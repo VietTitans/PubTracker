@@ -1,0 +1,24 @@
+name: pubtracker
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: research_papers_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: research_papers_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../app/db/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    driver: local
