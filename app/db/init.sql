@@ -1,3 +1,5 @@
+CREATE DATABASE "PubTrackerDB";
+
 -- Sources that provide research papers
 CREATE TABLE sources (
     id SERIAL PRIMARY KEY,
@@ -33,6 +35,12 @@ CREATE TABLE subscribers (
     created_at TIMESTAMP NOT NULL DEFAULT now()
 );
 
+CREATE TABLE subscriber_saved_search_subscriptions (
+    subscriber_id INT NOT NULL REFERENCES subscribers(id) ON DELETE CASCADE,
+    saved_search_id INT NOT NULL REFERENCES saved_searches(id) ON DELETE CASCADE,
+    PRIMARY KEY (subscriber_id, saved_search_id)
+);
+
 -- User-specific saved searches (private to each user)
 CREATE TABLE saved_searches (
     id SERIAL PRIMARY KEY,
@@ -55,13 +63,23 @@ CREATE TABLE notifications (
     UNIQUE (subscriber_id, record_id, search_id)
 );
 
--- Audit log of source processing
-CREATE TABLE source_processing_log (
-    id SERIAL PRIMARY KEY,
-    source_id INT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
-    records_processed INT NOT NULL,
-    processed_at TIMESTAMP NOT NULL DEFAULT now()
-);
+
+-- On User deletetion resign saved_searches to placeholderUser
+CREATE OR REPLACE FUNCTION reassign_deleted_user_searches()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE saved_searches
+    SET subscriber_id = -1  -- placeholderUser
+    WHERE subscriber_id = OLD.id;
+    RETURN OLD;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trg_reassign_saved_searches
+BEFORE DELETE ON subscribers
+FOR EACH ROW
+EXECUTE FUNCTION reassign_deleted_user_searches();
+
 
 -- Indexes for performance
 CREATE INDEX idx_records_paper_id ON records(paper_id);
@@ -74,3 +92,5 @@ CREATE INDEX idx_saved_searches_query_params ON saved_searches USING gin(query_p
 CREATE INDEX idx_notifications_subscriber ON notifications(subscriber_id);
 CREATE INDEX idx_notifications_record ON notifications(record_id);
 CREATE INDEX idx_notifications_search ON notifications(search_id);
+CREATE INDEX idx_subscriber_subscriptions ON subscriber_saved_search_subscriptions(subscriber_id);
+CREATE INDEX idx_saved_search_subscriptions ON subscriber_saved_search_subscriptions(saved_search_id);
