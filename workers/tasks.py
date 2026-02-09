@@ -1,7 +1,7 @@
 from celery import Celery
 from app.db.session import SessionLocal
 from app.models.saved_searches import SavedSearch
-from app.models.subscribers import Subscriber
+from app.models.subscribers import Subscribers
 
 celery = Celery("worker", broker="redis://localhost:6379/0")
 

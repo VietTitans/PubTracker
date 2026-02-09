@@ -1,7 +1,5 @@
-CREATE DATABASE "PubTrackerDB";
-
 -- Sources that provide research papers
-CREATE TABLE sources (
+CREATE TABLE IF NOT EXISTS sources (
     id SERIAL PRIMARY KEY,
     name VARCHAR(255) NOT NULL UNIQUE
 );
@@ -32,13 +30,7 @@ CREATE TABLE subscribers (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP NOT NULL DEFAULT now()
-);
-
-CREATE TABLE subscriber_saved_search_subscriptions (
-    subscriber_id INT NOT NULL REFERENCES subscribers(id) ON DELETE CASCADE,
-    saved_search_id INT NOT NULL REFERENCES saved_searches(id) ON DELETE CASCADE,
-    PRIMARY KEY (subscriber_id, saved_search_id)
+    created_at TIMESTAMP NOT NULL DEFAULT NOW()
 );
 
 -- User-specific saved searches (private to each user)
@@ -51,6 +43,12 @@ CREATE TABLE saved_searches (
     created_at TIMESTAMP NOT NULL DEFAULT now(),
     updated_at TIMESTAMP NOT NULL DEFAULT now(),
     UNIQUE (subscriber_id, name)
+);
+
+CREATE TABLE subscriber_saved_search_subscriptions (
+    subscriber_id INT NOT NULL REFERENCES subscribers(id) ON DELETE CASCADE,
+    saved_search_id INT NOT NULL REFERENCES saved_searches(id) ON DELETE CASCADE,
+    PRIMARY KEY (subscriber_id, saved_search_id)
 );
 
 -- Notifications sent to subscribers
@@ -84,7 +82,7 @@ EXECUTE FUNCTION reassign_deleted_user_searches();
 -- Indexes for performance
 CREATE INDEX idx_records_paper_id ON records(paper_id);
 CREATE INDEX idx_records_source_id ON records(source_id);
-CREATE INDEX idx_papers_doi ON papers(doi);
+CREATE INDEX IF NOT EXISTS idx_papers_doi ON papers(doi);
 CREATE INDEX idx_papers_date_discovered ON papers(date_first_discovered);
 CREATE INDEX idx_saved_searches_subscriber ON saved_searches(subscriber_id);
 CREATE INDEX idx_saved_searches_active ON saved_searches(subscriber_id, is_active);
