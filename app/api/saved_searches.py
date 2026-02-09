@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 from app.models.saved_searches import SavedSearch
-from app.models.subscribers import Subscriber
+from app.models.subscribers import Subscribers
 
 router = APIRouter()
 
@@ -15,7 +15,7 @@ def get_db():
 
 @router.post("/saved_searches")
 def create_saved_search(owner_id: int, name: str, query_params: dict, db: Session = Depends(get_db)):
-    owner = db.get(Subscriber, owner_id)
+    owner = db.get(Subscribers, owner_id)
     if not owner:
         raise HTTPException(status_code=404, detail="Owner not found")
     search = SavedSearch(subscriber_id=owner.id, name=name, query_params=query_params)
@@ -27,7 +27,7 @@ def create_saved_search(owner_id: int, name: str, query_params: dict, db: Sessio
 @router.post("/saved_searches/{search_id}/subscribe")
 def subscribe_to_search(search_id: int, subscriber_id: int, db: Session = Depends(get_db)):
     search = db.get(SavedSearch, search_id)
-    subscriber = db.get(Subscriber, subscriber_id)
+    subscriber = db.get(Subscribers, subscriber_id)
     if not search or not subscriber:
         raise HTTPException(status_code=404, detail="Search or subscriber not found")
     if subscriber not in search.followers:

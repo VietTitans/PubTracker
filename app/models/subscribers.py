@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from .base import Base
 from datetime import datetime
 
-class Subscriber(Base):
+class Subscribers(Base):
     __tablename__ = "subscribers"
 
     id = Column(Integer, primary_key=True)

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
-from app.models.subscribers import Subscriber
+from app.models.subscribers import Subscribers
 from app.models.saved_searches import SavedSearch
 
 router = APIRouter()
@@ -15,7 +15,7 @@ def get_db():
 
 @router.post("/subscribers")
 def create_subscriber(email: str, db: Session = Depends(get_db)):
-    user = Subscriber(email=email)
+    user = Subscribers(email=email)
     db.add(user)
     db.commit()
     db.refresh(user)
@@ -24,13 +24,13 @@ def create_subscriber(email: str, db: Session = Depends(get_db)):
 @router.delete("/subscribers/{subscriber_id}")
 def delete_subscriber(subscriber_id: int, db: Session = Depends(get_db)):
     placeholder_id = 1
-    placeholder = db.get(Subscriber, placeholder_id)
+    placeholder = db.get(Subscribers, placeholder_id)
     if not placeholder:
-        placeholder = Subscriber(id=placeholder_id, email="placeholder@example.com")
+        placeholder = Subscribers(id=placeholder_id, email="placeholder@example.com")
         db.add(placeholder)
         db.commit()
 
-    subscriber = db.get(Subscriber, subscriber_id)
+    subscriber = db.get(Subscribers, subscriber_id)
     if not subscriber:
         raise HTTPException(status_code=404, detail="Subscriber not found")
 
