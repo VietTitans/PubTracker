@@ -21,6 +21,11 @@ def create_subscriber(email: str, db: Session = Depends(get_db)):
     db.refresh(user)
     return user
 
+# TODO: Authencation and authorization should be added to these endpoints in the future 
+@router.get("/subscribers")
+def get_subscribers(db: Session = Depends(get_db)):
+    return db.query(Subscribers).all()
+
 @router.delete("/subscribers/{subscriber_id}")
 def delete_subscriber(subscriber_id: int, db: Session = Depends(get_db)):
     placeholder_id = 1
