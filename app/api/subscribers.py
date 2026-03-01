@@ -2,6 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
 from app.models.subscribers import Subscribers
+from app.db.schema.subscriber_create import SubscriberCreate
 from app.models.saved_searches import SavedSearch
 
 router = APIRouter()
@@ -14,8 +15,12 @@ def get_db():
         db.close()
 
 @router.post("/subscribers")
-def create_subscriber(email: str, db: Session = Depends(get_db)):
-    user = Subscribers(email=email)
+def create_subscriber(subscriber: SubscriberCreate, db: Session = Depends(get_db)):
+    user = Subscribers(
+        email=subscriber.email, 
+        is_active=subscriber.is_active
+    )
+
     db.add(user)
     db.commit()
     db.refresh(user)
