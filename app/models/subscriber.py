@@ -3,7 +3,7 @@ from sqlalchemy.orm import relationship
 from .base import Base
 from datetime import datetime
 
-class Subscribers(Base):
+class Subscriber(Base):
     __tablename__ = "subscribers"
 
     id = Column(Integer, primary_key=True)
@@ -11,9 +11,9 @@ class Subscribers(Base):
     is_active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)
 
-    saved_searches = relationship("saved_searches", back_populates="subscriber")  # owned searches
+    saved_searches = relationship("SavedSearch", back_populates="subscriber")  # owned searches
     subscribed_searches = relationship(
-        "saved_searches",
+        "SavedSearch",
         secondary="subscriber_saved_search_subscriptions",
         back_populates="followers"
     )

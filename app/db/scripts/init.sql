@@ -11,7 +11,7 @@ CREATE TABLE papers (
     title TEXT NOT NULL,
     abstract TEXT,
     url TEXT NOT NULL,
-    date_first_discovered TIMESTAMP NOT NULL DEFAULT now()
+    date_first_discovered TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Track which sources have which papers
@@ -20,17 +20,27 @@ CREATE TABLE records (
     paper_id INT NOT NULL REFERENCES papers(id) ON DELETE CASCADE,
     source_id INT NOT NULL REFERENCES sources(id) ON DELETE CASCADE,
     external_id VARCHAR(255) NOT NULL,
-    date_discovered TIMESTAMP NOT NULL DEFAULT now(),
+    date_discovered TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (source_id, external_id),
     UNIQUE (paper_id, source_id)
 );
+
+-- Users
+CREATE TABLE users (
+    id SERIAL PRIMARY KEY,
+    username VARCHAR(255) NOT NULL UNIQUE,
+    email VARCHAR(255) NOT NULL UNIQUE,
+    is_active BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
 
 -- Users who can subscribe
 CREATE TABLE subscribers (
     id SERIAL PRIMARY KEY,
     email VARCHAR(255) NOT NULL UNIQUE,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
 -- User-specific saved searches (private to each user)
@@ -40,9 +50,9 @@ CREATE TABLE saved_searches (
     name VARCHAR(255) NOT NULL,
     query_params JSONB NOT NULL,
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    created_at TIMESTAMP NOT NULL DEFAULT now(),
-    updated_at TIMESTAMP NOT NULL DEFAULT now(),
-    UNIQUE (subscriber_id, name)
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    UNIQUE (subscriber_id, )
 );
 
 CREATE TABLE subscriber_saved_search_subscriptions (

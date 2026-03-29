@@ -1,3 +1,2 @@
--- Insert a placeholder user
-INSERT INTO subscribers (email, is_active)
-VALUES ('placeholder@example.com', TRUE);
+INSERT INTO public.users (username, email)
+VALUES ('john_doe', 'john@example.com');

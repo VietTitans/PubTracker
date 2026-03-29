@@ -9,4 +9,3 @@ class Source(Base):
     name = Column(String(255), nullable=False, unique=True)
 
     records = relationship("Record", back_populates="source", cascade="all, delete-orphan")
-    processing_logs = relationship("SourceProcessingLog", back_populates="source", cascade="all, delete-orphan")

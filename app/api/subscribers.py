@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.session import SessionLocal
-from app.models.subscribers import Subscribers
+from app.models.subscriber import Subscriber
 from app.db.schema.subscriber_create import SubscriberCreate
 from app.models.saved_searches import SavedSearch
 
@@ -16,31 +16,31 @@ def get_db():
 
 @router.post("/subscribers")
 def create_subscriber(subscriber: SubscriberCreate, db: Session = Depends(get_db)):
-    user = Subscribers(
+    subscriber = Subscriber(
         email=subscriber.email, 
         is_active=subscriber.is_active
     )
 
-    db.add(user)
+    db.add(subscriber)
     db.commit()
-    db.refresh(user)
-    return user
+    db.refresh(subscriber)
+    return subscriber
 
 # TODO: Authencation and authorization should be added to these endpoints in the future 
 @router.get("/subscribers")
 def get_subscribers(db: Session = Depends(get_db)):
-    return db.query(Subscribers).all()
+    return db.query(Subscriber).all()
 
 @router.delete("/subscribers/{subscriber_id}")
 def delete_subscriber(subscriber_id: int, db: Session = Depends(get_db)):
     placeholder_id = 1
-    placeholder = db.get(Subscribers, placeholder_id)
+    placeholder = db.get(Subscriber, placeholder_id)
     if not placeholder:
-        placeholder = Subscribers(id=placeholder_id, email="placeholder@example.com")
+        placeholder = Subscriber(id=placeholder_id, email="placeholder@example.com")
         db.add(placeholder)
         db.commit()
 
-    subscriber = db.get(Subscribers, subscriber_id)
+    subscriber = db.get(Subscriber, subscriber_id)
     if not subscriber:
         raise HTTPException(status_code=404, detail="Subscriber not found")
 
