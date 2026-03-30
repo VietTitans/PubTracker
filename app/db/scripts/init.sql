@@ -52,7 +52,7 @@ CREATE TABLE saved_searches (
     is_active BOOLEAN NOT NULL DEFAULT TRUE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    UNIQUE (subscriber_id, )
+    UNIQUE (subscriber_id)
 );
 
 CREATE TABLE subscriber_saved_search_subscriptions (
