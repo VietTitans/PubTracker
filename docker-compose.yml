@@ -8,6 +8,10 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./app/db/scripts/init.sql:/docker-entrypoint-initdb.d/01-init.sql
+      - ./app/db/scripts/insert.sql:/docker-entrypoint-initdb.d/02-insert.sql
     ports:
       - "5432:5432"
     healthcheck:
@@ -15,17 +19,6 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-  # redis:
-  #   image: redis:8.4
-  #   container_name: redis
-  #   restart: unless-stopped
-  #   ports:
-  #     - "6379:6379"
-  #   healthcheck:
-  #     test: ["CMD", "redis-cli", "ping"]
-  #     interval: 10s
-  #     timeout: 5s
-  #     retries: 5
   api:
     container_name: api
     restart: unless-stopped
@@ -33,9 +26,12 @@ services:
     depends_on:
       - db
     ports:
-      - "8000:80"
+      - "8000:8000"
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       DATABASE_URL: ${DATABASE_URL} 
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
+volumes:
+  postgres_data:
