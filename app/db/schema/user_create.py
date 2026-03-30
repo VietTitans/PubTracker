@@ -1,6 +1,5 @@
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, Field
 
 class UserCreate(BaseModel):
-    username: str
-    email: EmailStr
-    is_active: bool = True
+    username: str = Field(..., description="Username for the user")
+    email: EmailStr = Field(..., description="Email address")
