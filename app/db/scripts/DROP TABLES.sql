@@ -1,5 +1,3 @@
-DROP TABLE IF EXISTS notifications CASCADE;
-DROP TABLE IF EXISTS subscriber_saved_search_subscriptions CASCADE;
 DROP TABLE IF EXISTS saved_searches CASCADE;
 DROP TABLE IF EXISTS users CASCADE;
 DROP TABLE IF EXISTS subscribers CASCADE;
