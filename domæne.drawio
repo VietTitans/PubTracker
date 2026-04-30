@@ -1,0 +1,37 @@
+<mxfile host="app.diagrams.net">
+  <diagram name="Page-1" id="EUDI1-mFSaaAOgXt9_0q">
+    <mxGraphModel dx="1414" dy="752" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="850" pageHeight="1100" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="NFMhhtNNtaMEOLTEgk34-42" edge="1" parent="1" source="NFMhhtNNtaMEOLTEgk34-19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="NFMhhtNNtaMEOLTEgk34-21" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="NFMhhtNNtaMEOLTEgk34-19" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="User" vertex="1">
+          <mxGeometry height="60" width="120" x="330" y="110" as="geometry" />
+        </mxCell>
+        <mxCell id="NFMhhtNNtaMEOLTEgk34-22" edge="1" parent="1" source="NFMhhtNNtaMEOLTEgk34-23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="NFMhhtNNtaMEOLTEgk34-27">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="NFMhhtNNtaMEOLTEgk34-23" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="Papers" vertex="1">
+          <mxGeometry height="60" width="120" x="90" y="360" as="geometry" />
+        </mxCell>
+        <mxCell id="NFMhhtNNtaMEOLTEgk34-24" edge="1" parent="1" source="NFMhhtNNtaMEOLTEgk34-25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" target="NFMhhtNNtaMEOLTEgk34-27">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="NFMhhtNNtaMEOLTEgk34-25" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="Sources" vertex="1">
+          <mxGeometry height="60" width="120" x="90" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="NFMhhtNNtaMEOLTEgk34-27" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="Records" vertex="1">
+          <mxGeometry height="60" width="120" x="330" y="300" as="geometry" />
+        </mxCell>
+        <mxCell id="NFMhhtNNtaMEOLTEgk34-41" edge="1" parent="1" source="NFMhhtNNtaMEOLTEgk34-21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" target="NFMhhtNNtaMEOLTEgk34-27" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="NFMhhtNNtaMEOLTEgk34-21" parent="1" style="rounded=1;whiteSpace=wrap;html=1;" value="Saved_Searches" vertex="1">
+          <mxGeometry height="60" width="120" x="330" y="200" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
