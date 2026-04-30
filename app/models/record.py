@@ -18,4 +18,3 @@ class Record(Base):
 
     paper = relationship("Paper", back_populates="records")
     source = relationship("Source", back_populates="records")
-    notifications = relationship("Notification", back_populates="record", cascade="all, delete-orphan")
