@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Table
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, JSON, Table, Text
 from sqlalchemy.orm import relationship
 from .base import Base
 from datetime import datetime
@@ -10,7 +10,7 @@ class SavedSearch(Base):
     user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
 
     name = Column(String(255), nullable=False)
-    query_params = Column(JSON, nullable=False)
+    search_query = Column(Text(), nullable=False)
     is_active = Column(Boolean, nullable=False, default=True)
 
     created_at = Column(DateTime, nullable=False, default=datetime.utcnow)

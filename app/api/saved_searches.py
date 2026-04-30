@@ -14,24 +14,48 @@ def get_db():
         db.close()
 
 @router.post("/saved_searches")
-def create_saved_search(owner_id: int, name: str, query_params: dict, db: Session = Depends(get_db)):
+def create_saved_search(owner_id: int, name: str, search_query: str, db: Session = Depends(get_db)):
     owner = db.get(User, owner_id)
     if not owner:
         raise HTTPException(status_code=404, detail="Owner not found")
-    search = SavedSearch(user_id=owner.id, name=name, query_params=query_params)
+    search = SavedSearch(user_id=owner.id, name=name, search_query=search_query)
     db.add(search)
     db.commit()
     db.refresh(search)
     return search
 
-@router.post("/saved_searches/{search_id}/subscribe")
-def subscribe_to_search(search_id: int, subscriber_id: int, db: Session = Depends(get_db)):
+@router.get("/saved_searches/{search_id}")
+def get_saved_search(search_id: int, db: Session = Depends(get_db)):
     search = db.get(SavedSearch, search_id)
-    subscriber = db.get(User, subscriber_id)
-    if not search or not subscriber:
-        raise HTTPException(status_code=404, detail="Search or subscriber not found")
-    if subscriber not in search.followers:
-        search.followers.append(subscriber)
-        db.commit()
-    return {"message": f"Subscriber {subscriber_id} is now following search {search_id}"}
- 
+    if not search:
+        raise HTTPException(status_code=404, detail="Saved search not found")
+    return search
+
+@router.get("/saved_searches")
+def get_all_saved_searches(db: Session = Depends(get_db)):
+    searches = db.query(SavedSearch).all()
+    return searches
+
+@router.put("/saved_searches/{search_id}")
+def update_saved_search(search_id: int, name: str = None, search_query: str = None, is_active: bool = None, db: Session = Depends(get_db)):
+    search = db.get(SavedSearch, search_id)
+    if not search:
+        raise HTTPException(status_code=404, detail="Saved search not found")
+    if name is not None:
+        search.name = name
+    if search_query is not None:
+        search.search_query = search_query
+    if is_active is not None:
+        search.is_active = is_active
+    db.commit()
+    db.refresh(search)
+    return search
+
+@router.delete("/saved_searches/{search_id}")
+def delete_saved_search(search_id: int, db: Session = Depends(get_db)):
+    search = db.get(SavedSearch, search_id)
+    if not search:
+        raise HTTPException(status_code=404, detail="Saved search not found")
+    db.delete(search)
+    db.commit()
+    return {"detail": "Saved search deleted"}
