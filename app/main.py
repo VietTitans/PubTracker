@@ -1,10 +1,20 @@
+import fastapi
 from sqlalchemy import text
 from fastapi import FastAPI
 from app.api import saved_searches, users
 from app.db.session import init_db, engine
 from app.models.base import Base
-    
-app = FastAPI(title="PubTracker")
+import fastapi_swagger_dark as fsd
+
+app = FastAPI(
+    title="PubTracker",
+    docs_url=None,
+    redoc_url=None,
+)
+
+router = fastapi.APIRouter()
+fsd.install(router, path="/swagger")
+app.include_router(router)
 
 app.include_router(saved_searches.router)
 app.include_router(users.router)

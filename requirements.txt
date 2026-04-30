@@ -7,3 +7,4 @@ redis==7.1.0
 pydantic==2.12
 pydantic[email]==2.12
 python-dotenv==1.2.1
+fastapi-swagger-dark==0.0.9
