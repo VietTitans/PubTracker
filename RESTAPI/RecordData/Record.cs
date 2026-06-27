@@ -1,0 +1,6 @@
+﻿namespace RecordData;
+
+class Record
+{
+
+}
