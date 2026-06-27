@@ -206,3 +206,10 @@ marimo/_static/
 marimo/_lsp/
 __marimo__/
 .vscode/settings.json
+/RESTAPI/RecordService/.vs
+/RESTAPI/RecordData/obj
+/RESTAPI/RecordService/obj
+/RESTAPI/RecordService/obj
+*.cache
+/RESTAPI/RecordService/obj/Debug
+/RESTAPI/RecordService/.vs
