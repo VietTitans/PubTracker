@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("RecordService")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1b47f79bed38499e8afda5d14f0afe9bd3e8c0c3")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+7d0cc4201f16c72c5f0c653c3f85c278b25c348b")]
 [assembly: System.Reflection.AssemblyProductAttribute("RecordService")]
 [assembly: System.Reflection.AssemblyTitleAttribute("RecordService")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

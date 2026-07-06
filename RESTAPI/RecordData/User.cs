@@ -2,8 +2,10 @@
 
 class User
 {
-    public string Username;
+    public int Userid;
 
-    public string Email;
+    public required string Username;
+
+    public required string Email;
 
 }
