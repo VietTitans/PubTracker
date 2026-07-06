@@ -1,23 +1,23 @@
 {
   "format": 1,
   "restore": {
-    "C:\\Users\\Lenovo\\Documents\\repo\\PubTracker\\RESTAPI\\RecordService\\RecordService.csproj": {}
+    "C:\\Users\\nikof\\OneDrive\\Skrivebord\\Matt\\repo\\PubTracker\\RESTAPI\\RecordService\\RecordService.csproj": {}
   },
   "projects": {
-    "C:\\Users\\Lenovo\\Documents\\repo\\PubTracker\\RESTAPI\\RecordService\\RecordService.csproj": {
+    "C:\\Users\\nikof\\OneDrive\\Skrivebord\\Matt\\repo\\PubTracker\\RESTAPI\\RecordService\\RecordService.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "C:\\Users\\Lenovo\\Documents\\repo\\PubTracker\\RESTAPI\\RecordService\\RecordService.csproj",
+        "projectUniqueName": "C:\\Users\\nikof\\OneDrive\\Skrivebord\\Matt\\repo\\PubTracker\\RESTAPI\\RecordService\\RecordService.csproj",
         "projectName": "RecordService",
-        "projectPath": "C:\\Users\\Lenovo\\Documents\\repo\\PubTracker\\RESTAPI\\RecordService\\RecordService.csproj",
-        "packagesPath": "C:\\Users\\Lenovo\\.nuget\\packages\\",
-        "outputPath": "C:\\Users\\Lenovo\\Documents\\repo\\PubTracker\\RESTAPI\\RecordService\\obj\\",
+        "projectPath": "C:\\Users\\nikof\\OneDrive\\Skrivebord\\Matt\\repo\\PubTracker\\RESTAPI\\RecordService\\RecordService.csproj",
+        "packagesPath": "C:\\Users\\nikof\\.nuget\\packages\\",
+        "outputPath": "C:\\Users\\nikof\\OneDrive\\Skrivebord\\Matt\\repo\\PubTracker\\RESTAPI\\RecordService\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
         ],
         "configFilePaths": [
-          "C:\\Users\\Lenovo\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Users\\nikof\\AppData\\Roaming\\NuGet\\NuGet.Config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.FallbackLocation.config",
           "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
         ],

@@ -213,3 +213,4 @@ __marimo__/
 *.cache
 /RESTAPI/RecordService/obj/Debug
 /RESTAPI/RecordService/.vs
+/RESTAPI/.vs

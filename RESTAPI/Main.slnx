@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="RecordData/RecordData.csproj" />
+  <Project Path="RecordService/RecordService.csproj">
+    <BuildDependency Project="RecordData/RecordData.csproj" />
+  </Project>
+</Solution>
