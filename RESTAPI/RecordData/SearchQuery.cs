@@ -2,9 +2,9 @@
 
 class SearchQuery
 {
-    public int Id { get; set; }
     public int SourceId { get; set; }
     public string TargetUrl { get; set; } = string.Empty;
+    public List<string>? Subscriptioners { get; set; }
     public int CurrentRecordCount { get; set; }
     public int PreviousRecordCount { get; set; }
 

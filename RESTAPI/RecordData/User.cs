@@ -8,4 +8,6 @@ class User
 
     public required string Email;
 
+    public Notification? Notification { get;}
+
 }
