@@ -1,8 +1,3 @@
-using DotNetEnv;
-
-Env.Load(Path.Combine(Directory.GetCurrentDirectory(), "../../.env"));
-Console.WriteLine("Hello");
-
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
@@ -27,6 +22,6 @@ app.UseHttpsRedirection();
 
 app.UseAuthorization();
 
-app.MapControllers();
+app.MapControllers(); 
 
 app.Run();

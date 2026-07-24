@@ -5,9 +5,11 @@ WORKDIR /src
 
 COPY . .
 
-RUN dotnet restore
+RUN dotnet restore RecordService/RecordService.csproj
 
-RUN dotnet publish -c Release -o /publish
+RUN dotnet publish RecordService/RecordService.csproj \
+    -c Release \
+    -o /publish
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0
 
