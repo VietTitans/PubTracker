@@ -19,7 +19,8 @@ public class SourcesDataAccess
         using (var connection = new NpgsqlConnection (_connectionString))
         {
             await connection.OpenAsync();
-            using (var command = new NpgsqlCommand("SELECT id, name, username, email FROM users", connection))
+            //using (var command = new NpgsqlCommand("SELECT id, name, username, email FROM users", connection))
+            using (var command = new NpgsqlCommand("SELECT id, username, email FROM \"User\"", connection))
             {
                 using (var reader = await command.ExecuteReaderAsync())
                 {
@@ -28,9 +29,8 @@ public class SourcesDataAccess
                         var user = new User
                         {
                             Id = reader.GetInt32(0),
-                            Name = reader.GetString(1),
-                            Username = reader.GetString(2),
-                            Email = reader.GetString(3)
+                            Username = reader.GetString(1),
+                            Email = reader.GetString(2)
                         };
                         users.Add(user);
                     }

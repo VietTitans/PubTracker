@@ -1,22 +1,15 @@
-using DotNetEnv;
 using RecordService.DataAccess;
-
-var envPath = Path.GetFullPath(
-    Path.Combine(
-        Directory.GetCurrentDirectory(),
-        "../../docker/.env"
-    )
-);
-
-Env.Load(envPath);
 
 var builder = WebApplication.CreateBuilder(args);
 
 var runMode = Environment.GetEnvironmentVariable("RUN_MODE");
 
-string connectionString = runMode == "docker"
-    ? Environment.GetEnvironmentVariable("DATABASE_URL_DOCKER")!
-    : Environment.GetEnvironmentVariable("DATABASE_URL_LOCAL")!;
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+
+if (string.IsNullOrEmpty(connectionString))
+{
+    throw new Exception("Database connection string is missing");
+}
 
 builder.Services.AddControllers();
 
