@@ -1,5 +1,11 @@
 var builder = WebApplication.CreateBuilder(args);
 
+var runMode = Environment.GetEnvironmentVariable("RUN_MODE");
+
+string connectionString = runMode == "docker"
+    ? Environment.GetEnvironmentVariable("DATABASE_URL_DOCKER")!
+    : Environment.GetEnvironmentVariable("DATABASE_URL_LOCAL")!;
+
 builder.Services.AddControllers();
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
