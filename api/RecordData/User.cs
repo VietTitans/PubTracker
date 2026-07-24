@@ -1,11 +1,13 @@
 ﻿namespace RecordData;
 
-class User
+public class User
 {
-    public int Userid;
+    public int Id;
 
-    public required string Username;
+    public string Name;
 
-    public required string Email;
+    public string Username;
+
+    public string Email;
 
 }

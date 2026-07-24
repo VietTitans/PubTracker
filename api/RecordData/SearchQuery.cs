@@ -1,8 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 
 namespace RecordData;
-
-class SearchQuery
+public class SearchQuery
 {
     public int SourceId { get; set; }
     public string TargetUrl { get; set; } = string.Empty;

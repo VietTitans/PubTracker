@@ -1,6 +1,6 @@
 ﻿namespace RecordData;
 
-class Record
+public class Record
 {
     public required string Doi { get; set; }
     public required string Title { get; set; }

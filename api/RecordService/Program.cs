@@ -1,3 +1,25 @@
+using DotNetEnv;
+using RecordService.DataAccess;
+using System.Diagnostics;
+
+Debug.WriteLine($"Current directory: {Directory.GetCurrentDirectory()}");
+
+var envPath = Path.GetFullPath(
+    Path.Combine(
+        Directory.GetCurrentDirectory(),
+        "../../docker/.env"
+    )
+);
+
+Debug.WriteLine($"Env path: {envPath}");
+Debug.WriteLine($"Exists: {File.Exists(envPath)}");
+
+Env.Load(envPath);
+
+Debug.WriteLine(
+    $"DATABASE_URL_LOCAL: {Environment.GetEnvironmentVariable("DATABASE_URL_LOCAL")}"
+);
+
 var builder = WebApplication.CreateBuilder(args);
 
 var runMode = Environment.GetEnvironmentVariable("RUN_MODE");
@@ -7,6 +29,8 @@ string connectionString = runMode == "docker"
     : Environment.GetEnvironmentVariable("DATABASE_URL_LOCAL")!;
 
 builder.Services.AddControllers();
+
+builder.Services.AddScoped(ServiceProvider => new SourcesDataAccess(connectionString));
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
