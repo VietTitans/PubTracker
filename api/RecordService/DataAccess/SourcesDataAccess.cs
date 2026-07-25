@@ -20,7 +20,7 @@ public class SourcesDataAccess
         {
             await connection.OpenAsync();
             //using (var command = new NpgsqlCommand("SELECT id, name, username, email FROM users", connection))
-            using (var command = new NpgsqlCommand("SELECT id, username, email FROM \"User\"", connection))
+            using (var command = new NpgsqlCommand("SELECT id, username, email FROM users", connection))
             {
                 using (var reader = await command.ExecuteReaderAsync())
                 {
