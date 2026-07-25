@@ -13,7 +13,7 @@ if (string.IsNullOrEmpty(connectionString))
 
 builder.Services.AddControllers();
 
-builder.Services.AddScoped(ServiceProvider => new SourcesDataAccess(connectionString));
+builder.Services.AddScoped(ServiceProvider => new UsersDataAccess(connectionString));
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();

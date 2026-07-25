@@ -1,26 +1,23 @@
 ﻿using Npgsql;
 using RecordData;
-using System.Diagnostics;
 
 namespace RecordService.DataAccess;
 
-public class SourcesDataAccess
+public class UsersDataAccess
 {
     private readonly string _connectionString;
 
-    public SourcesDataAccess(string connectionString)
+    public UsersDataAccess(string connectionString)
     {
         _connectionString = connectionString;
-        Debug.WriteLine($"Connection string: '{connectionString}'");
     }
     public async Task<List<User>> GetUsersAsync()
     {
         var users = new List<User>();
-        using (var connection = new NpgsqlConnection (_connectionString))
+        using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync();
-            //using (var command = new NpgsqlCommand("SELECT id, name, username, email FROM users", connection))
-            using (var command = new NpgsqlCommand("SELECT id, username, email FROM users", connection))
+            using (var command = new NpgsqlCommand("SELECT id, name, username, email FROM users", connection))
             {
                 using (var reader = await command.ExecuteReaderAsync())
                 {
@@ -29,8 +26,9 @@ public class SourcesDataAccess
                         var user = new User
                         {
                             Id = reader.GetInt32(0),
-                            Username = reader.GetString(1),
-                            Email = reader.GetString(2)
+                            Name = reader.GetString(1),
+                            Username = reader.GetString(2),
+                            Email = reader.GetString(3)
                         };
                         users.Add(user);
                     }

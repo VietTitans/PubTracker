@@ -1,16 +1,15 @@
-﻿using Microsoft.AspNetCore.Http;
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using RecordService.DataAccess;
 
 namespace RecordService.Controllers;
 
-[ApiController]
 [Route("api/[controller]")]
-public class SourcesController : ControllerBase
+[ApiController]
+public class UsersController : ControllerBase
 {
-    private readonly SourcesDataAccess _dataAccess;
+    private readonly UsersDataAccess _dataAccess;
 
-    public SourcesController(SourcesDataAccess dataAccess)
+    public UsersController(UsersDataAccess dataAccess)
     {
         _dataAccess = dataAccess;
     }
