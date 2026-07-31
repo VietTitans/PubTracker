@@ -25,11 +25,14 @@ services:
       context: ../api
       dockerfile: Dockerfile
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
-      DATABASE_URL: ${DATABASE_URL_DOCKER}
+      ConnectionStrings__DefaultConnection: '${DATABASE_URL_LOCAL:-Host=db;Port=${POSTGRES_PORT};Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}}'
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
 
 volumes:

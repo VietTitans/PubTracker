@@ -20,4 +20,8 @@
     <ProjectReference Include="..\RecordData\RecordData.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Folder Include="DTOs\" />
+  </ItemGroup>
+
 </Project>

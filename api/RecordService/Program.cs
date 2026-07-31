@@ -3,8 +3,6 @@ using RecordService.BusinessLogic;
 
 var builder = WebApplication.CreateBuilder(args);
 
-var runMode = Environment.GetEnvironmentVariable("RUN_MODE");
-
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
 if (string.IsNullOrEmpty(connectionString))
