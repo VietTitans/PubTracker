@@ -1,4 +1,5 @@
 using RecordService.DataAccess;
+using RecordService.BusinessLogic;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -13,7 +14,19 @@ if (string.IsNullOrEmpty(connectionString))
 
 builder.Services.AddControllers();
 
-builder.Services.AddScoped(ServiceProvider => new UsersDataAccess(connectionString));
+builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddScoped(serviceProvider => 
+    new UsersDataAccess(connectionString, serviceProvider.GetRequiredService<IHttpContextAccessor>()));
+
+builder.Services.AddScoped<UsersService>();
+
+// Configure Authorization Policies for Roles
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("AdminOnly", policy => 
+        policy.RequireRole("Admin"))
+    .AddPolicy("UserOrAdmin", policy => 
+        policy.RequireRole("User", "Admin"));
 
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
