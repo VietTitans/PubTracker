@@ -3,11 +3,11 @@ using RecordService.DataAccess;
 
 namespace RecordService.BusinessLogic;
 
-public class UsersService
+public class UsersService : IUsersService
 {
-    private readonly UsersDataAccess _dataAccess;
+    private readonly IUsersDataAccess _dataAccess;
 
-    public UsersService(UsersDataAccess dataAccess)
+    public UsersService(IUsersDataAccess dataAccess)
     {
         _dataAccess = dataAccess;
     }
@@ -20,6 +20,26 @@ public class UsersService
     public async Task<List<User>> GetUsersAsync()
     {
         return await _dataAccess.GetUsersAsync();
+    }
+
+    public async Task<List<string>> GetSearchQueriesByUserAsync(int userId)
+    {
+        return await _dataAccess.GetSearchQueriesByUserAsync(userId);
+    }
+
+    public async Task<User> CreateUserAsync(User user)
+    {
+        return await _dataAccess.CreateUserAsync(user);
+    }
+
+    public async Task UpdateUserAsync(int userId, User user)
+    {
+        await _dataAccess.UpdateUserAsync(userId, user);
+    }
+
+    public async Task SoftDeleteUserAsync(int userId)
+    {
+        await _dataAccess.SoftDeleteUserAsync(userId);
     }
 
 }

@@ -1,5 +1,6 @@
 using RecordService.DataAccess;
 using RecordService.BusinessLogic;
+using RecordService.ErrorHandling;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -14,10 +15,23 @@ builder.Services.AddControllers();
 
 builder.Services.AddHttpContextAccessor();
 
+// Data Access Layer - Register interfaces to implementations
 builder.Services.AddScoped(serviceProvider => 
     new UsersDataAccess(connectionString, serviceProvider.GetRequiredService<IHttpContextAccessor>()));
+builder.Services.AddScoped<IUsersDataAccess>(sp => sp.GetRequiredService<UsersDataAccess>());
 
-builder.Services.AddScoped<UsersService>();
+builder.Services.AddScoped<ISavedSearchesDataAccess, SavedSearchesDataAccess>();
+builder.Services.AddScoped<ISearchQueriesDataAccess, SearchQueriesDataAccess>();
+builder.Services.AddScoped<ISourcesDataAccess, SourcesDataAccess>();
+
+// Business Logic Layer - Register interfaces to implementations
+builder.Services.AddScoped<IUsersService, UsersService>();
+builder.Services.AddScoped<ISavedSearchesService, SavedSearchesService>();
+builder.Services.AddScoped<ISearchQueriesService, SearchQueriesService>();
+builder.Services.AddScoped<ISourcesService, SourcesService>();
+
+// Cross-cutting Concerns
+builder.Services.AddScoped<IErrorHandler, DefaultErrorHandler>();
 
 // Configure Authorization Policies for Roles
 builder.Services.AddAuthorizationBuilder()
