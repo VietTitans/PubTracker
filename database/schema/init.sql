@@ -27,6 +27,8 @@ CREATE TABLE IF NOT EXISTS users (
     name TEXT NOT NULL,
     username TEXT NOT NULL,
     email TEXT NOT NULL,
+    is_marked_for_deletion BOOLEAN NOT NULL DEFAULT FALSE,
+    deletion_requested_at TIMESTAMPTZ,
     PRIMARY KEY (id)
 );
 

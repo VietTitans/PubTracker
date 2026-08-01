@@ -19,10 +19,10 @@ INSERT INTO records (id, doi, title, description) VALUES
   (4, '10.1001/arxiv.2202.00002', 'Advances in Natural Language Processing', 'New transformer architectures and benchmarks.');
 
 -- 4. users
-INSERT INTO users (id, name, username, email) VALUES
-  (1, 'Alice Johnson', 'alicej', 'alice@example.com'),
-  (2, 'Bob Martinez', 'bobm', 'bob@example.com');
-
+INSERT INTO users (id, name, username, email, is_marked_for_deletion, deletion_requested_at) VALUES
+  (1, 'Alice Johnson', 'alicej', 'alice@example.com', FALSE, NULL),
+  (2, 'Bob Martinez',  'bobm',   'bob@example.com',   FALSE, NULL);
+  
 -- 5. user_search_queries
 INSERT INTO user_search_queries (id, user_id, search_query_id, created_at) VALUES
   (1, 1, 1, '2026-07-01 10:00:00+00'),
