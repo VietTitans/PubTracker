@@ -10,4 +10,8 @@ public class User
 
     public string Email { get; set; }
 
+    public bool IsMarkedForDeletion { get; set; } = false;
+
+    public DateTime? DeletionRequestedAt { get; set; } = null;
+
 }
