@@ -1,18 +1,66 @@
+using Npgsql;
 using RecordData;
 
 namespace RecordService.DataAccess;
 
 public class SourcesDataAccess : ISourcesDataAccess
 {
-    // This is a placeholder. In a real implementation, this would interact with the database
-    private static List<Source> _sources = new()
+    private readonly string _connectionString;
+
+    public SourcesDataAccess(string connectionString)
     {
-        new Source { Id = 1, Name = "Source 1", BaseUrl = "https://example1.com" },
-        new Source { Id = 2, Name = "Source 2", BaseUrl = "https://example2.com" }
-    };
+        _connectionString = connectionString; 
+    }
 
     public async Task<List<Source>> GetAllSourcesAsync()
     {
-        return await Task.FromResult(_sources);
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var command = new NpgsqlCommand("SELECT id, name, base_url FROM sources", connection))
+            {
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    var sources = new List<Source>();
+                    while (await reader.ReadAsync())
+                    {
+                        var source = new Source
+                        {
+                            Id = reader.GetInt32(0),
+                            Name = reader.GetString(1),
+                            BaseUrl = reader.GetString(2)
+                        };
+                        sources.Add(source);
+                    }
+                    return sources;
+                }
+            }
+        }
     }
+
+    public async Task<Source?> GetSourceByIdAsync(int sourceId)
+    {
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var command = new NpgsqlCommand("SELECT id, name, base_url FROM sources WHERE id = @id", connection))
+            {
+                command.Parameters.AddWithValue("@id", sourceId);
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        return new Source
+                        {
+                            Id = reader.GetInt32(0),
+                            Name = reader.GetString(1),
+                            BaseUrl = reader.GetString(2)
+                        };
+                    }
+                    return null;
+                }
+            }
+        }
+    }
+
 }

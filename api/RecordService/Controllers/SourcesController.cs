@@ -16,6 +16,24 @@ public class SourcesController : ControllerBase
         _sourcesService = sourcesService;
     }
 
+    [HttpGet("{id}")]
+    public async Task<IActionResult> GetSourceById(int id)
+    {
+        try
+        {
+            var source = await _sourcesService.GetSourceByIdAsync(id);
+            if (source == null)
+            {
+                return NotFound();
+            }
+            return Ok(source.ToResponseDto());
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Error retrieving source", error = ex.Message });
+        }
+    }
+
     [HttpGet]
     public async Task<IActionResult> GetAllSources()
     {

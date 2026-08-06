@@ -16,4 +16,9 @@ public class SourcesService : ISourcesService
     {
         return await _dataAccess.GetAllSourcesAsync();
     }
+
+    public async Task<Source?> GetSourceByIdAsync(int sourceId)
+    {
+        return await _dataAccess.GetSourceByIdAsync(sourceId);
+    }
 }
