@@ -78,7 +78,7 @@ public class UsersDataAccess : IUsersDataAccess
         using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync();
-            using (var command = new NpgsqlCommand("SELECT sq.id FROM search_queries sq INNER JOIN saved_searches ss ON sq.id = ss.search_query_id WHERE ss.user_id = @userId", connection))
+            using (var command = new NpgsqlCommand("SELECT sq.id FROM search_queries sq INNER JOIN user_search_queries usq ON sq.id = usq.search_query_id WHERE usq.user_id = @userId", connection))
             {
                 command.Parameters.AddWithValue("@userId", userId);
                 using (var reader = await command.ExecuteReaderAsync())

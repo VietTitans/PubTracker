@@ -1,4 +1,7 @@
+using Microsoft.AspNetCore.Authentication;
+using RecordService.Authentication;
 using RecordService.DataAccess;
+using RecordService.DataAccess.ExternalSources;
 using RecordService.BusinessLogic;
 using RecordService.ErrorHandling;
 
@@ -15,6 +18,20 @@ builder.Services.AddControllers();
 
 builder.Services.AddHttpContextAccessor();
 
+// External Literature Sources - Register providers for factory pattern
+builder.Services.AddSingleton<PubMedProvider>();
+builder.Services.AddSingleton<PedroProvider>();
+builder.Services.AddSingleton<LiteratureSourceFactory>(serviceProvider =>
+{
+    var providers = new ILiteratureSourceProvider[]
+    {
+        serviceProvider.GetRequiredService<PubMedProvider>(),
+        serviceProvider.GetRequiredService<PedroProvider>()
+        // Add new providers here as they are implemented
+    };
+    return new LiteratureSourceFactory(providers);
+});
+
 // Data Access Layer - Register interfaces to implementations
 builder.Services.AddScoped(serviceProvider => 
     new UsersDataAccess(connectionString, serviceProvider.GetRequiredService<IHttpContextAccessor>()));
@@ -22,7 +39,8 @@ builder.Services.AddScoped<IUsersDataAccess>(sp => sp.GetRequiredService<UsersDa
 builder.Services.AddScoped<ISourcesDataAccess>(serviceProvider =>
     new SourcesDataAccess(connectionString));
 
-builder.Services.AddScoped<ISearchQueriesDataAccess, SearchQueriesDataAccess>();
+builder.Services.AddScoped<ISearchQueriesDataAccess>(serviceProvider =>
+    new SearchQueriesDataAccess(connectionString, serviceProvider.GetRequiredService<LiteratureSourceFactory>()));
 
 // Business Logic Layer - Register interfaces to implementations
 builder.Services.AddScoped<IUsersService, UsersService>();
@@ -31,6 +49,14 @@ builder.Services.AddScoped<ISourcesService, SourcesService>();
 
 // Cross-cutting Concerns
 builder.Services.AddScoped<IErrorHandler, DefaultErrorHandler>();
+
+// Dev-only placeholder auth so claims-reading endpoints (e.g. ClaimTypes.NameIdentifier)
+// can be exercised locally before real auth is wired up. Never registered outside Development.
+if (builder.Environment.IsDevelopment())
+{
+    builder.Services.AddAuthentication(DebugAuthenticationHandler.SchemeName)
+        .AddScheme<AuthenticationSchemeOptions, DebugAuthenticationHandler>(DebugAuthenticationHandler.SchemeName, options => { });
+}
 
 // Configure Authorization Policies for Roles
 builder.Services.AddAuthorizationBuilder()
@@ -56,6 +82,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseAuthentication();
 
 app.UseAuthorization();
 
