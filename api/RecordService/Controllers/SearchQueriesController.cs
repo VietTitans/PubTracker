@@ -2,7 +2,9 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RecordService.BusinessLogic;
 using RecordService.Dtos;
+using RecordService.Exceptions;
 using RecordService.Extensions;
+using System.Security.Claims;
 
 namespace RecordService.Controllers;
 
@@ -49,6 +51,40 @@ public class SearchQueriesController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { message = "Error retrieving users for search query", error = ex.Message });
+        }
+    }
+
+    //[Authorize(Policy = "UserOrAdmin")]
+    [HttpPost]
+    public async Task<IActionResult> CreateSearchQuery([FromBody] CreateSearchQueryDto dto)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null)
+        {
+            return Unauthorized(new { message = "User ID not found in claims." });
+        }
+
+        if (string.IsNullOrWhiteSpace(dto.TargetUrl))
+        {
+            return BadRequest(new { message = "TargetUrl is required." });
+        }
+
+        try
+        {
+            var searchQuery = await _searchQueriesService.SubscribeAsync(int.Parse(userId), dto.TargetUrl);
+            return CreatedAtAction(nameof(GetSearchQueryById), new { searchQueryId = searchQuery.Id }, searchQuery.ToResponseDto());
+        }
+        catch (AlreadySubscribedException ex)
+        {
+            return Conflict(new { message = "Already subscribed to this search query.", error = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = "Unsupported or unrecognized search URL.", error = ex.Message });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Error creating search query", error = ex.Message });
         }
     }
 }
