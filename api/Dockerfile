@@ -17,4 +17,6 @@ WORKDIR /app
 
 COPY --from=build /publish .
 
+RUN dotnet exec --runtimeconfig /app/RecordService.runtimeconfig.json --depsfile /app/RecordService.deps.json /app/Microsoft.Playwright.dll install --with-deps chromium
+
 ENTRYPOINT ["dotnet", "RecordService.dll"]
