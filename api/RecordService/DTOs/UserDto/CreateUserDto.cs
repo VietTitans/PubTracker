@@ -1,9 +1,9 @@
-namespace RecordService.Dtos;
+namespace RecordService.DTOs.UserDto;
 
 /// <summary>
-/// DTO for updating an existing user
+/// DTO for creating a new user
 /// </summary>
-public class UpdateUserDto
+public class CreateUserDto
 {
     public string Name { get; set; }
 

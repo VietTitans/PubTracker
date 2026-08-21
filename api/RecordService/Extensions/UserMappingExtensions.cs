@@ -1,5 +1,5 @@
 using RecordData;
-using RecordService.Dtos;
+using RecordService.DTOs.UserDto;
 
 namespace RecordService.Extensions;
 

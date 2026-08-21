@@ -1,5 +1,3 @@
-using RecordService.BusinessLogic;
-
 namespace RecordService.Workers;
 
 /// <summary>

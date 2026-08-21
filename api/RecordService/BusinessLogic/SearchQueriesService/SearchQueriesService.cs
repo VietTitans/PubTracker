@@ -1,7 +1,7 @@
 using RecordData;
 using RecordService.DataAccess;
 
-namespace RecordService.BusinessLogic;
+namespace RecordService.BusinessLogic.SearchQueriesService;
 
 public class SearchQueriesService : ISearchQueriesService
 {

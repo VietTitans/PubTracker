@@ -1,6 +1,6 @@
 using RecordData;
 
-namespace RecordService.BusinessLogic;
+namespace RecordService.BusinessLogic.SourcesService.SourcesService;
 
 public interface ISourcesService
 {

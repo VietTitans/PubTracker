@@ -2,8 +2,12 @@ using Microsoft.AspNetCore.Authentication;
 using RecordService.Authentication;
 using RecordService.DataAccess;
 using RecordService.DataAccess.ExternalSources;
-using RecordService.BusinessLogic;
 using RecordService.ErrorHandling;
+using RecordService.Workers;
+using RecordService.BusinessLogic.UsersService;
+using RecordService.BusinessLogic.SearchQueriesService;
+using RecordService.BusinessLogic.RecordPollingService;
+using RecordService.BusinessLogic.SourcesService;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -27,7 +31,6 @@ builder.Services.AddSingleton<LiteratureSourceFactory>(serviceProvider =>
     {
         serviceProvider.GetRequiredService<PubMedProvider>(),
         serviceProvider.GetRequiredService<PedroProvider>()
-        // Add new providers here as they are implemented
     };
     return new LiteratureSourceFactory(providers);
 });
@@ -42,10 +45,21 @@ builder.Services.AddScoped<ISourcesDataAccess>(serviceProvider =>
 builder.Services.AddScoped<ISearchQueriesDataAccess>(serviceProvider =>
     new SearchQueriesDataAccess(connectionString, serviceProvider.GetRequiredService<LiteratureSourceFactory>()));
 
+builder.Services.AddScoped<IRecordsDataAccess>(serviceProvider =>
+    new RecordsDataAccess(connectionString));
+
 // Business Logic Layer - Register interfaces to implementations
 builder.Services.AddScoped<IUsersService, UsersService>();
 builder.Services.AddScoped<ISearchQueriesService, SearchQueriesService>();
 builder.Services.AddScoped<ISourcesService, SourcesService>();
+builder.Services.AddScoped<IRecordPollingService, RecordPollingService>();
+
+// Background scheduler - polls every search query for new records on an interval
+var pollIntervalHours = builder.Configuration.GetValue<double?>("Scheduler:PollIntervalHours") ?? 168;
+builder.Services.AddHostedService(serviceProvider => new RecordPollingBackgroundService(
+    serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+    serviceProvider.GetRequiredService<ILogger<RecordPollingBackgroundService>>(),
+    TimeSpan.FromHours(pollIntervalHours)));
 
 // Cross-cutting Concerns
 builder.Services.AddScoped<IErrorHandler, DefaultErrorHandler>();

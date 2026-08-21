@@ -1,4 +1,4 @@
-namespace RecordService.Dtos;
+namespace RecordService.DTOs.SearchQueryDto;
 
 public class CreateSearchQueryDto
 {

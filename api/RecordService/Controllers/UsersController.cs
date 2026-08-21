@@ -1,8 +1,8 @@
 ﻿using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RecordData;
-using RecordService.BusinessLogic;
-using RecordService.Dtos;
+using RecordService.BusinessLogic.UsersService;
+using RecordService.DTOs.UserDto;
 using RecordService.Extensions;
 using System.Security.Claims;
 

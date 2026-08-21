@@ -1,7 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using RecordService.BusinessLogic;
-using RecordService.Dtos;
+using RecordService.DTOs.SearchQueryDto;
 using RecordService.Exceptions;
 using RecordService.Extensions;
 using System.Security.Claims;

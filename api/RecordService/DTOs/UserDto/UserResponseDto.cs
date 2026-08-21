@@ -1,4 +1,4 @@
-namespace RecordService.Dtos;
+namespace RecordService.DTOs.UserDto;
 
 /// <summary>
 /// DTO for user data returned in API responses

@@ -1,6 +1,5 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
-using RecordService.BusinessLogic;
 using RecordService.Extensions;
 
 namespace RecordService.Controllers;

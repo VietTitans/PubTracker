@@ -1,7 +1,7 @@
 using RecordService.DataAccess;
 using RecordService.Models;
 
-namespace RecordService.BusinessLogic;
+namespace RecordService.BusinessLogic.RecordPollingService;
 
 public class RecordPollingService : IRecordPollingService
 {
