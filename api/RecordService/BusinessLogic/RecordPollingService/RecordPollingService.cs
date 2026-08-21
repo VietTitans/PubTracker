@@ -31,7 +31,7 @@ public class RecordPollingService : IRecordPollingService
             try
             {
                 var searchResult = await _searchQueriesDataAccess.ExecuteSourceSearchAsync(
-                    searchQuery.Id, searchQuery.TargetUrl, lastRunDate: null);
+                    searchQuery.Id, searchQuery.TargetUrl, searchQuery.LastDigestSentAt);
 
                 if (!searchResult.IsSuccessful)
                 {
@@ -50,6 +50,8 @@ public class RecordPollingService : IRecordPollingService
                 var newRecordCount = searchResult.NewRecords.Count > 0
                     ? await _recordsDataAccess.PersistSearchResultsAsync(searchQuery.Id, searchQuery.SourceId, searchResult.NewRecords)
                     : 0;
+
+                await _searchQueriesDataAccess.UpdateLastDigestSentAtAsync(searchQuery.Id, DateTime.UtcNow);
 
                 _logger.LogInformation(
                     "Search query {SearchQueryId}: {NewRecordCount} new / {FetchedCount} fetched",

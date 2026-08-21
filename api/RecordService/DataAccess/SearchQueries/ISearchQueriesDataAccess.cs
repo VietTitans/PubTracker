@@ -26,4 +26,12 @@ public interface ISearchQueriesDataAccess
     /// <param name="targetUrl">The literature search URL to subscribe to</param>
     /// <exception cref="InvalidOperationException">Thrown if the URL doesn't match a supported literature source</exception>
     Task<SearchQuery> SubscribeAsync(int userId, string targetUrl);
+
+    /// <summary>
+    /// Advances the search query's watermark timestamp. Currently reused as the poll
+    /// watermark (fed back in as ExecuteSourceSearchAsync's lastRunDate) ahead of the
+    /// digest-email feature existing; may need to split into a separate column once
+    /// poll cadence and digest-send cadence diverge.
+    /// </summary>
+    Task UpdateLastDigestSentAtAsync(int searchQueryId, DateTime timestamp);
 }
