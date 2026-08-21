@@ -34,6 +34,7 @@ services:
     environment:
       ConnectionStrings__DefaultConnection: '${DATABASE_URL_LOCAL:-Host=db;Port=${POSTGRES_PORT};Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}}'
       ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT}
+      Scheduler__PollIntervalHours: ${SCHEDULER_POLL_INTERVAL_HOURS}
 
 volumes:
   postgres_data:

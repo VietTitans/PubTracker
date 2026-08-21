@@ -1,3 +1,5 @@
+using RecordService.BusinessLogic.RecordPollingService;
+
 namespace RecordService.Workers;
 
 /// <summary>

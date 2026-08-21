@@ -1,6 +1,6 @@
 using RecordService.Models;
 
-namespace RecordService.BusinessLogic.RecordPollingService.RecordPollingService;
+namespace RecordService.BusinessLogic.RecordPollingService;
 
 public interface IRecordPollingService
 {

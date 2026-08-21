@@ -1,6 +1,6 @@
 using RecordData;
 
-namespace RecordService.BusinessLogic.SearchQueriesService.SearchQueriesService;
+namespace RecordService.BusinessLogic.SearchQueriesService;
 
 public interface ISearchQueriesService
 {
