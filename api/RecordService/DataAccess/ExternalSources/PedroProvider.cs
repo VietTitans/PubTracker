@@ -1,18 +1,26 @@
-using HtmlAgilityPack;
+using System.Text.RegularExpressions;
+using Microsoft.Playwright;
 using RecordService.Models;
-using System.Xml.Linq;
 
 namespace RecordService.DataAccess.ExternalSources;
 
 /// <summary>
 /// PEDro (Physiotherapy Evidence Database) literature source provider implementation.
-/// Handles searching and parsing PEDro results from cached HTML.
+/// Scrapes PEDro advanced-search results pages with a headless browser (PEDro's results
+/// table is exposed there, not through any public API).
+/// Requires the Playwright Chromium browser to be installed locally:
+/// `pwsh bin/Debug/net10.0/playwright.ps1 install chromium` after building.
 /// </summary>
-public class PedroProvider : ILiteratureSourceProvider
+public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
 {
     public string ProviderName => "PEDro";
 
-    private readonly Dictionary<string, List<LiteratureRecord>> _cache = new();
+    private static readonly Regex CountRegex = new(@"Found\s+([\d,]+)\s+records", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+    private static readonly Regex RecordIdRegex = new(@"record-detail/(\d+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
+    private readonly SemaphoreSlim _browserLock = new(1, 1);
+    private IPlaywright? _playwright;
+    private IBrowser? _browser;
 
     public bool CanHandle(string url)
     {
@@ -23,10 +31,8 @@ public class PedroProvider : ILiteratureSourceProvider
     {
         try
         {
-            // Parse cached HTML to get all records
-            var allRecords = await ParseCachedHtmlAsync(url);
+            var (_, allRecords) = await ScrapeAsync(url);
 
-            // Filter to only new records since last run
             var newRecords = lastRunDate.HasValue
                 ? allRecords.Where(r => r.DiscoveredAt > lastRunDate.Value).ToList()
                 : allRecords;
@@ -56,15 +62,7 @@ public class PedroProvider : ILiteratureSourceProvider
     {
         try
         {
-            // In a real implementation, this would:
-            // 1. Fetch fresh HTML from the URL
-            // 2. Store it in database or file system
-            // 3. Parse and cache the results
-
-            // For now, we'll simulate this by parsing existing cached data
-            var records = await ParseCachedHtmlAsync(url);
-            _cache[url] = records;
-
+            await ScrapeAsync(url);
             return true;
         }
         catch
@@ -73,53 +71,84 @@ public class PedroProvider : ILiteratureSourceProvider
         }
     }
 
-    public async Task<List<LiteratureRecord>> ParseCachedHtmlAsync(string url)
+    private async Task<(int RecordCount, List<LiteratureRecord> Records)> ScrapeAsync(string url)
     {
-        // Check if already in memory cache
-        if (_cache.TryGetValue(url, out var cachedRecords))
-            return await Task.FromResult(cachedRecords);
+        var browser = await GetBrowserAsync();
+
+        await using var context = await browser.NewContextAsync();
+        var page = await context.NewPageAsync();
+
+        await page.GotoAsync(url, new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
+        await page.WaitForSelectorAsync("#search-content");
+
+        var contentText = await page.Locator("#search-content").InnerTextAsync();
+        var normalizedText = string.Join(' ', contentText.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+
+        var recordCount = 0;
+        var countMatch = CountRegex.Match(normalizedText);
+        if (countMatch.Success)
+        {
+            recordCount = int.Parse(countMatch.Groups[1].Value.Replace(",", ""));
+        }
 
         var records = new List<LiteratureRecord>();
+        var links = page.Locator("#search-content a[href*='record-detail/']");
+        var linkCount = await links.CountAsync();
 
-        try
+        for (var i = 0; i < linkCount; i++)
         {
-            // In a production system, you would:
-            // 1. Fetch HTML from cache (database/file system)
-            // 2. Parse HTML using HtmlAgilityPack
-            // Example structure:
+            var link = links.Nth(i);
+            var href = await link.GetAttributeAsync("href");
+            var title = (await link.InnerTextAsync()).Trim();
 
-            var doc = new HtmlDocument();
-            // doc.LoadHtml(cachedHtmlContent); // Load from cache
+            if (string.IsNullOrEmpty(href) || string.IsNullOrEmpty(title))
+                continue;
 
-            // Example: PEDro search results have a different HTML structure than PubMed
-            // This is a template showing the expected parsing pattern specific to PEDro
+            var idMatch = RecordIdRegex.Match(href);
+            if (!idMatch.Success)
+                continue;
 
-            // var trialNodes = doc.DocumentNode.SelectNodes("//div[@class='trial']");
-            // foreach (var node in trialNodes ?? new())
-            // {
-            //     var doiNode = node.SelectSingleNode(".//span[@class='doi']");
-            //     var titleNode = node.SelectSingleNode(".//h3[@class='title']");
-            //     var authorNode = node.SelectSingleNode(".//span[@class='author']");
-            //     
-            //     records.Add(new LiteratureRecord
-            //     {
-            //         Doi = doiNode?.InnerText ?? string.Empty,
-            //         Title = titleNode?.InnerText ?? string.Empty,
-            //         Authors = authorNode?.InnerText ?? string.Empty,
-            //         Source = ProviderName,
-            //         DiscoveredAt = DateTime.UtcNow
-            //     });
-            // }
-
-            _cache[url] = records;
-        }
-        catch (Exception ex)
-        {
-            // Log error: Unable to parse PEDro HTML
-            Console.WriteLine($"Error parsing PEDro HTML: {ex.Message}");
+            records.Add(new LiteratureRecord
+            {
+                Doi = $"pedro:{idMatch.Groups[1].Value}",
+                Title = title,
+                Authors = string.Empty,
+                SourceUrl = href,
+                Source = ProviderName,
+                DiscoveredAt = DateTime.UtcNow
+            });
         }
 
-        return await Task.FromResult(records);
+        return (recordCount, records);
     }
 
+    private async Task<IBrowser> GetBrowserAsync()
+    {
+        if (_browser is not null)
+            return _browser;
+
+        await _browserLock.WaitAsync();
+        try
+        {
+            if (_browser is not null)
+                return _browser;
+
+            _playwright = await Playwright.CreateAsync();
+            _browser = await _playwright.Chromium.LaunchAsync(new BrowserTypeLaunchOptions { Headless = true });
+            return _browser;
+        }
+        finally
+        {
+            _browserLock.Release();
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_browser is not null)
+            await _browser.CloseAsync();
+
+        _playwright?.Dispose();
+        _browserLock.Dispose();
+    }
 }
