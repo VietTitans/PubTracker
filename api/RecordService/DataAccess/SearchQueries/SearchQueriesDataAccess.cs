@@ -43,6 +43,31 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
         }
     }
 
+    public async Task<List<SearchQuery>> GetAllSearchQueriesAsync()
+    {
+        var searchQueries = new List<SearchQuery>();
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var command = new NpgsqlCommand("SELECT id, source_id, target_url FROM search_queries", connection))
+            {
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        searchQueries.Add(new SearchQuery
+                        {
+                            Id = reader.GetInt32(0),
+                            SourceId = reader.IsDBNull(1) ? 0 : reader.GetInt32(1),
+                            TargetUrl = reader.IsDBNull(2) ? string.Empty : reader.GetString(2)
+                        });
+                    }
+                }
+            }
+        }
+        return searchQueries;
+    }
+
     public async Task<List<int>> GetUserSubscribersForQueryAsync(int searchQueryId)
     {
         var userIds = new List<int>();
