@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Authentication;
 using RecordService.Authentication;
 using RecordService.DataAccess;
+using RecordService.DataAccess.Email;
 using RecordService.DataAccess.ExternalSources;
 using RecordService.ErrorHandling;
 using RecordService.Workers;
@@ -8,6 +9,7 @@ using RecordService.BusinessLogic.UsersService;
 using RecordService.BusinessLogic.SearchQueriesService;
 using RecordService.BusinessLogic.RecordPollingService;
 using RecordService.BusinessLogic.SourcesService;
+using RecordService.BusinessLogic.DigestService;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -48,10 +50,27 @@ builder.Services.AddScoped<ISearchQueriesDataAccess>(serviceProvider =>
 builder.Services.AddScoped<IRecordsDataAccess>(serviceProvider =>
     new RecordsDataAccess(connectionString));
 
+// Email - swappable behind IEmailSender; BrevoEmailSender is the only provider-specific piece
+var emailApiKey = builder.Configuration["Email:ApiKey"];
+var emailFromAddress = builder.Configuration["Email:FromAddress"];
+var emailFromName = builder.Configuration["Email:FromName"];
+
+if (string.IsNullOrEmpty(emailApiKey) || string.IsNullOrEmpty(emailFromAddress) || string.IsNullOrEmpty(emailFromName))
+{
+    throw new Exception("Email configuration is missing");
+}
+
+builder.Services.AddHttpClient();
+builder.Services.AddScoped<IEmailSender>(serviceProvider =>
+    new BrevoEmailSender(
+        serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(),
+        emailApiKey, emailFromAddress, emailFromName));
+
 // Business Logic Layer - Register interfaces to implementations
 builder.Services.AddScoped<IUsersService, UsersService>();
 builder.Services.AddScoped<ISearchQueriesService, SearchQueriesService>();
 builder.Services.AddScoped<ISourcesService, SourcesService>();
+builder.Services.AddScoped<IDigestService, DigestService>();
 builder.Services.AddScoped<IRecordPollingService, RecordPollingService>();
 
 // Background scheduler - polls every search query for new records on an interval
@@ -104,3 +123,5 @@ app.UseAuthorization();
 app.MapControllers(); 
 
 app.Run();
+
+public partial class Program { }

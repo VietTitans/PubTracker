@@ -140,25 +140,16 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
                 try
                 {
                     int sourceId;
-                    using (var findSourceCommand = new NpgsqlCommand("SELECT id FROM sources WHERE name = @name", connection, transaction))
+                    using (var upsertSourceCommand = new NpgsqlCommand(
+                        @"INSERT INTO sources (name, base_url)
+                          VALUES (@name, @baseUrl)
+                          ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+                          RETURNING id", connection, transaction))
                     {
-                        findSourceCommand.Parameters.AddWithValue("@name", provider.ProviderName);
-                        var existingSourceId = await findSourceCommand.ExecuteScalarAsync();
-                        if (existingSourceId != null)
-                        {
-                            sourceId = (int)existingSourceId;
-                        }
-                        else
-                        {
-                            var baseUrl = new Uri(targetUrl).GetLeftPart(UriPartial.Authority);
-                            using (var insertSourceCommand = new NpgsqlCommand(
-                                "INSERT INTO sources (name, base_url) VALUES (@name, @baseUrl) RETURNING id", connection, transaction))
-                            {
-                                insertSourceCommand.Parameters.AddWithValue("@name", provider.ProviderName);
-                                insertSourceCommand.Parameters.AddWithValue("@baseUrl", baseUrl);
-                                sourceId = (int)(await insertSourceCommand.ExecuteScalarAsync())!;
-                            }
-                        }
+                        var baseUrl = new Uri(targetUrl).GetLeftPart(UriPartial.Authority);
+                        upsertSourceCommand.Parameters.AddWithValue("@name", provider.ProviderName);
+                        upsertSourceCommand.Parameters.AddWithValue("@baseUrl", baseUrl);
+                        sourceId = (int)(await upsertSourceCommand.ExecuteScalarAsync())!;
                     }
 
                     int searchQueryId;
