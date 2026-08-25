@@ -77,4 +77,39 @@ public class RecordsDataAccess : IRecordsDataAccess
 
         return newlyLinkedRecords;
     }
+
+    public async Task<List<LiteratureRecord>> GetRecordsSeenSinceAsync(int searchQueryId, DateTime? since)
+    {
+        var records = new List<LiteratureRecord>();
+        var effectiveSince = DateTime.SpecifyKind(since ?? DateTime.MinValue, DateTimeKind.Utc);
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var command = new NpgsqlCommand(
+                @"SELECT r.doi, r.title, r.description
+                  FROM search_query_records sqr
+                  JOIN records r ON r.id = sqr.record_id
+                  WHERE sqr.search_query_id = @searchQueryId AND sqr.first_seen_at > @since
+                  ORDER BY sqr.first_seen_at", connection))
+            {
+                command.Parameters.AddWithValue("@searchQueryId", searchQueryId);
+                command.Parameters.AddWithValue("@since", effectiveSince);
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        records.Add(new LiteratureRecord
+                        {
+                            Doi = reader.GetString(0),
+                            Title = reader.GetString(1),
+                            Abstract = reader.IsDBNull(2) ? null : reader.GetString(2)
+                        });
+                    }
+                }
+            }
+        }
+
+        return records;
+    }
 }

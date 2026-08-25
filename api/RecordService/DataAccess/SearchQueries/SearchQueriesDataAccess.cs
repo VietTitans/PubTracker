@@ -22,7 +22,7 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
         using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync();
-            using (var command = new NpgsqlCommand("SELECT id, source_id, target_url FROM search_queries WHERE id = @id", connection))
+            using (var command = new NpgsqlCommand("SELECT id, source_id, target_url, last_digest_sent_at FROM search_queries WHERE id = @id", connection))
             {
                 command.Parameters.AddWithValue("@id", searchQueryId);
                 using (var reader = await command.ExecuteReaderAsync())
@@ -33,7 +33,8 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
                         {
                             Id = reader.GetInt32(0),
                             SourceId = reader.IsDBNull(1) ? 0 : reader.GetInt32(1),
-                            TargetUrl = reader.IsDBNull(2) ? string.Empty : reader.GetString(2)
+                            TargetUrl = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                            LastDigestSentAt = reader.IsDBNull(3) ? null : reader.GetDateTime(3)
                         };
                     }
 

@@ -28,10 +28,15 @@ public interface ISearchQueriesDataAccess
     Task<SearchQuery> SubscribeAsync(int userId, string targetUrl);
 
     /// <summary>
-    /// Advances the search query's watermark timestamp. Currently reused as the poll
-    /// watermark (fed back in as ExecuteSourceSearchAsync's lastRunDate) ahead of the
-    /// digest-email feature existing; may need to split into a separate column once
-    /// poll cadence and digest-send cadence diverge.
+    /// Advances the search query's watermark timestamp. Also reused as the poll fetch
+    /// watermark (fed back in as ExecuteSourceSearchAsync's lastRunDate), though provider
+    /// implementations currently stamp DiscoveredAt at scrape time so that filter is largely
+    /// a no-op in practice - persistence-level dedup (search_query_records' unique constraint)
+    /// is what actually prevents re-processing already-seen records.
+    /// Callers (see RecordPollingService.PollOneAsync) should only call this after a digest
+    /// send has actually succeeded - records with search_query_records.first_seen_at after
+    /// this timestamp are what the next poll's digest is built from, so advancing it on a
+    /// failed send would silently drop those records from ever being retried.
     /// </summary>
     Task UpdateLastDigestSentAtAsync(int searchQueryId, DateTime timestamp);
 }
