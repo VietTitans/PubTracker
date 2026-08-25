@@ -12,9 +12,9 @@ public class RecordsDataAccess : IRecordsDataAccess
         _connectionString = connectionString ?? throw new ArgumentNullException(nameof(connectionString));
     }
 
-    public async Task<int> PersistSearchResultsAsync(int searchQueryId, int sourceId, IReadOnlyList<LiteratureRecord> records)
+    public async Task<List<LiteratureRecord>> PersistSearchResultsAsync(int searchQueryId, int sourceId, IReadOnlyList<LiteratureRecord> records)
     {
-        var newlySeenCount = 0;
+        var newlyLinkedRecords = new List<LiteratureRecord>();
 
         using (var connection = new NpgsqlConnection(_connectionString))
         {
@@ -60,7 +60,7 @@ public class RecordsDataAccess : IRecordsDataAccess
                             var insertedRecordId = await linkQueryCommand.ExecuteScalarAsync();
                             if (insertedRecordId != null)
                             {
-                                newlySeenCount++;
+                                newlyLinkedRecords.Add(record);
                             }
                         }
                     }
@@ -75,6 +75,6 @@ public class RecordsDataAccess : IRecordsDataAccess
             }
         }
 
-        return newlySeenCount;
+        return newlyLinkedRecords;
     }
 }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using RecordService.BusinessLogic.RecordPollingService;
 using RecordService.BusinessLogic.SearchQueriesService;
 using RecordService.DTOs.SearchQueryDto;
 using RecordService.Exceptions;
@@ -13,10 +14,12 @@ namespace RecordService.Controllers;
 public class SearchQueriesController : ControllerBase
 {
     private readonly ISearchQueriesService _searchQueriesService;
+    private readonly IRecordPollingService _recordPollingService;
 
-    public SearchQueriesController(ISearchQueriesService searchQueriesService)
+    public SearchQueriesController(ISearchQueriesService searchQueriesService, IRecordPollingService recordPollingService)
     {
         _searchQueriesService = searchQueriesService;
+        _recordPollingService = recordPollingService;
     }
 
     //[Authorize(Policy = "AdminOnly")]
@@ -51,6 +54,26 @@ public class SearchQueriesController : ControllerBase
         catch (Exception ex)
         {
             return StatusCode(500, new { message = "Error retrieving users for search query", error = ex.Message });
+        }
+    }
+
+    //[Authorize(Policy = "AdminOnly")]
+    [HttpPost("{searchQueryId}/poll")]
+    public async Task<IActionResult> PollSearchQuery(int searchQueryId)
+    {
+        try
+        {
+            var result = await _recordPollingService.PollSearchQueryAsync(searchQueryId);
+            if (result == null)
+            {
+                return NotFound(new { message = "Search query not found." });
+            }
+
+            return Ok(result.ToResponseDto());
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Error polling search query", error = ex.Message });
         }
     }
 
