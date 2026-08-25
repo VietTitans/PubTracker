@@ -227,3 +227,5 @@ __marimo__/
 /RESTAPI/RecordService/bin
 /api/RecordData/bin
 /.vs
+/api/test/bin
+/api/test/obj

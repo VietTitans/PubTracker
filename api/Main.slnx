@@ -3,4 +3,5 @@
   <Project Path="RecordService/RecordService.csproj">
     <BuildDependency Project="RecordData/RecordData.csproj" />
   </Project>
+  <Project Path="test/Test.csproj" />
 </Solution>
