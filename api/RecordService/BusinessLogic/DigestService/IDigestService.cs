@@ -8,5 +8,6 @@ public interface IDigestService
     /// Emails every subscriber of the given search query a digest of the newly found records.
     /// A failure sending to one subscriber does not stop the others from being notified.
     /// </summary>
-    Task SendDigestForSearchQueryAsync(int searchQueryId, string targetUrl, IReadOnlyList<LiteratureRecord> newRecords);
+    /// <returns>True if the send succeeded for every subscriber (or there were none); false if any failed.</returns>
+    Task<bool> SendDigestForSearchQueryAsync(int searchQueryId, string targetUrl, IReadOnlyList<LiteratureRecord> newRecords);
 }

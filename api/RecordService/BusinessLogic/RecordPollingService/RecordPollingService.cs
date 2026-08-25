@@ -73,19 +73,37 @@ public class RecordPollingService : IRecordPollingService
                 ? await _recordsDataAccess.PersistSearchResultsAsync(searchQuery.Id, searchQuery.SourceId, searchResult.NewRecords)
                 : new List<LiteratureRecord>();
 
-            if (newlyLinkedRecords.Count > 0)
+            // Digest content is the durable "seen since last successful digest" set, not just
+            // this poll's newly-linked records - so records left over from a previously failed
+            // send are retried alongside anything new this time.
+            var pendingDigestRecords = await _recordsDataAccess.GetRecordsSeenSinceAsync(searchQuery.Id, searchQuery.LastDigestSentAt);
+
+            var digestSucceeded = true;
+            if (pendingDigestRecords.Count > 0)
             {
                 try
                 {
-                    await _digestService.SendDigestForSearchQueryAsync(searchQuery.Id, searchQuery.TargetUrl, newlyLinkedRecords);
+                    digestSucceeded = await _digestService.SendDigestForSearchQueryAsync(searchQuery.Id, searchQuery.TargetUrl, pendingDigestRecords);
                 }
                 catch (Exception ex)
                 {
+                    digestSucceeded = false;
                     _logger.LogWarning(ex, "Failed to send digest for search query {SearchQueryId}", searchQuery.Id);
                 }
             }
 
-            await _searchQueriesDataAccess.UpdateLastDigestSentAtAsync(searchQuery.Id, DateTime.UtcNow);
+            // Only advance the watermark once the digest actually went out - a failed send
+            // leaves it in place so the same pending records are retried on the next poll.
+            if (digestSucceeded)
+            {
+                await _searchQueriesDataAccess.UpdateLastDigestSentAtAsync(searchQuery.Id, DateTime.UtcNow);
+            }
+            else
+            {
+                _logger.LogWarning(
+                    "Search query {SearchQueryId}: digest send failed, watermark not advanced ({PendingCount} record(s) pending retry)",
+                    searchQuery.Id, pendingDigestRecords.Count);
+            }
 
             _logger.LogInformation(
                 "Search query {SearchQueryId}: {NewRecordCount} new / {FetchedCount} fetched",
@@ -94,8 +112,9 @@ public class RecordPollingService : IRecordPollingService
             return new PollResult
             {
                 SearchQueryId = searchQuery.Id,
-                IsSuccessful = true,
-                NewRecordCount = newlyLinkedRecords.Count
+                IsSuccessful = digestSucceeded,
+                NewRecordCount = newlyLinkedRecords.Count,
+                ErrorMessage = digestSucceeded ? null : "Digest send failed; will retry on next poll."
             };
         }
         catch (Exception ex)

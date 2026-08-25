@@ -25,17 +25,18 @@ public class DigestService : IDigestService
         _logger = logger;
     }
 
-    public async Task SendDigestForSearchQueryAsync(int searchQueryId, string targetUrl, IReadOnlyList<LiteratureRecord> newRecords)
+    public async Task<bool> SendDigestForSearchQueryAsync(int searchQueryId, string targetUrl, IReadOnlyList<LiteratureRecord> newRecords)
     {
         if (newRecords.Count == 0)
         {
-            return;
+            return true;
         }
 
         var subject = $"{newRecords.Count} new record{(newRecords.Count == 1 ? "" : "s")} for your search";
         var htmlBody = BuildHtmlBody(targetUrl, newRecords);
 
         var subscriberIds = await _searchQueriesDataAccess.GetUserSubscribersForQueryAsync(searchQueryId);
+        var allSucceeded = true;
 
         foreach (var userId in subscriberIds)
         {
@@ -51,14 +52,17 @@ public class DigestService : IDigestService
             }
             catch (Exception ex)
             {
+                allSucceeded = false;
                 _logger.LogWarning(ex,
                     "Failed to send digest for search query {SearchQueryId} to user {UserId}",
                     searchQueryId, userId);
             }
         }
+
+        return allSucceeded;
     }
 
-    private static string BuildHtmlBody(string targetUrl, IReadOnlyList<LiteratureRecord> newRecords)
+    public static string BuildHtmlBody(string targetUrl, IReadOnlyList<LiteratureRecord> newRecords)
     {
         var sb = new StringBuilder();
         sb.Append("<p>New records found for your search: ");
@@ -68,7 +72,20 @@ public class DigestService : IDigestService
         foreach (var record in newRecords)
         {
             sb.Append("<li><strong>");
-            sb.Append(WebUtility.HtmlEncode(record.Title));
+
+            if (!string.IsNullOrWhiteSpace(record.SourceUrl))
+            {
+                sb.Append("<a href=\"");
+                sb.Append(WebUtility.HtmlEncode(record.SourceUrl));
+                sb.Append("\">");
+                sb.Append(WebUtility.HtmlEncode(record.Title));
+                sb.Append("</a>");
+            }
+            else
+            {
+                sb.Append(WebUtility.HtmlEncode(record.Title));
+            }
+
             sb.Append("</strong>");
 
             if (!string.IsNullOrWhiteSpace(record.Abstract))
@@ -77,11 +94,7 @@ public class DigestService : IDigestService
                 sb.Append(WebUtility.HtmlEncode(record.Abstract));
             }
 
-            sb.Append("<br/><a href=\"https://doi.org/");
-            sb.Append(WebUtility.HtmlEncode(record.Doi));
-            sb.Append("\">");
-            sb.Append(WebUtility.HtmlEncode(record.Doi));
-            sb.Append("</a></li>");
+            sb.Append("</li>");
         }
 
         sb.Append("</ul>");
