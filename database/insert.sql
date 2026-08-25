@@ -2,14 +2,14 @@
 INSERT INTO sources (id, name, base_url) VALUES
   (1, 'arXiv', 'https://arxiv.org'),
   (2, 'PubMed', 'https://pubmed.ncbi.nlm.nih.gov'),
-  (3, 'IEEE Xplore', 'https://ieeexplore.ieee.org');
+  (3, 'IEEE Xplore', 'https://ieeexplore.ieee.org'),
+  (4, 'PEDro', 'https://search.pedro.org.au');
 
 -- 2. search_queries
 INSERT INTO search_queries (id, source_id, target_url, last_digest_sent_at) VALUES
-  (1, 1, 'https://arxiv.org/search/?query=machine+learning&searchtype=all', '2026-07-15 09:00:00+00'),
-  (2, 1, 'https://arxiv.org/search/?query=natural+language+processing&searchtype=all', '2026-07-20 14:30:00+00'),
-  (3, 2, 'https://pubmed.ncbi.nlm.nih.gov/?term=genomics', NULL),
-  (4, 3, 'https://ieeexplore.ieee.org/search/searchresult.jsp?queryText=robotics', '2026-07-18 18:45:00+00');
+  (1, 4, 'https://search.pedro.org.au/advanced-search/results?abstract_with_title=&therapy=VL01387&problem=VL01371&body_part=VL01396&subdiscipline=VL01359&topic=VL01402&method=0&authors_association=&title=&source=&year_of_publication=2020&date_record_was_created=&nscore=&perpage=20&lop=and&find=&find=Start+Search', NULL),
+  (2, 4, 'https://search.pedro.org.au/advanced-search/results?abstract_with_title=&therapy=VL01387&problem=VL01371&body_part=VL01391&subdiscipline=VL01359&topic=VL01402&method=0&authors_association=&title=&source=&year_of_publication=2020&date_record_was_created=&nscore=&perpage=20&lop=and&find=&find=Start+Search', '2026-07-15 09:00:00+00'),
+  (3, 4, 'https://search.pedro.org.au/advanced-search/results?abstract_with_title=ACL&therapy=VL01387&problem=VL01375&body_part=VL01399&subdiscipline=VL01361&topic=VL01406&method=0&authors_association=&title=&source=&year_of_publication=2020&date_record_was_created=&nscore=&perpage=20&lop=and&find=&find=Start+Search', '2026-07-20 14:30:00+00');
 
 -- 3. records
 INSERT INTO records (id, doi, title, description) VALUES
@@ -27,8 +27,7 @@ INSERT INTO users (id, name, username, email, is_marked_for_deletion, deletion_r
 INSERT INTO user_search_queries (id, user_id, search_query_id, created_at) VALUES
   (1, 1, 1, '2026-07-01 10:00:00+00'),
   (2, 1, 2, '2026-07-05 11:30:00+00'),
-  (3, 2, 3, '2026-07-10 14:15:00+00'),
-  (4, 2, 4, '2026-07-12 09:45:00+00');
+  (3, 2, 3, '2026-07-10 14:15:00+00');
 
 -- 6. source_records
 INSERT INTO source_records (id, record_id, source_id) VALUES
@@ -43,8 +42,7 @@ INSERT INTO search_query_records (search_query_id, record_id, first_seen_at) VAL
   (1, 4, '2026-07-20 14:00:00+00'),
   (2, 4, '2026-07-18 12:20:00+00'),
   (3, 2, '2026-07-16 11:05:00+00'),
-  (4, 3, '2026-07-17 16:10:00+00'),
-  (4, 1, '2026-07-19 09:30:00+00');
+  (3, 3, '2026-07-19 09:30:00+00');
 
 -- Reset identity sequence generators to avoid primary key conflicts on future INSERTs
 SELECT setval(pg_get_serial_sequence('sources', 'id'), (SELECT MAX(id) FROM sources));
