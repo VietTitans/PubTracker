@@ -14,6 +14,13 @@ export interface SearchQuery {
   sourceId: number;
   targetUrl: string;
   subscribers: string[] | null;
+  lastDigestSentAt: string | null;
+  recordCount: number;
+  topic: string | null;
+  therapy: string | null;
+  problem: string | null;
+  bodyPart: string | null;
+  publicationYear: string | null;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
@@ -44,8 +51,25 @@ export function getCurrentUser(): Promise<User> {
   return request<User>("/api/Users/me");
 }
 
+export function updateCurrentUser(dto: { name: string; username: string; email: string }): Promise<User> {
+  return request<User>("/api/Users/me", {
+    method: "PUT",
+    body: JSON.stringify(dto),
+  });
+}
+
+export function deleteCurrentUser(): Promise<void> {
+  return request<void>("/api/Users/me", {
+    method: "DELETE",
+  });
+}
+
 export function getSearchQueriesForUser(userId: number): Promise<SearchQuery[]> {
   return request<SearchQuery[]>(`/api/Users/${userId}/search-queries`);
+}
+
+export function getSearchQueryById(searchQueryId: number): Promise<SearchQuery> {
+  return request<SearchQuery>(`/api/SearchQueries/${searchQueryId}`);
 }
 
 export function subscribeToSearchQuery(targetUrl: string): Promise<SearchQuery> {

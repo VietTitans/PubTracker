@@ -1,4 +1,5 @@
 using RecordData;
+using RecordService.BusinessLogic.DigestService;
 using RecordService.DTOs.SearchQueryDto;
 using RecordService.Models;
 
@@ -13,7 +14,14 @@ public static class SearchQueryMappingExtensions
             Id = searchQuery.Id,
             SourceId = searchQuery.SourceId,
             TargetUrl = searchQuery.TargetUrl,
-            Subscribers = searchQuery.Subscribers
+            Subscribers = searchQuery.Subscribers,
+            LastDigestSentAt = searchQuery.LastDigestSentAt,
+            RecordCount = searchQuery.RecordCount,
+            Topic = PedroDigestMessageBuilder.GetTopicLabel(searchQuery.TargetUrl),
+            Therapy = PedroDigestMessageBuilder.GetTherapyLabel(searchQuery.TargetUrl),
+            Problem = PedroDigestMessageBuilder.GetProblemLabel(searchQuery.TargetUrl),
+            BodyPart = PedroDigestMessageBuilder.GetBodyPartLabel(searchQuery.TargetUrl),
+            PublicationYear = PedroDigestMessageBuilder.GetPublicationYear(searchQuery.TargetUrl)
         };
     }
 

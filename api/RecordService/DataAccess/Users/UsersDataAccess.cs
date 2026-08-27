@@ -79,7 +79,8 @@ public class UsersDataAccess : IUsersDataAccess
         {
             await connection.OpenAsync();
             using (var command = new NpgsqlCommand(
-                @"SELECT sq.id, sq.source_id, sq.target_url, sq.last_digest_sent_at
+                @"SELECT sq.id, sq.source_id, sq.target_url, sq.last_digest_sent_at,
+                         (SELECT COUNT(*) FROM search_query_records sqr WHERE sqr.search_query_id = sq.id)
                   FROM search_queries sq
                   INNER JOIN user_search_queries usq ON sq.id = usq.search_query_id
                   WHERE usq.user_id = @userId", connection))
@@ -94,7 +95,8 @@ public class UsersDataAccess : IUsersDataAccess
                             Id = reader.GetInt32(0),
                             SourceId = reader.IsDBNull(1) ? 0 : reader.GetInt32(1),
                             TargetUrl = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
-                            LastDigestSentAt = reader.IsDBNull(3) ? null : reader.GetDateTime(3)
+                            LastDigestSentAt = reader.IsDBNull(3) ? null : reader.GetDateTime(3),
+                            RecordCount = (int)reader.GetInt64(4)
                         });
                     }
                 }
