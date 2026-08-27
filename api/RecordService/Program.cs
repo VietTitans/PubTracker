@@ -99,12 +99,26 @@ builder.Services.AddScoped<IErrorHandler, DefaultErrorHandler>();
 // first successful validation, and the resulting internal id is what's written back onto
 // the principal as ClaimTypes.NameIdentifier, so existing claims-reading controller code
 // (int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier))) keeps working unchanged.
+//
+// Authority vs MetadataAddress: Authority is the browser-facing URL and is what tokens are
+// actually stamped with as `iss` (since Keycloak derives issuer from however the browser
+// reached it), so it's what we validate the token's issuer against. Inside Docker, this API
+// container can't reach Keycloak at that same browser-facing "localhost:8081" address
+// (there's nothing listening on that port inside this container) - it needs the Docker
+// network's service name instead. MetadataAddress lets the two diverge: when set (only in
+// docker-compose), it's used purely for this container's own outbound signing-key fetch,
+// while ValidIssuer stays pinned to the browser-facing Authority regardless.
 var keycloakAuthority = builder.Configuration["Keycloak:Authority"] ?? "http://localhost:8081/realms/science-alerts-saas";
+var keycloakMetadataAddress = builder.Configuration["Keycloak:MetadataAddress"];
 var keycloakAudience = builder.Configuration["Keycloak:Audience"] ?? "science-alerts-api";
 
 void ConfigureKeycloakBearer(JwtBearerOptions options)
 {
     options.Authority = keycloakAuthority;
+    if (!string.IsNullOrEmpty(keycloakMetadataAddress))
+    {
+        options.MetadataAddress = keycloakMetadataAddress;
+    }
     options.Audience = keycloakAudience;
     options.RequireHttpsMetadata = !builder.Environment.IsDevelopment(); // local dev Keycloak runs over plain HTTP
     options.MapInboundClaims = false; // keep raw JWT claim names ("sub", "email", ...) instead of the default ClaimTypes.* remapping
@@ -112,6 +126,7 @@ void ConfigureKeycloakBearer(JwtBearerOptions options)
     {
         ValidateAudience = true,
         ValidateIssuer = true,
+        ValidIssuer = keycloakAuthority,
         ClockSkew = TimeSpan.FromMinutes(5)
     };
     options.Events = new JwtBearerEvents
