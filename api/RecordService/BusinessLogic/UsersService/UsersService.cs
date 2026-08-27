@@ -32,6 +32,11 @@ public class UsersService : IUsersService
         return await _dataAccess.CreateUserAsync(user);
     }
 
+    public async Task<User> GetOrProvisionByKeycloakSubAsync(string keycloakSub, string email, string name, string username)
+    {
+        return await _dataAccess.GetOrProvisionByKeycloakSubAsync(keycloakSub, email, name, username);
+    }
+
     public async Task UpdateUserAsync(int userId, User user)
     {
         await _dataAccess.UpdateUserAsync(userId, user);

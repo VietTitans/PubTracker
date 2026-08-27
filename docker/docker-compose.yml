@@ -18,6 +18,18 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: keycloak
+    restart: unless-stopped
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
   api:
     container_name: api
     restart: unless-stopped
@@ -38,6 +50,20 @@ services:
       Email__ApiKey: ${EMAIL_API_KEY}
       Email__FromAddress: ${EMAIL_FROM_ADDRESS}
       Email__FromName: ${EMAIL_FROM_NAME}
+  web:
+    container_name: web
+    restart: unless-stopped
+    build:
+      context: ../web
+      dockerfile: Dockerfile
+      args:
+        VITE_API_BASE_URL: ${WEB_API_BASE_URL:-http://localhost:8080}
+        VITE_KEYCLOAK_AUTHORITY: ${WEB_KEYCLOAK_AUTHORITY:-http://localhost:8081/realms/science-alerts-saas}
+        VITE_KEYCLOAK_CLIENT_ID: ${WEB_KEYCLOAK_CLIENT_ID:-science-alerts-web}
+    depends_on:
+      - api
+    ports:
+      - "5173:80"
 
 volumes:
   postgres_data:

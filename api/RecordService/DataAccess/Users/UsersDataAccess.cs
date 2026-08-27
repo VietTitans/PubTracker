@@ -128,6 +128,72 @@ public class UsersDataAccess : IUsersDataAccess
         }
     }
 
+    public async Task<User> GetOrProvisionByKeycloakSubAsync(string keycloakSub, string email, string name, string username)
+    {
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+
+            using (var command = new NpgsqlCommand(
+                "SELECT id, name, username, email, is_marked_for_deletion, deletion_requested_at FROM users WHERE keycloak_sub = @keycloakSub", connection))
+            {
+                command.Parameters.AddWithValue("@keycloakSub", keycloakSub);
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        return ReadUser(reader);
+                    }
+                }
+            }
+
+            using (var command = new NpgsqlCommand(
+                @"UPDATE users SET keycloak_sub = @keycloakSub
+                  WHERE email = @email AND keycloak_sub IS NULL
+                  RETURNING id, name, username, email, is_marked_for_deletion, deletion_requested_at", connection))
+            {
+                command.Parameters.AddWithValue("@keycloakSub", keycloakSub);
+                command.Parameters.AddWithValue("@email", email);
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    if (await reader.ReadAsync())
+                    {
+                        return ReadUser(reader);
+                    }
+                }
+            }
+
+            using (var command = new NpgsqlCommand(
+                @"INSERT INTO users (name, username, email, keycloak_sub)
+                  VALUES (@name, @username, @email, @keycloakSub)
+                  RETURNING id, name, username, email, is_marked_for_deletion, deletion_requested_at", connection))
+            {
+                command.Parameters.AddWithValue("@name", name);
+                command.Parameters.AddWithValue("@username", username);
+                command.Parameters.AddWithValue("@email", email);
+                command.Parameters.AddWithValue("@keycloakSub", keycloakSub);
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    await reader.ReadAsync();
+                    return ReadUser(reader);
+                }
+            }
+        }
+    }
+
+    private static User ReadUser(NpgsqlDataReader reader)
+    {
+        return new User
+        {
+            Id = reader.GetInt32(0),
+            Name = reader.GetString(1),
+            Username = reader.GetString(2),
+            Email = reader.GetString(3),
+            IsMarkedForDeletion = reader.GetBoolean(4),
+            DeletionRequestedAt = reader.IsDBNull(5) ? null : reader.GetDateTime(5)
+        };
+    }
+
     public async Task UpdateUserAsync(int userId, User user)
     {
         using (var connection = new NpgsqlConnection(_connectionString))

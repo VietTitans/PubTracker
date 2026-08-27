@@ -1,4 +1,7 @@
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
 using RecordService.Authentication;
 using RecordService.DataAccess;
 using RecordService.DataAccess.Email;
@@ -23,6 +26,14 @@ if (string.IsNullOrEmpty(connectionString))
 builder.Services.AddControllers();
 
 builder.Services.AddHttpContextAccessor();
+
+// CORS - allows the React dev server (Vite, default port 5173) to call this API.
+var webAppOrigin = builder.Configuration["Cors:WebAppOrigin"] ?? "http://localhost:5173";
+builder.Services.AddCors(options =>
+{
+    options.AddDefaultPolicy(policy =>
+        policy.WithOrigins(webAppOrigin).AllowAnyHeader().AllowAnyMethod());
+});
 
 // External Literature Sources - Register providers for factory pattern
 builder.Services.AddSingleton<PubMedProvider>();
@@ -83,12 +94,79 @@ builder.Services.AddHostedService(serviceProvider => new RecordPollingBackground
 // Cross-cutting Concerns
 builder.Services.AddScoped<IErrorHandler, DefaultErrorHandler>();
 
+// Keycloak (real login). JWT `sub` is a Keycloak-generated UUID, not our internal
+// users.id - GetOrProvisionByKeycloakSubAsync resolves/creates the matching users row on
+// first successful validation, and the resulting internal id is what's written back onto
+// the principal as ClaimTypes.NameIdentifier, so existing claims-reading controller code
+// (int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier))) keeps working unchanged.
+var keycloakAuthority = builder.Configuration["Keycloak:Authority"] ?? "http://localhost:8081/realms/science-alerts-saas";
+var keycloakAudience = builder.Configuration["Keycloak:Audience"] ?? "science-alerts-api";
+
+void ConfigureKeycloakBearer(JwtBearerOptions options)
+{
+    options.Authority = keycloakAuthority;
+    options.Audience = keycloakAudience;
+    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment(); // local dev Keycloak runs over plain HTTP
+    options.MapInboundClaims = false; // keep raw JWT claim names ("sub", "email", ...) instead of the default ClaimTypes.* remapping
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateAudience = true,
+        ValidateIssuer = true,
+        ClockSkew = TimeSpan.FromMinutes(5)
+    };
+    options.Events = new JwtBearerEvents
+    {
+        OnTokenValidated = async context =>
+        {
+            var principal = context.Principal!;
+            var keycloakSub = principal.FindFirstValue("sub");
+            if (string.IsNullOrEmpty(keycloakSub))
+            {
+                context.Fail("Token is missing a sub claim.");
+                return;
+            }
+
+            var email = principal.FindFirstValue("email") ?? string.Empty;
+            var name = principal.FindFirstValue("name") ?? email;
+            var username = principal.FindFirstValue("preferred_username") ?? email;
+
+            var usersService = context.HttpContext.RequestServices.GetRequiredService<IUsersService>();
+            var user = await usersService.GetOrProvisionByKeycloakSubAsync(keycloakSub, email, name, username);
+
+            ((ClaimsIdentity)principal.Identity!).AddClaim(new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()));
+        }
+    };
+}
+
 // Dev-only placeholder auth so claims-reading endpoints (e.g. ClaimTypes.NameIdentifier)
-// can be exercised locally before real auth is wired up. Never registered outside Development.
+// can be exercised via Swagger/Postman without a real Keycloak login. Never registered
+// outside Development. Requests carrying a real "Authorization: Bearer <jwt>" header are
+// still routed to the real Keycloak validation above; only requests without one fall back
+// to the debug identity - see the "Smart" policy scheme below.
 if (builder.Environment.IsDevelopment())
 {
-    builder.Services.AddAuthentication(DebugAuthenticationHandler.SchemeName)
-        .AddScheme<AuthenticationSchemeOptions, DebugAuthenticationHandler>(DebugAuthenticationHandler.SchemeName, options => { });
+    builder.Services.AddAuthentication(options =>
+        {
+            options.DefaultScheme = "Smart";
+            options.DefaultChallengeScheme = "Smart";
+        })
+        .AddPolicyScheme("Smart", "Bearer token or debug identity", options =>
+        {
+            options.ForwardDefaultSelector = context =>
+            {
+                var authHeader = context.Request.Headers.Authorization.ToString();
+                return authHeader.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)
+                    ? JwtBearerDefaults.AuthenticationScheme
+                    : DebugAuthenticationHandler.SchemeName;
+            };
+        })
+        .AddScheme<AuthenticationSchemeOptions, DebugAuthenticationHandler>(DebugAuthenticationHandler.SchemeName, options => { })
+        .AddJwtBearer(ConfigureKeycloakBearer);
+}
+else
+{
+    builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+        .AddJwtBearer(ConfigureKeycloakBearer);
 }
 
 // Configure Authorization Policies for Roles
@@ -115,6 +193,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors();
 
 app.UseAuthentication();
 
