@@ -110,4 +110,30 @@ public class SearchQueriesController : ControllerBase
             return StatusCode(500, new { message = "Error creating search query", error = ex.Message });
         }
     }
+
+    //[Authorize(Policy = "UserOrAdmin")]
+    [HttpDelete("{searchQueryId}")]
+    public async Task<IActionResult> UnsubscribeFromSearchQuery(int searchQueryId)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null)
+        {
+            return Unauthorized(new { message = "User ID not found in claims." });
+        }
+
+        try
+        {
+            var unsubscribed = await _searchQueriesService.UnsubscribeAsync(int.Parse(userId), searchQueryId);
+            if (!unsubscribed)
+            {
+                return NotFound(new { message = "Subscription not found." });
+            }
+
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Error unsubscribing from search query", error = ex.Message });
+        }
+    }
 }

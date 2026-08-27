@@ -200,6 +200,22 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
         }
     }
 
+    public async Task<bool> UnsubscribeAsync(int userId, int searchQueryId)
+    {
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var command = new NpgsqlCommand(
+                "DELETE FROM user_search_queries WHERE user_id = @userId AND search_query_id = @searchQueryId", connection))
+            {
+                command.Parameters.AddWithValue("@userId", userId);
+                command.Parameters.AddWithValue("@searchQueryId", searchQueryId);
+                var rowsAffected = await command.ExecuteNonQueryAsync();
+                return rowsAffected > 0;
+            }
+        }
+    }
+
     public async Task UpdateLastDigestSentAtAsync(int searchQueryId, DateTime timestamp)
     {
         using (var connection = new NpgsqlConnection(_connectionString))

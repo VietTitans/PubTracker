@@ -72,20 +72,30 @@ public class UsersDataAccess : IUsersDataAccess
         return users;
     }
 
-    public async Task<List<string>> GetSearchQueriesByUserAsync(int userId)
+    public async Task<List<SearchQuery>> GetSearchQueriesByUserAsync(int userId)
     {
-        var queries = new List<string>();
+        var queries = new List<SearchQuery>();
         using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync();
-            using (var command = new NpgsqlCommand("SELECT sq.id FROM search_queries sq INNER JOIN user_search_queries usq ON sq.id = usq.search_query_id WHERE usq.user_id = @userId", connection))
+            using (var command = new NpgsqlCommand(
+                @"SELECT sq.id, sq.source_id, sq.target_url, sq.last_digest_sent_at
+                  FROM search_queries sq
+                  INNER JOIN user_search_queries usq ON sq.id = usq.search_query_id
+                  WHERE usq.user_id = @userId", connection))
             {
                 command.Parameters.AddWithValue("@userId", userId);
                 using (var reader = await command.ExecuteReaderAsync())
                 {
                     while (await reader.ReadAsync())
                     {
-                        queries.Add(reader.GetInt32(0).ToString());
+                        queries.Add(new SearchQuery
+                        {
+                            Id = reader.GetInt32(0),
+                            SourceId = reader.IsDBNull(1) ? 0 : reader.GetInt32(1),
+                            TargetUrl = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
+                            LastDigestSentAt = reader.IsDBNull(3) ? null : reader.GetDateTime(3)
+                        });
                     }
                 }
             }

@@ -22,7 +22,7 @@ public class UsersService : IUsersService
         return await _dataAccess.GetUsersAsync();
     }
 
-    public async Task<List<string>> GetSearchQueriesByUserAsync(int userId)
+    public async Task<List<SearchQuery>> GetSearchQueriesByUserAsync(int userId)
     {
         return await _dataAccess.GetSearchQueriesByUserAsync(userId);
     }

@@ -190,7 +190,7 @@ public class UsersController : ControllerBase
         try
         {
             var queries = await _userService.GetSearchQueriesByUserAsync(userId);
-            return Ok(new { searchQueryIds = queries });
+            return Ok(queries.ToResponseDtoList());
         }
         catch (Exception ex)
         {

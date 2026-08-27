@@ -28,6 +28,12 @@ public interface ISearchQueriesDataAccess
     Task<SearchQuery> SubscribeAsync(int userId, string targetUrl);
 
     /// <summary>
+    /// Removes the user's subscription to the given search query, if one exists.
+    /// </summary>
+    /// <returns>True if a subscription was removed; false if the user wasn't subscribed.</returns>
+    Task<bool> UnsubscribeAsync(int userId, int searchQueryId);
+
+    /// <summary>
     /// Advances the search query's watermark timestamp. Also reused as the poll fetch
     /// watermark (fed back in as ExecuteSourceSearchAsync's lastRunDate), though provider
     /// implementations currently stamp DiscoveredAt at scrape time so that filter is largely
