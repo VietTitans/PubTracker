@@ -16,11 +16,7 @@ export interface SearchQuery {
   subscribers: string[] | null;
   lastDigestSentAt: string | null;
   recordCount: number;
-  topic: string | null;
-  therapy: string | null;
-  problem: string | null;
-  bodyPart: string | null;
-  publicationYear: string | null;
+  tags: string[];
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

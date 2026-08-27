@@ -15,16 +15,9 @@ public class SearchQueryResponseDto
     public int RecordCount { get; set; }
 
     /// <summary>
-    /// PEDro-specific decoded search-field labels (see PedroDigestMessageBuilder). Null for
-    /// non-PEDro sources, or when the URL doesn't carry a recognized value for that field.
+    /// Every recognized PEDro advanced-search field present on TargetUrl, as ready-to-display
+    /// tags (see PedroDigestMessageBuilder.GetKeywordTags). Empty for non-PEDro sources or a
+    /// PEDro URL with no recognized fields.
     /// </summary>
-    public string? Topic { get; set; }
-
-    public string? Therapy { get; set; }
-
-    public string? Problem { get; set; }
-
-    public string? BodyPart { get; set; }
-
-    public string? PublicationYear { get; set; }
+    public List<string> Tags { get; set; } = new();
 }

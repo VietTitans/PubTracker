@@ -17,11 +17,7 @@ public static class SearchQueryMappingExtensions
             Subscribers = searchQuery.Subscribers,
             LastDigestSentAt = searchQuery.LastDigestSentAt,
             RecordCount = searchQuery.RecordCount,
-            Topic = PedroDigestMessageBuilder.GetTopicLabel(searchQuery.TargetUrl),
-            Therapy = PedroDigestMessageBuilder.GetTherapyLabel(searchQuery.TargetUrl),
-            Problem = PedroDigestMessageBuilder.GetProblemLabel(searchQuery.TargetUrl),
-            BodyPart = PedroDigestMessageBuilder.GetBodyPartLabel(searchQuery.TargetUrl),
-            PublicationYear = PedroDigestMessageBuilder.GetPublicationYear(searchQuery.TargetUrl)
+            Tags = PedroDigestMessageBuilder.GetKeywordTags(searchQuery.TargetUrl)
         };
     }
 

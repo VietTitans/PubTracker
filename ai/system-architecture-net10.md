@@ -22,6 +22,8 @@ The backend features a **Parser Factory Engine** designed to deconstruct pasted 
 
 > **Note — ToS/legal review required:** replaying user-authenticated or session-scoped search URLs against Scopus/IEEE Xplore on a recurring schedule, and routing traffic through institutional proxies, may conflict with those providers' terms of service and the institution's network-use policy. This needs explicit legal sign-off before implementation, and pasted URLs from these platforms may carry session tokens that expire, breaking the "paste once, monitor forever" assumption.
 
+> **Note — PEDro Fair Use conflict (confirmed):** PEDro's published Fair Use policy (`pedro.org.au/fair-use/`) explicitly states "Any form of systematic, bulk, or automated downloading or the use of spiders or robots is not permitted," and that commercial use requires written approval from the PEDro Partnership. The current `PedroProvider` headless-scraping implementation directly conflicts with this — it is not a hypothetical risk. `robots.txt` being permissive does not override these terms. No self-serve API or bulk-licensing option is advertised on their site; the stated path is to contact the PEDro Partnership directly for written approval. **Decision (as of this investigation): accepted as a dev-time risk given current low request volume — must be resolved (obtain written approval, or drop PEDro as a source) before any production launch or scale-up.**
+
 ---
 
 ## 3. High-Level Architecture & Technical Stack

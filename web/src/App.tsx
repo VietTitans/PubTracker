@@ -14,16 +14,6 @@ import { useAuth } from "./auth/useAuth";
 import { detectSourceLabel } from "./lib/sourceLabel";
 import "./App.css";
 
-function getKeywordTags(sq: SearchQuery): string[] {
-  return [
-    sq.bodyPart,
-    sq.therapy,
-    sq.problem,
-    sq.topic,
-    sq.publicationYear ? `Since ${sq.publicationYear}` : null,
-  ].filter((keyword): keyword is string => Boolean(keyword));
-}
-
 function ExternalLinkIcon() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -164,7 +154,7 @@ function DetailDialog({
   const lastFetch = detail?.lastDigestSentAt
     ? new Date(detail.lastDigestSentAt).toLocaleString(undefined, { hour12: false })
     : "Never";
-  const keywords = detail ? getKeywordTags(detail) : [];
+  const keywords = detail?.tags ?? [];
 
   return (
     <div className="modal-overlay" onClick={onClose}>
@@ -280,7 +270,6 @@ function UserMenu({
         </span>
         <span className="user-chip-text">
           <span className="user-chip-name">{user.name}</span>
-          <span className="user-chip-email">{user.email}</span>
         </span>
         <ChevronDownIcon />
       </button>
@@ -692,7 +681,7 @@ function App() {
           <ul className="search-query-list">
             {searchQueries.map((sq) => {
               const source = detectSourceLabel(sq.targetUrl);
-              const tags = getKeywordTags(sq);
+              const tags = sq.tags;
               return (
                 <li key={sq.id} onClick={() => handleOpenDetail(sq)} className="clickable">
                   <span className={`badge badge-${source.toLowerCase()}`}>{source}</span>
