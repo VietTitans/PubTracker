@@ -37,12 +37,13 @@ INSERT INTO source_records (id, record_id, source_id) VALUES
   (4, 3, 3);
 
 -- 7. search_query_records (Composite PK)
-INSERT INTO search_query_records (search_query_id, record_id, first_seen_at) VALUES
-  (1, 1, '2026-07-10 08:15:00+00'),
-  (1, 4, '2026-07-20 14:00:00+00'),
-  (2, 4, '2026-07-18 12:20:00+00'),
-  (3, 2, '2026-07-16 11:05:00+00'),
-  (3, 3, '2026-07-19 09:30:00+00');
+-- Intentionally empty: search_queries 1-3 are all PEDro (source_id 4), but none of the
+-- seed records above are PEDro-sourced (they're arXiv/PubMed/IEEE), so there's no record
+-- here that could legitimately link to them - a real scrape always links a search query
+-- only to records from its own source. Earlier versions of this file linked them anyway,
+-- which silently inflated those queries' record counts with records from unrelated
+-- sources. Real search_query_records rows for these queries come from the background
+-- poller actually scraping PEDro once the app is running.
 
 -- Reset identity sequence generators to avoid primary key conflicts on future INSERTs
 SELECT setval(pg_get_serial_sequence('sources', 'id'), (SELECT MAX(id) FROM sources));
