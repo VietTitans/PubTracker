@@ -27,15 +27,16 @@ public class RecordsDataAccess : IRecordsDataAccess
                     {
                         int recordId;
                         using (var upsertRecordCommand = new NpgsqlCommand(
-                            @"INSERT INTO records (doi, title, description)
-                              VALUES (@doi, @title, @description)
+                            @"INSERT INTO records (doi, title, description, source_url)
+                              VALUES (@doi, @title, @description, @sourceUrl)
                               ON CONFLICT (doi) DO UPDATE
-                                  SET title = EXCLUDED.title, description = EXCLUDED.description
+                                  SET title = EXCLUDED.title, description = EXCLUDED.description, source_url = EXCLUDED.source_url
                               RETURNING id", connection, transaction))
                         {
                             upsertRecordCommand.Parameters.AddWithValue("@doi", record.Doi);
                             upsertRecordCommand.Parameters.AddWithValue("@title", record.Title);
                             upsertRecordCommand.Parameters.AddWithValue("@description", (object?)record.Abstract ?? DBNull.Value);
+                            upsertRecordCommand.Parameters.AddWithValue("@sourceUrl", (object?)record.SourceUrl ?? DBNull.Value);
                             recordId = (int)(await upsertRecordCommand.ExecuteScalarAsync())!;
                         }
 
@@ -87,7 +88,7 @@ public class RecordsDataAccess : IRecordsDataAccess
         {
             await connection.OpenAsync();
             using (var command = new NpgsqlCommand(
-                @"SELECT r.doi, r.title, r.description
+                @"SELECT r.doi, r.title, r.description, r.source_url
                   FROM search_query_records sqr
                   JOIN records r ON r.id = sqr.record_id
                   WHERE sqr.search_query_id = @searchQueryId AND sqr.first_seen_at > @since
@@ -103,7 +104,8 @@ public class RecordsDataAccess : IRecordsDataAccess
                         {
                             Doi = reader.GetString(0),
                             Title = reader.GetString(1),
-                            Abstract = reader.IsDBNull(2) ? null : reader.GetString(2)
+                            Abstract = reader.IsDBNull(2) ? null : reader.GetString(2),
+                            SourceUrl = reader.IsDBNull(3) ? null : reader.GetString(3)
                         });
                     }
                 }

@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS records (
     doi TEXT NOT NULL UNIQUE,
     title TEXT NOT NULL,
     description TEXT,
+    source_url TEXT,
     PRIMARY KEY (id)
 );
 

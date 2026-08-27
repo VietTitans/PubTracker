@@ -42,7 +42,7 @@ public class PedroProviderManualTest
         Assert.False(string.IsNullOrWhiteSpace(fromAddress), "EMAIL_FROM_ADDRESS must be set in docker/.env to run this test.");
 
         var subject = $"{result.NewRecords.Count} new record{(result.NewRecords.Count == 1 ? "" : "s")} for your search";
-        var htmlBody = DigestService.BuildHtmlBody(TestUrl, result.NewRecords);
+        var htmlBody = PedroDigestMessageBuilder.BuildHtmlBody(TestUrl, result.NewRecords);
 
         var sender = new BrevoEmailSender(new HttpClient(), apiKey!, fromAddress!, fromName);
         await sender.SendAsync(fromAddress!, subject, htmlBody);

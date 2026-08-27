@@ -2,6 +2,7 @@ using System.Net;
 using System.Text;
 using RecordService.DataAccess;
 using RecordService.DataAccess.Email;
+using RecordService.DataAccess.ExternalSources;
 using RecordService.Models;
 
 namespace RecordService.BusinessLogic.DigestService;
@@ -33,7 +34,12 @@ public class DigestService : IDigestService
         }
 
         var subject = $"{newRecords.Count} new record{(newRecords.Count == 1 ? "" : "s")} for your search";
-        var htmlBody = BuildHtmlBody(targetUrl, newRecords);
+        var htmlBody = SourceDetector.DetectSource(targetUrl) switch
+        {
+            SourceDetector.SourceType.Pedro => PedroDigestMessageBuilder.BuildHtmlBody(targetUrl, newRecords),
+            SourceDetector.SourceType.PubMed => PubMedDigestMessageBuilder.BuildHtmlBody(targetUrl, newRecords),
+            _ => BuildHtmlBody(targetUrl, newRecords)
+        };
 
         var subscriberIds = await _searchQueriesDataAccess.GetUserSubscribersForQueryAsync(searchQueryId);
         var allSucceeded = true;
