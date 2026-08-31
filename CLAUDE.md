@@ -49,7 +49,10 @@ dotnet restore api/RecordService/RecordService.csproj   # restore deps
 dotnet build api/RecordService/RecordService.csproj      # build
 dotnet run --project api/RecordService                   # run locally (needs DefaultConnection configured, see below)
 ```
-No test project exists yet in `api/`.
+Tests live in `api/test/Test.csproj` (xunit; `Testcontainers.PostgreSql`-based end-to-end tests):
+```bash
+dotnet test api/test/Test.csproj
+```
 
 ### Full stack via Docker
 ```bash
