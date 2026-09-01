@@ -14,6 +14,18 @@ pipeline {
         // point it at the Jenkins workspace instead — that directory is bind-mounted from the
         // host into every .inside() container at the same path, so it persists across stages.
         NUGET_PACKAGES = "${WORKSPACE}/.nuget-packages"
+        // Testcontainers' Ryuk cleanup sidecar can't be reached back over the network in this
+        // Docker-outside-of-Docker setup (SDK container -> host daemon via mounted socket), so
+        // its init just times out ("Initialization has been cancelled"). Standard CI workaround:
+        // disable it. Tradeoff: if a test crashes mid-run, its ephemeral Postgres container won't
+        // be auto-removed — harmless locally, just prune manually if containers pile up.
+        TESTCONTAINERS_RYUK_DISABLED = 'true'
+        // Testcontainers guesses 172.17.0.1 (the classic Linux docker0 bridge gateway) as the
+        // address to reach sibling containers' published ports, which doesn't reliably work
+        // under Docker Desktop's networking model on Windows/Mac. host.docker.internal is
+        // Docker Desktop's own DNS name for the host, resolves automatically in any container,
+        // and is where published ports actually are reachable from.
+        TESTCONTAINERS_HOST_OVERRIDE = 'host.docker.internal'
     }
 
     stages {
