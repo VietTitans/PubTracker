@@ -9,6 +9,11 @@ pipeline {
     environment {
         DOTNET_CLI_TELEMETRY_OPTOUT = '1'
         DOTNET_NOLOGO = '1'
+        // Restore/Build/Test each run in a fresh, throwaway SDK container. NuGet's default
+        // cache (~/.nuget/packages) lives inside that container and is gone once it exits, so
+        // point it at the Jenkins workspace instead — that directory is bind-mounted from the
+        // host into every .inside() container at the same path, so it persists across stages.
+        NUGET_PACKAGES = "${WORKSPACE}/.nuget-packages"
     }
 
     stages {
