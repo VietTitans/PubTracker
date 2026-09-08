@@ -190,6 +190,42 @@ public class PubMedProviderTests
         Assert.Empty(result.NewRecords);
     }
 
+    // Regression test for a real bug: NCBI's non-history ESearch mode caps out at 9,999
+    // records, so a second page requested past that ceiling returns an <ERROR> element
+    // instead of <Count>. The parser used to unconditionally reassign `total` from each
+    // page's <Count>, so that error page reset the real total (14089) back to 0 even
+    // though the first page's records were still fetched successfully.
+    [Fact]
+    public async Task SearchAsync_KeepsTotalFromFirstPage_WhenSecondPageHitsRetstartCeiling()
+    {
+        const string firstPageEsearchXml = """
+            <?xml version="1.0"?>
+            <eSearchResult>
+              <Count>14089</Count>
+              <RetMax>1</RetMax>
+              <RetStart>0</RetStart>
+              <IdList>
+                <Id>111</Id>
+              </IdList>
+            </eSearchResult>
+            """;
+
+        const string secondPageErrorXml = """
+            <?xml version="1.0"?>
+            <eSearchResult>
+              <ERROR>Search Backend failed: Exception:
+              'retstart' cannot be larger than 9998.</ERROR>
+            </eSearchResult>
+            """;
+
+        var provider = CreateProvider(new PagedEsearchHandler(firstPageEsearchXml, secondPageErrorXml, EfetchXml));
+
+        var result = await provider.SearchAsync(SearchUrl);
+
+        Assert.True(result.IsSuccessful, result.ErrorMessage);
+        Assert.Equal(14089, result.TotalRecordCount);
+    }
+
     private class FakeEutilsHandler(string esearchXml, string efetchXml) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
@@ -203,5 +239,22 @@ public class PubMedProviderTests
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) =>
             Task.FromResult(new HttpResponseMessage(HttpStatusCode.InternalServerError));
+    }
+
+    private class PagedEsearchHandler(string firstEsearchXml, string secondEsearchXml, string efetchXml) : HttpMessageHandler
+    {
+        private int _esearchCallCount;
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (!request.RequestUri!.AbsolutePath.EndsWith("esearch.fcgi"))
+            {
+                return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(efetchXml) });
+            }
+
+            _esearchCallCount++;
+            var xml = _esearchCallCount == 1 ? firstEsearchXml : secondEsearchXml;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(xml) });
+        }
     }
 }

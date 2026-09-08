@@ -636,7 +636,9 @@ function App() {
     setDetailError(null);
     setIsDetailLoading(true);
     try {
-      setDetailData(await getSearchQueryById(sq.id));
+      const fresh = await getSearchQueryById(sq.id);
+      setDetailData(fresh);
+      setSearchQueries((prev) => prev.map((q) => (q.id === fresh.id ? fresh : q)));
     } catch (err) {
       setDetailError(err instanceof Error ? err.message : String(err));
     } finally {

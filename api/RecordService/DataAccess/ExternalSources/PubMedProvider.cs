@@ -122,7 +122,14 @@ public class PubMedProvider : ILiteratureSourceProvider
             response.EnsureSuccessStatusCode();
 
             var xml = XDocument.Parse(await response.Content.ReadAsStringAsync());
-            total = int.TryParse(xml.Root?.Element("Count")?.Value, out var count) ? count : 0;
+            // NCBI's non-history ESearch mode caps out at 9,999 records: a page requested past
+            // that ceiling returns an <ERROR> element instead of <Count>, so only overwrite the
+            // total when this page actually reports one - otherwise the real total from an
+            // earlier page would get clobbered back to 0.
+            if (int.TryParse(xml.Root?.Element("Count")?.Value, out var count))
+            {
+                total = count;
+            }
             var page = xml.Root?.Element("IdList")?.Elements("Id").Select(e => e.Value).ToList() ?? new();
 
             pmids.AddRange(page);
