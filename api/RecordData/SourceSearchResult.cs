@@ -12,6 +12,13 @@ public class SourceSearchResult
     public int NewRecordCount { get; set; }
 
     /// <summary>
+    /// The source's current total match count for this search query (e.g. PEDro's
+    /// "Found X records"), independent of how many of those have actually been fetched/stored.
+    /// Null when a provider doesn't report one.
+    /// </summary>
+    public int? TotalRecordCount { get; set; }
+
+    /// <summary>
     /// List of new literature records discovered
     /// </summary>
     public List<LiteratureRecord> NewRecords { get; set; } = new();

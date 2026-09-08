@@ -54,7 +54,7 @@ public class RecordPollingService : IRecordPollingService
         try
         {
             var searchResult = await _searchQueriesDataAccess.ExecuteSourceSearchAsync(
-                searchQuery.Id, searchQuery.TargetUrl, searchQuery.LastDigestSentAt);
+                searchQuery.Id, searchQuery.TargetUrl, searchQuery.LastPolledAt);
 
             if (!searchResult.IsSuccessful)
             {
@@ -68,6 +68,12 @@ public class RecordPollingService : IRecordPollingService
                     ErrorMessage = searchResult.ErrorMessage
                 };
             }
+
+            // Advance the fetch watermark as soon as the source search itself succeeds,
+            // independent of whether a digest email later succeeds or fails - otherwise a
+            // provider like PEDro (whose "since" filter relies on this watermark) would
+            // re-fetch the same window, or worse, never advance past its first baseline poll.
+            await _searchQueriesDataAccess.RecordPollCompletedAsync(searchQuery.Id, DateTime.UtcNow, searchResult.TotalRecordCount);
 
             var newlyLinkedRecords = searchResult.NewRecords.Count > 0
                 ? await _recordsDataAccess.PersistSearchResultsAsync(searchQuery.Id, searchQuery.SourceId, searchResult.NewRecords)

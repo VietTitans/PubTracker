@@ -151,8 +151,8 @@ function DetailDialog({
   }, [onClose]);
 
   const source = detectSourceLabel(target.targetUrl);
-  const lastFetch = detail?.lastDigestSentAt
-    ? new Date(detail.lastDigestSentAt).toLocaleString(undefined, { hour12: false })
+  const lastFetch = detail?.lastFetchedAt
+    ? new Date(detail.lastFetchedAt).toLocaleString(undefined, { hour12: false })
     : "Never";
   const keywords = detail?.tags ?? [];
 
@@ -197,7 +197,7 @@ function DetailDialog({
           </div>
           <div>
             <dt>Records registered</dt>
-            <dd>{isLoading ? <Spinner /> : (detail?.recordCount ?? "—")}</dd>
+            <dd>{isLoading ? <Spinner /> : (detail?.sourceRecordCount ?? "—")}</dd>
           </div>
           <div>
             <dt>Last fetch</dt>
@@ -512,6 +512,41 @@ function App() {
     }
   }
 
+  // The backend fetches a brand new search query's records shortly after it's created
+  // (a few seconds after this returns) rather than during the subscribe request itself, so
+  // the list we get back immediately still shows 0 records. How long that actually takes
+  // varies a lot by source (PEDro's Playwright scrape can take much longer than a single
+  // fixed delay would predict, especially a cold browser launch on a large result set), so
+  // keep polling until it's actually done rather than giving up after a guessed duration -
+  // a stopped poll would otherwise leave the spinner stuck until a manual page reload.
+  function scheduleRecordCountRefresh(userId: number, searchQueryId: number) {
+    const pollIntervalMs = 4000;
+
+    function poll() {
+      setTimeout(() => {
+        getSearchQueriesForUser(userId)
+          .then((queries) => {
+            setSearchQueries(queries);
+            // Matches the condition the list actually renders a spinner for (App.tsx's
+            // sourceRecordCount === null check) - not lastFetchedAt, which PEDro's baseline
+            // poll (no individual records linked yet) can leave null indefinitely even once
+            // sourceRecordCount is populated.
+            const stillFetching = queries.some((q) => q.id === searchQueryId && q.sourceRecordCount === null);
+            if (stillFetching) {
+              poll();
+            }
+          })
+          .catch(() => {
+            // Transient failure (e.g. a network blip) - keep trying rather than leaving the
+            // spinner stuck forever.
+            poll();
+          });
+      }, pollIntervalMs);
+    }
+
+    poll();
+  }
+
   async function handleSubscribe(e: React.FormEvent) {
     e.preventDefault();
     if (!user || !targetUrl.trim()) {
@@ -521,9 +556,10 @@ function App() {
     setIsSubmitting(true);
     setError(null);
     try {
-      await subscribeToSearchQuery(targetUrl.trim());
+      const newQuery = await subscribeToSearchQuery(targetUrl.trim());
       setTargetUrl("");
       setSearchQueries(await getSearchQueriesForUser(user.id));
+      scheduleRecordCountRefresh(user.id, newQuery.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -574,13 +610,23 @@ function App() {
     setIsRedoing(true);
     setError(null);
     try {
-      await subscribeToSearchQuery(url);
+      const newQuery = await subscribeToSearchQuery(url);
       setSearchQueries(await getSearchQueriesForUser(user.id));
+      scheduleRecordCountRefresh(user.id, newQuery.id);
       setUndoStack((prev) => prev.slice(0, -1));
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setIsRedoing(false);
+    }
+  }
+
+  async function handleLogin() {
+    setError(null);
+    try {
+      await login();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
     }
   }
 
@@ -614,7 +660,12 @@ function App() {
           <p className="tagline">
             Paste a search URL from PEDro or PubMed and get a digest whenever new results appear.
           </p>
-          <button className="btn btn-primary btn-block" onClick={() => login()}>
+          {error && (
+            <p className="alert" role="alert">
+              {error}
+            </p>
+          )}
+          <button className="btn btn-primary btn-block" onClick={handleLogin}>
             Sign in
           </button>
         </div>
@@ -700,7 +751,11 @@ function App() {
                   )}
                   <div className="record-count" title="Records registered">
                     <span className="record-count-label">Records</span>
-                    <span className="record-count-value">{sq.recordCount}</span>
+                    {sq.sourceRecordCount === null ? (
+                      <Spinner />
+                    ) : (
+                      <span className="record-count-value">{sq.sourceRecordCount}</span>
+                    )}
                   </div>
                   <a
                     href={sq.targetUrl}

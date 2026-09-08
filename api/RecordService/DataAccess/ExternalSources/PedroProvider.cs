@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Playwright;
 using RecordService.Models;
 
@@ -14,6 +15,9 @@ namespace RecordService.DataAccess.ExternalSources;
 public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
 {
     public string ProviderName => "PEDro";
+
+    // PEDro caps the `perpage` URL param at 1000 server-side regardless of what's requested.
+    private const int ScrapePageSize = 1000;
 
     private static readonly Regex CountRegex = new(@"Found\s+([\d,]+)\s+records", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex RecordIdRegex = new(@"record-detail/(\d+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -31,15 +35,23 @@ public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
     {
         try
         {
-            var (_, allRecords) = await ScrapeAsync(url);
+            // The search's current total (what the UI displays as "records registered") is
+            // refreshed on every poll - it's just a page-1 fetch of the URL as pasted, and is
+            // meaningful even when there's nothing new to fetch in detail below.
+            var (totalCount, _) = await ScrapeAsync(url);
 
+            // On the very first poll there's no watermark yet, so rather than pulling full
+            // details for every matching record (which can be thousands), just record the
+            // current total as a baseline. Later polls use PEDro's own
+            // "date_record_was_created" filter to fetch only what's actually new since then.
             var newRecords = lastRunDate.HasValue
-                ? allRecords.Where(r => r.DiscoveredAt > lastRunDate.Value).ToList()
-                : allRecords;
+                ? await ScrapeRecordsAddedSinceAsync(url, lastRunDate.Value)
+                : new List<LiteratureRecord>();
 
             return new SourceSearchResult
             {
                 Source = ProviderName,
+                TotalRecordCount = totalCount,
                 NewRecordCount = newRecords.Count,
                 NewRecords = newRecords,
                 IsSuccessful = true
@@ -69,6 +81,49 @@ public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
         {
             return false;
         }
+    }
+
+    // Fetches full details for every record PEDro reports as added since `since`, paginating
+    // at the server's max page size (records aren't guaranteed to appear on the unfiltered
+    // search's first page just because they're new, so this can't be inferred from ScrapeAsync
+    // alone - see PedroProvider's SearchAsync).
+    private async Task<List<LiteratureRecord>> ScrapeRecordsAddedSinceAsync(string url, DateTime since)
+    {
+        var dateFilter = since.ToString("dd/MM/yyyy");
+
+        var (totalCount, records) = await ScrapeAsync(WithQueryParams(url, new Dictionary<string, string?>
+        {
+            ["date_record_was_created"] = dateFilter,
+            ["perpage"] = ScrapePageSize.ToString(),
+            ["page"] = "1"
+        }));
+
+        var totalPages = (int)Math.Ceiling(totalCount / (double)ScrapePageSize);
+        for (var page = 2; page <= totalPages; page++)
+        {
+            var (_, pageRecords) = await ScrapeAsync(WithQueryParams(url, new Dictionary<string, string?>
+            {
+                ["date_record_was_created"] = dateFilter,
+                ["perpage"] = ScrapePageSize.ToString(),
+                ["page"] = page.ToString()
+            }));
+            records.AddRange(pageRecords);
+        }
+
+        return records;
+    }
+
+    private static string WithQueryParams(string url, Dictionary<string, string?> overrides)
+    {
+        var uri = new Uri(url);
+        var query = QueryHelpers.ParseQuery(uri.Query).ToDictionary(kv => kv.Key, kv => (string?)kv.Value.ToString());
+
+        foreach (var (key, value) in overrides)
+        {
+            query[key] = value;
+        }
+
+        return QueryHelpers.AddQueryString(uri.GetLeftPart(UriPartial.Path), query);
     }
 
     private async Task<(int RecordCount, List<LiteratureRecord> Records)> ScrapeAsync(string url)
@@ -110,7 +165,7 @@ public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
 
             records.Add(new LiteratureRecord
             {
-                Doi = $"pedro:{idMatch.Groups[1].Value}",
+                ExternalId = $"pedro:{idMatch.Groups[1].Value}",
                 Title = title,
                 Authors = string.Empty,
                 SourceUrl = href,

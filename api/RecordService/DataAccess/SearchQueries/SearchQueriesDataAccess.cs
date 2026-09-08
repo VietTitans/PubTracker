@@ -24,8 +24,15 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
             await connection.OpenAsync();
             using (var command = new NpgsqlCommand(
                 @"SELECT sq.id, sq.source_id, sq.target_url, sq.last_digest_sent_at,
-                         (SELECT COUNT(*) FROM search_query_records sqr WHERE sqr.search_query_id = sq.id)
+                         agg.record_count, agg.last_fetched_at,
+                         sq.source_record_count,
+                         sq.last_polled_at
                   FROM search_queries sq
+                  LEFT JOIN LATERAL (
+                      SELECT COUNT(*) AS record_count, MAX(sqr.first_seen_at) AS last_fetched_at
+                      FROM search_query_records sqr
+                      WHERE sqr.search_query_id = sq.id
+                  ) agg ON true
                   WHERE sq.id = @id", connection))
             {
                 command.Parameters.AddWithValue("@id", searchQueryId);
@@ -39,7 +46,10 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
                             SourceId = reader.IsDBNull(1) ? 0 : reader.GetInt32(1),
                             TargetUrl = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
                             LastDigestSentAt = reader.IsDBNull(3) ? null : reader.GetDateTime(3),
-                            RecordCount = (int)reader.GetInt64(4)
+                            RecordCount = (int)reader.GetInt64(4),
+                            LastFetchedAt = reader.IsDBNull(5) ? null : reader.GetDateTime(5),
+                            SourceRecordCount = reader.IsDBNull(6) ? null : reader.GetInt32(6),
+                            LastPolledAt = reader.IsDBNull(7) ? null : reader.GetDateTime(7)
                         };
                     }
 
@@ -55,7 +65,7 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
         using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync();
-            using (var command = new NpgsqlCommand("SELECT id, source_id, target_url, last_digest_sent_at FROM search_queries", connection))
+            using (var command = new NpgsqlCommand("SELECT id, source_id, target_url, last_digest_sent_at, last_polled_at FROM search_queries", connection))
             {
                 using (var reader = await command.ExecuteReaderAsync())
                 {
@@ -66,7 +76,8 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
                             Id = reader.GetInt32(0),
                             SourceId = reader.IsDBNull(1) ? 0 : reader.GetInt32(1),
                             TargetUrl = reader.IsDBNull(2) ? string.Empty : reader.GetString(2),
-                            LastDigestSentAt = reader.IsDBNull(3) ? null : reader.GetDateTime(3)
+                            LastDigestSentAt = reader.IsDBNull(3) ? null : reader.GetDateTime(3),
+                            LastPolledAt = reader.IsDBNull(4) ? null : reader.GetDateTime(4)
                         });
                     }
                 }
@@ -230,6 +241,25 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
                 "UPDATE search_queries SET last_digest_sent_at = @timestamp WHERE id = @id", connection))
             {
                 command.Parameters.AddWithValue("@timestamp", timestamp);
+                command.Parameters.AddWithValue("@id", searchQueryId);
+                await command.ExecuteNonQueryAsync();
+            }
+        }
+    }
+
+    public async Task RecordPollCompletedAsync(int searchQueryId, DateTime polledAt, int? sourceRecordCount)
+    {
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var command = new NpgsqlCommand(
+                @"UPDATE search_queries
+                  SET last_polled_at = @polledAt,
+                      source_record_count = COALESCE(@sourceRecordCount, source_record_count)
+                  WHERE id = @id", connection))
+            {
+                command.Parameters.AddWithValue("@polledAt", polledAt);
+                command.Parameters.AddWithValue("@sourceRecordCount", (object?)sourceRecordCount ?? DBNull.Value);
                 command.Parameters.AddWithValue("@id", searchQueryId);
                 await command.ExecuteNonQueryAsync();
             }

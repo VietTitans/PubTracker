@@ -7,9 +7,16 @@ namespace RecordService.Models;
 public class LiteratureRecord
 {
     /// <summary>
-    /// Unique identifier from the record
+    /// Globally unique identifier for this record within its source (e.g. "pubmed:12345",
+    /// "pedro:6789"). Used as the dedup key, since a real DOI isn't always present and can
+    /// be shared by distinct records (e.g. a review and its later update).
     /// </summary>
-    public required string Doi { get; set; }
+    public required string ExternalId { get; set; }
+
+    /// <summary>
+    /// The record's real DOI, when one exists. Display-only - not used for deduplication.
+    /// </summary>
+    public string? Doi { get; set; }
 
     /// <summary>
     /// Title of the publication/record

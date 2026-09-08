@@ -34,15 +34,22 @@ public interface ISearchQueriesDataAccess
     Task<bool> UnsubscribeAsync(int userId, int searchQueryId);
 
     /// <summary>
-    /// Advances the search query's watermark timestamp. Also reused as the poll fetch
-    /// watermark (fed back in as ExecuteSourceSearchAsync's lastRunDate), though provider
-    /// implementations currently stamp DiscoveredAt at scrape time so that filter is largely
-    /// a no-op in practice - persistence-level dedup (search_query_records' unique constraint)
-    /// is what actually prevents re-processing already-seen records.
+    /// Advances the search query's digest-retry watermark.
     /// Callers (see RecordPollingService.PollOneAsync) should only call this after a digest
     /// send has actually succeeded - records with search_query_records.first_seen_at after
     /// this timestamp are what the next poll's digest is built from, so advancing it on a
     /// failed send would silently drop those records from ever being retried.
     /// </summary>
     Task UpdateLastDigestSentAtAsync(int searchQueryId, DateTime timestamp);
+
+    /// <summary>
+    /// Records that a poll of this search query's source just completed: advances the
+    /// source-fetch watermark (fed back in as the next poll's ExecuteSourceSearchAsync
+    /// lastRunDate - separate from UpdateLastDigestSentAtAsync, so callers should call this
+    /// after any successful poll, regardless of digest outcome), and, when the source reported
+    /// one, updates its current total match count (e.g. PEDro's "Found X records"). Pass null
+    /// for sourceRecordCount when the source didn't report a total - the existing value is left
+    /// unchanged.
+    /// </summary>
+    Task RecordPollCompletedAsync(int searchQueryId, DateTime polledAt, int? sourceRecordCount);
 }

@@ -14,10 +14,18 @@ public class SearchQueryResponseDto
 
     public int RecordCount { get; set; }
 
+    public DateTime? LastFetchedAt { get; set; }
+
     /// <summary>
-    /// Every recognized PEDro advanced-search field present on TargetUrl, as ready-to-display
-    /// tags (see PedroDigestMessageBuilder.GetKeywordTags). Empty for non-PEDro sources or a
-    /// PEDro URL with no recognized fields.
+    /// The source's current total match count for this search (e.g. PEDro's "Found X
+    /// records"), as of the most recent successful poll. Null until the first successful poll.
+    /// </summary>
+    public int? SourceRecordCount { get; set; }
+
+    /// <summary>
+    /// Ready-to-display tags describing TargetUrl's search, derived per-source (see
+    /// PedroDigestMessageBuilder.GetKeywordTags and PubMedDigestMessageBuilder.GetKeywordTags).
+    /// Empty for an unrecognized source or a URL with no recognized search fields.
     /// </summary>
     public List<string> Tags { get; set; } = new();
 }

@@ -20,8 +20,8 @@ public class FakeLiteratureSourceProvider : ILiteratureSourceProvider
     {
         var allRecords = new List<LiteratureRecord>
         {
-            new() { Doi = "fake:1", Title = "Fake Record 1", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-2) },
-            new() { Doi = "fake:2", Title = "Fake Record 2", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-1) }
+            new() { ExternalId = "fake:1", Title = "Fake Record 1", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-2) },
+            new() { ExternalId = "fake:2", Title = "Fake Record 2", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-1) }
         };
 
         var newRecords = lastRunDate.HasValue

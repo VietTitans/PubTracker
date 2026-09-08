@@ -1,5 +1,6 @@
 using RecordData;
 using RecordService.BusinessLogic.DigestService;
+using RecordService.DataAccess.ExternalSources;
 using RecordService.DTOs.SearchQueryDto;
 using RecordService.Models;
 
@@ -17,7 +18,19 @@ public static class SearchQueryMappingExtensions
             Subscribers = searchQuery.Subscribers,
             LastDigestSentAt = searchQuery.LastDigestSentAt,
             RecordCount = searchQuery.RecordCount,
-            Tags = PedroDigestMessageBuilder.GetKeywordTags(searchQuery.TargetUrl)
+            LastFetchedAt = searchQuery.LastFetchedAt,
+            SourceRecordCount = searchQuery.SourceRecordCount,
+            Tags = GetKeywordTags(searchQuery.TargetUrl)
+        };
+    }
+
+    private static List<string> GetKeywordTags(string targetUrl)
+    {
+        return SourceDetector.DetectSource(targetUrl) switch
+        {
+            SourceDetector.SourceType.PubMed => PubMedDigestMessageBuilder.GetKeywordTags(targetUrl),
+            SourceDetector.SourceType.Pedro => PedroDigestMessageBuilder.GetKeywordTags(targetUrl),
+            _ => new List<string>()
         };
     }
 

@@ -76,6 +76,27 @@ public static class PubMedDigestMessageBuilder
         return DigestMessageFormatter.BuildHtmlBody("PubMed", GetCategory(targetUrl), targetUrl, newRecords);
     }
 
+    /// <summary>
+    /// PubMed has no structured fields like PEDro's advanced search - the whole query lives in
+    /// the "term" param, which can be an arbitrary boolean expression. So unlike PEDro's
+    /// multi-tag breakdown, this returns at most a single "Search: ..." tag with the raw term.
+    /// </summary>
+    public static List<string> GetKeywordTags(string targetUrl)
+    {
+        if (!Uri.TryCreate(targetUrl, UriKind.Absolute, out var uri))
+        {
+            return new();
+        }
+
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        if (!query.TryGetValue("term", out var term) || string.IsNullOrWhiteSpace(term.ToString()))
+        {
+            return new();
+        }
+
+        return new List<string> { $"Search: \"{term}\"" };
+    }
+
     private static string? GetCategory(string targetUrl)
     {
         if (!Uri.TryCreate(targetUrl, UriKind.Absolute, out var uri))

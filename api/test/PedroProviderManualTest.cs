@@ -22,14 +22,23 @@ public class PedroProviderManualTest
     {
         await using var provider = new PedroProvider();
 
-        var result = await provider.SearchAsync(TestUrl);
+        // With no lastRunDate this is a baseline call - it should report the search's total
+        // record count but not fetch any record details (see PedroProvider.SearchAsync).
+        var baseline = await provider.SearchAsync(TestUrl);
+        Assert.True(baseline.IsSuccessful, baseline.ErrorMessage);
+        Assert.NotNull(baseline.TotalRecordCount);
+        Assert.Empty(baseline.NewRecords);
+
+        // Passing a lastRunDate exercises the incremental path (PEDro's
+        // "date_record_was_created" filter), which is what actually fetches record details.
+        var result = await provider.SearchAsync(TestUrl, DateTime.UtcNow.AddYears(-10));
 
         Assert.True(result.IsSuccessful, result.ErrorMessage);
         Assert.NotEmpty(result.NewRecords);
 
         foreach (var record in result.NewRecords.Take(5))
         {
-            Console.WriteLine($"{record.Doi} | {record.Title} | {record.SourceUrl}");
+            Console.WriteLine($"{record.ExternalId} | {record.Title} | {record.SourceUrl}");
         }
 
         Env.Load(FindDockerEnvFile());

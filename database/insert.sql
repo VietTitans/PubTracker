@@ -12,11 +12,11 @@ INSERT INTO search_queries (id, source_id, target_url, last_digest_sent_at) VALU
   (3, 4, 'https://search.pedro.org.au/advanced-search/results?abstract_with_title=ACL&therapy=VL01387&problem=VL01375&body_part=VL01399&subdiscipline=VL01361&topic=VL01406&method=0&authors_association=&title=&source=&year_of_publication=2020&date_record_was_created=&nscore=&perpage=20&lop=and&find=&find=Start+Search', '2026-07-20 14:30:00+00');
 
 -- 3. records
-INSERT INTO records (id, doi, title, description, source_url) VALUES
-  (1, '10.1001/arxiv.2101.00001', 'A Survey of Machine Learning', 'Comprehensive review of machine learning techniques.', 'https://arxiv.org/abs/2101.00001'),
-  (2, '10.1002/pubmed.123456', 'Genomics in Precision Medicine', 'Discussion of genomic methods for personalized treatments.', 'https://pubmed.ncbi.nlm.nih.gov/123456'),
-  (3, '10.1109/5.771073', 'Autonomous Robotics Systems', 'Overview of robotics systems with autonomous navigation.', 'https://ieeexplore.ieee.org/document/771073'),
-  (4, '10.1001/arxiv.2202.00002', 'Advances in Natural Language Processing', 'New transformer architectures and benchmarks.', 'https://arxiv.org/abs/2202.00002');
+INSERT INTO records (id, external_id, doi, title, description, source_url) VALUES
+  (1, 'arxiv:2101.00001', '10.1001/arxiv.2101.00001', 'A Survey of Machine Learning', 'Comprehensive review of machine learning techniques.', 'https://arxiv.org/abs/2101.00001'),
+  (2, 'pubmed:123456', '10.1002/pubmed.123456', 'Genomics in Precision Medicine', 'Discussion of genomic methods for personalized treatments.', 'https://pubmed.ncbi.nlm.nih.gov/123456'),
+  (3, 'ieee:771073', '10.1109/5.771073', 'Autonomous Robotics Systems', 'Overview of robotics systems with autonomous navigation.', 'https://ieeexplore.ieee.org/document/771073'),
+  (4, 'arxiv:2202.00002', '10.1001/arxiv.2202.00002', 'Advances in Natural Language Processing', 'New transformer architectures and benchmarks.', 'https://arxiv.org/abs/2202.00002');
 
 -- 4. users
 INSERT INTO users (id, name, username, email, is_marked_for_deletion, deletion_requested_at) VALUES

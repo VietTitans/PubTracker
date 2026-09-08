@@ -16,6 +16,8 @@ export interface SearchQuery {
   subscribers: string[] | null;
   lastDigestSentAt: string | null;
   recordCount: number;
+  lastFetchedAt: string | null;
+  sourceRecordCount: number | null;
   tags: string[];
 }
 
