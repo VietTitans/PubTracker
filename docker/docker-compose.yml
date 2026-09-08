@@ -52,6 +52,8 @@ services:
       Email__ApiKey: ${EMAIL_API_KEY}
       Email__FromAddress: ${EMAIL_FROM_ADDRESS}
       Email__FromName: ${EMAIL_FROM_NAME}
+      Ncbi__ApiKey: ${NCBI_API_KEY}
+      Ncbi__ContactEmail: ${NCBI_CONTACT_EMAIL}
       # Authority is the browser-facing URL (must match the `iss` claim Keycloak stamps on
       # tokens); MetadataAddress is this container's own path to Keycloak over the Docker
       # network, for fetching signing keys - see the comment above ConfigureKeycloakBearer

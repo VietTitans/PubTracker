@@ -1,20 +1,35 @@
-using HtmlAgilityPack;
-using RecordService.Models;
+using System.Globalization;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
+using Microsoft.AspNetCore.WebUtilities;
+using RecordService.Models;
 
 namespace RecordService.DataAccess.ExternalSources;
 
 /// <summary>
-/// PubMed literature source provider implementation.
-/// Supports both API-based queries (via NCBI E-utilities) and HTML-based parsing.
-/// Transparently handles data retrieval and caching.
+/// PubMed literature source provider. Converts a pasted PubMed search URL into NCBI
+/// E-utilities calls: ESearch resolves the search term to PMIDs, EFetch retrieves the
+/// full records for those PMIDs.
 /// </summary>
 public class PubMedProvider : ILiteratureSourceProvider
 {
+    private const string EutilsBaseUrl = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/";
+    private const int EsearchPageSize = 9999; // NCBI's per-request ceiling for a plain (non-history) ESearch
+    private const int EfetchBatchSize = 200; // keep individual EFetch responses to a reasonable size
+
     public string ProviderName => "PubMed";
 
-    private readonly Dictionary<string, List<LiteratureRecord>> _cache = new();
+    private readonly HttpClient _httpClient;
+    private readonly string? _apiKey;
+    private readonly string? _contactEmail;
+
+    public PubMedProvider(HttpClient httpClient, string? apiKey, string? contactEmail)
+    {
+        _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
+        _httpClient.BaseAddress = new Uri(EutilsBaseUrl);
+        _apiKey = apiKey;
+        _contactEmail = contactEmail;
+    }
 
     public bool CanHandle(string url)
     {
@@ -25,10 +40,8 @@ public class PubMedProvider : ILiteratureSourceProvider
     {
         try
         {
-            // Get all records from the source (via API or cached HTML)
-            var allRecords = await FetchRecordsAsync(url);
+            var (totalCount, allRecords) = await FetchRecordsAsync(url);
 
-            // Filter to only new records since last run
             var newRecords = lastRunDate.HasValue
                 ? allRecords.Where(r => r.DiscoveredAt > lastRunDate.Value).ToList()
                 : allRecords;
@@ -36,6 +49,7 @@ public class PubMedProvider : ILiteratureSourceProvider
             return new SourceSearchResult
             {
                 Source = ProviderName,
+                TotalRecordCount = totalCount,
                 NewRecordCount = newRecords.Count,
                 NewRecords = newRecords,
                 IsSuccessful = true
@@ -58,14 +72,7 @@ public class PubMedProvider : ILiteratureSourceProvider
     {
         try
         {
-            // In a real implementation, this would:
-            // 1. Call PubMed NCBI E-utilities API endpoint
-            // 2. Or re-fetch and parse HTML from search results
-            // 3. Update the cache with fresh data
-
-            var records = await FetchRecordsAsync(url);
-            _cache[url] = records;
-
+            await FetchRecordsAsync(url);
             return true;
         }
         catch
@@ -74,113 +81,209 @@ public class PubMedProvider : ILiteratureSourceProvider
         }
     }
 
-    /// <summary>
-    /// Internal method to fetch records from PubMed.
-    /// Retrieves data from cache if available, otherwise fetches from source.
-    /// </summary>
-    private async Task<List<LiteratureRecord>> FetchRecordsAsync(string url)
+    private async Task<(int TotalCount, List<LiteratureRecord> Records)> FetchRecordsAsync(string url)
     {
-        // Check if already in memory cache
-        if (_cache.TryGetValue(url, out var cachedRecords))
-            return await Task.FromResult(cachedRecords);
+        var term = ExtractSearchTerm(url);
+        if (string.IsNullOrWhiteSpace(term))
+            return (0, new());
 
-        // Otherwise, fetch from source (API or HTML)
-        var records = await ParseSourceDataAsync(url);
+        var (totalCount, pmids) = await SearchPmidsAsync(term);
+        if (pmids.Count == 0)
+            return (totalCount, new());
 
-        _cache[url] = records;
+        return (totalCount, await FetchArticlesAsync(pmids));
+    }
+
+    private static string ExtractSearchTerm(string url)
+    {
+        var uri = new Uri(url);
+        var query = QueryHelpers.ParseQuery(uri.Query);
+        return query.TryGetValue("term", out var term) ? term.ToString() : string.Empty;
+    }
+
+    private async Task<(int TotalCount, List<string> Pmids)> SearchPmidsAsync(string term)
+    {
+        var pmids = new List<string>();
+        var retstart = 0;
+        var total = 0;
+
+        while (true)
+        {
+            var query = BuildQuery(new Dictionary<string, string?>
+            {
+                ["db"] = "pubmed",
+                ["term"] = term,
+                ["retstart"] = retstart.ToString(),
+                ["retmax"] = EsearchPageSize.ToString(),
+                ["retmode"] = "xml"
+            });
+
+            var response = await _httpClient.GetAsync($"esearch.fcgi?{query}");
+            response.EnsureSuccessStatusCode();
+
+            var xml = XDocument.Parse(await response.Content.ReadAsStringAsync());
+            total = int.TryParse(xml.Root?.Element("Count")?.Value, out var count) ? count : 0;
+            var page = xml.Root?.Element("IdList")?.Elements("Id").Select(e => e.Value).ToList() ?? new();
+
+            pmids.AddRange(page);
+            retstart += EsearchPageSize;
+
+            if (page.Count == 0 || retstart >= total)
+                break;
+
+            await Task.Delay(RequestDelay);
+        }
+
+        return (total, pmids);
+    }
+
+    private async Task<List<LiteratureRecord>> FetchArticlesAsync(List<string> pmids)
+    {
+        var records = new List<LiteratureRecord>();
+
+        for (var i = 0; i < pmids.Count; i += EfetchBatchSize)
+        {
+            var batch = pmids.Skip(i).Take(EfetchBatchSize);
+
+            var query = BuildQuery(new Dictionary<string, string?>
+            {
+                ["db"] = "pubmed",
+                ["id"] = string.Join(",", batch),
+                ["retmode"] = "xml",
+                ["rettype"] = "abstract"
+            });
+
+            var response = await _httpClient.GetAsync($"efetch.fcgi?{query}");
+            response.EnsureSuccessStatusCode();
+
+            var xml = XDocument.Parse(await response.Content.ReadAsStringAsync());
+            records.AddRange(xml.Descendants("PubmedArticle").Select(ParseArticle));
+            records.AddRange(xml.Descendants("PubmedBookArticle").Select(ParseBookArticle));
+
+            if (i + EfetchBatchSize < pmids.Count)
+                await Task.Delay(RequestDelay);
+        }
+
         return records;
     }
 
-    /// <summary>
-    /// Internal method that handles the actual data retrieval and parsing.
-    /// This could involve:
-    /// - Calling PubMed NCBI E-utilities REST API and parsing JSON
-    /// - Fetching HTML from PubMed search results and parsing
-    /// 
-    /// Implementation detail - not part of public interface.
-    /// </summary>
-    private async Task<List<LiteratureRecord>> ParseSourceDataAsync(string url)
+    // NCBI E-utilities usage policy: max 3 requests/sec without an API key, 10/sec with one.
+    private TimeSpan RequestDelay => string.IsNullOrEmpty(_apiKey) ? TimeSpan.FromMilliseconds(350) : TimeSpan.FromMilliseconds(110);
+
+    private LiteratureRecord ParseArticle(XElement article)
     {
-        var records = new List<LiteratureRecord>();
+        var medlineCitation = article.Element("MedlineCitation");
+        var pmid = medlineCitation?.Element("PMID")?.Value ?? string.Empty;
+        var articleEl = medlineCitation?.Element("Article");
+
+        var doi = article.Element("PubmedData")?.Element("ArticleIdList")?.Elements("ArticleId")
+            .FirstOrDefault(e => e.Attribute("IdType")?.Value == "doi")?.Value;
+
+        return BuildRecord(
+            pmid,
+            title: articleEl?.Element("ArticleTitle")?.Value ?? string.Empty,
+            authorElements: articleEl?.Element("AuthorList")?.Elements("Author"),
+            abstractParts: articleEl?.Element("Abstract")?.Elements("AbstractText").Select(e => e.Value).ToList(),
+            doi: doi,
+            pubDate: articleEl?.Element("Journal")?.Element("JournalIssue")?.Element("PubDate"));
+    }
+
+    // PubmedBookArticle (book chapters, e.g. StatPearls) has a differently-shaped XML tree
+    // than PubmedArticle - title/authors/abstract live directly under BookDocument rather
+    // than under Article, and the pub date is under Book instead of Journal/JournalIssue.
+    private LiteratureRecord ParseBookArticle(XElement bookArticle)
+    {
+        var bookDocument = bookArticle.Element("BookDocument");
+        var pmid = bookDocument?.Element("PMID")?.Value ?? string.Empty;
+
+        var doi = bookArticle.Element("PubmedBookData")?.Element("ArticleIdList")?.Elements("ArticleId")
+            .FirstOrDefault(e => e.Attribute("IdType")?.Value == "doi")?.Value;
+
+        return BuildRecord(
+            pmid,
+            title: bookDocument?.Element("ArticleTitle")?.Value ?? string.Empty,
+            authorElements: bookDocument?.Element("AuthorList")?.Elements("Author"),
+            abstractParts: bookDocument?.Element("Abstract")?.Elements("AbstractText").Select(e => e.Value).ToList(),
+            doi: doi,
+            pubDate: bookDocument?.Element("Book")?.Element("PubDate"));
+    }
+
+    private LiteratureRecord BuildRecord(
+        string pmid, string title, IEnumerable<XElement>? authorElements, List<string>? abstractParts, string? doi, XElement? pubDate)
+    {
+        var authors = (authorElements ?? Enumerable.Empty<XElement>())
+            .Select(a => string.Join(" ", new[] { a.Element("ForeName")?.Value, a.Element("LastName")?.Value }
+                .Where(s => !string.IsNullOrWhiteSpace(s))))
+            .Where(s => !string.IsNullOrWhiteSpace(s))
+            .ToList();
+
+        return new LiteratureRecord
+        {
+            ExternalId = $"pubmed:{pmid}",
+            Doi = string.IsNullOrWhiteSpace(doi) ? null : doi,
+            Title = title,
+            Authors = string.Join(", ", authors),
+            Abstract = abstractParts is { Count: > 0 } ? string.Join(" ", abstractParts) : null,
+            PublishedDate = ParsePubDate(pubDate),
+            SourceUrl = $"https://pubmed.ncbi.nlm.nih.gov/{pmid}/",
+            Source = ProviderName,
+            DiscoveredAt = DateTime.UtcNow
+        };
+    }
+
+    private static DateTime? ParsePubDate(XElement? pubDate)
+    {
+        if (pubDate is null)
+            return null;
+
+        var yearText = pubDate.Element("Year")?.Value;
+        if (string.IsNullOrEmpty(yearText))
+        {
+            // Some records only give a free-text MedlineDate (e.g. "2020 Jan-Feb"); pull the leading year.
+            var medlineDate = pubDate.Element("MedlineDate")?.Value;
+            var match = medlineDate is null ? null : Regex.Match(medlineDate, @"\d{4}");
+            yearText = match is { Success: true } ? match.Value : null;
+        }
+
+        if (!int.TryParse(yearText, out var year))
+            return null;
+
+        var month = ParseMonth(pubDate.Element("Month")?.Value) ?? 1;
+        var day = int.TryParse(pubDate.Element("Day")?.Value, out var d) ? d : 1;
 
         try
         {
-            // Example implementation (placeholder for actual API/HTML logic):
-            // 
-            // Option 1: API-based approach (recommended for PubMed)
-            // var apiClient = new HttpClient();
-            // var apiUrl = ConvertSearchUrlToApiEndpoint(url); // e.g., https://eutils.ncbi.nlm.nih.gov/entrez/eutils/esearch.fcgi
-            // var response = await apiClient.GetAsync(apiUrl);
-            // var xmlContent = await response.Content.ReadAsStringAsync();
-            // records = ParsePubMedApiResponse(xmlContent);
-            //
-            // Option 2: HTML-based approach (for search result pages)
-            // var htmlContent = await FetchHtmlAsync(url);
-            // records = ParsePubMedHtml(htmlContent);
-
-            // For now, returning empty list as placeholder
-            // In production, implement actual PubMed API integration
+            return new DateTime(year, month, day, 0, 0, 0, DateTimeKind.Utc);
         }
-        catch (Exception ex)
+        catch (ArgumentOutOfRangeException)
         {
-            // Log error: Unable to parse PubMed data
-            Console.WriteLine($"Error parsing PubMed data: {ex.Message}");
+            return new DateTime(year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         }
-
-        return await Task.FromResult(records);
     }
 
-    /// <summary>
-    /// Internal method to parse PubMed API response (XML format).
-    /// Would extract PMID, title, authors, etc.
-    /// </summary>
-    private List<LiteratureRecord> ParsePubMedApiResponse(string xmlContent)
+    private static int? ParseMonth(string? month)
     {
-        var records = new List<LiteratureRecord>();
+        if (string.IsNullOrWhiteSpace(month))
+            return null;
 
-        // Example: Parse NCBI E-utilities XML response
-        // Extract UIDs (PubMed IDs) and fetch full records
-        // This is a template for implementation
+        if (int.TryParse(month, out var numeric))
+            return numeric;
 
-        return records;
+        return DateTime.TryParseExact(month, "MMM", CultureInfo.InvariantCulture, DateTimeStyles.None, out var parsed)
+            ? parsed.Month
+            : null;
     }
 
-    /// <summary>
-    /// Internal method to parse PubMed HTML (if using HTML scraping).
-    /// </summary>
-    private List<LiteratureRecord> ParsePubMedHtml(string htmlContent)
+    private string BuildQuery(Dictionary<string, string?> parameters)
     {
-        var records = new List<LiteratureRecord>();
+        parameters["tool"] = "PubTracker";
+        if (!string.IsNullOrWhiteSpace(_contactEmail))
+            parameters["email"] = _contactEmail;
+        if (!string.IsNullOrWhiteSpace(_apiKey))
+            parameters["api_key"] = _apiKey;
 
-        try
-        {
-            var doc = new HtmlDocument();
-            doc.LoadHtml(htmlContent);
-
-            // Example: PubMed search results HTML structure
-            // var articleNodes = doc.DocumentNode.SelectNodes("//div[@class='rslt']");
-            // foreach (var node in articleNodes ?? new())
-            // {
-            //     var doiNode = node.SelectSingleNode(".//span[@class='doi']");
-            //     var titleNode = node.SelectSingleNode(".//a[@class='title']");
-            //     var authorNode = node.SelectSingleNode(".//div[@class='auths']");
-            //     
-            //     records.Add(new LiteratureRecord
-            //     {
-            //         Doi = doiNode?.InnerText ?? string.Empty,
-            //         Title = titleNode?.InnerText ?? string.Empty,
-            //         Authors = authorNode?.InnerText ?? string.Empty,
-            //         Source = ProviderName,
-            //         DiscoveredAt = DateTime.UtcNow
-            //     });
-            // }
-        }
-        catch (Exception ex)
-        {
-            Console.WriteLine($"Error parsing PubMed HTML: {ex.Message}");
-        }
-
-        return records;
+        return string.Join("&", parameters
+            .Where(kv => !string.IsNullOrEmpty(kv.Value))
+            .Select(kv => $"{kv.Key}={Uri.EscapeDataString(kv.Value!)}"));
     }
-
 }

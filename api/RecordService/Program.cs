@@ -36,7 +36,10 @@ builder.Services.AddCors(options =>
 });
 
 // External Literature Sources - Register providers for factory pattern
-builder.Services.AddSingleton<PubMedProvider>();
+var ncbiApiKey = builder.Configuration["Ncbi:ApiKey"];
+var ncbiContactEmail = builder.Configuration["Ncbi:ContactEmail"];
+builder.Services.AddSingleton<PubMedProvider>(sp =>
+    new PubMedProvider(sp.GetRequiredService<IHttpClientFactory>().CreateClient(), ncbiApiKey, ncbiContactEmail));
 builder.Services.AddSingleton<PedroProvider>();
 builder.Services.AddSingleton<LiteratureSourceFactory>(serviceProvider =>
 {
