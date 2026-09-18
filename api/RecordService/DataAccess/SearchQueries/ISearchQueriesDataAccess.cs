@@ -34,13 +34,27 @@ public interface ISearchQueriesDataAccess
     Task<bool> UnsubscribeAsync(int userId, int searchQueryId);
 
     /// <summary>
-    /// Advances the search query's digest-retry watermark.
-    /// Callers (see RecordPollingService.PollOneAsync) should only call this after a digest
-    /// send has actually succeeded - records with search_query_records.first_seen_at after
-    /// this timestamp are what the next poll's digest is built from, so advancing it on a
-    /// failed send would silently drop those records from ever being retried.
+    /// Every subscriber of the given search query, paired with their own digest watermark
+    /// (null if no row exists yet - e.g. a pre-migration subscription the backfill missed).
+    /// Called once per query during the fetch phase so the caller can compute a single floor
+    /// timestamp to read records with, then filter per-subscriber in memory.
     /// </summary>
-    Task UpdateLastDigestSentAtAsync(int searchQueryId, DateTime timestamp);
+    Task<List<(int UserId, DateTime? LastDigestSentAt)>> GetUserDigestWatermarksForQueryAsync(int searchQueryId);
+
+    /// <summary>
+    /// Advances one subscriber's digest watermark for one search query (upsert). A failed send
+    /// for this (user, query) pair must not affect any other subscriber of the same query, nor
+    /// any other query.
+    /// </summary>
+    Task UpdateUserDigestWatermarkAsync(int userId, int searchQueryId, DateTime timestamp);
+
+    /// <summary>
+    /// For the given user, every OTHER search query they're subscribed to (excluding
+    /// excludeSearchQueryIds) that has at least one already-persisted record newer than that
+    /// user's own watermark for it. Used only by the targeted-poll sweep - never re-fetches
+    /// from an external source.
+    /// </summary>
+    Task<List<PendingUserDigest>> GetOtherPendingDigestsForUserAsync(int userId, IReadOnlyList<int> excludeSearchQueryIds);
 
     /// <summary>
     /// Records that a poll of this search query's source just completed: advances the

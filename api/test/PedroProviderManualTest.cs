@@ -16,8 +16,7 @@ public class PedroProviderManualTest
     private const string TestUrl =
         "https://search.pedro.org.au/advanced-search/results?abstract_with_title=&therapy=VL01387&problem=VL01371&body_part=VL01396&subdiscipline=VL01359&topic=VL01402&method=0&authors_association=&title=&source=&year_of_publication=2020&date_record_was_created=&nscore=&perpage=20&lop=and&find=&find=Start+Search";
 
-    [Fact]
-    //[Fact(Skip = "Manual only - launches a real headless browser against the live PEDro site and sends a real email. Remove Skip locally to run.")]
+    [Fact(Skip = "Manual only - launches a real headless browser against the live PEDro site and sends a real email. Remove Skip locally to run.")]
     public async Task SearchAsync_ParsesRealPedroResultsPage()
     {
         await using var provider = new PedroProvider();

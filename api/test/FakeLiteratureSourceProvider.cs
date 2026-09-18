@@ -14,7 +14,10 @@ public class FakeLiteratureSourceProvider : ILiteratureSourceProvider
 
     public string ProviderName => "Fake";
 
-    public bool CanHandle(string url) => url == TestUrl;
+    // Prefix match (not exact) so tests needing their own distinct, non-colliding query URL -
+    // e.g. two tests in the same class sharing one Postgres container/class fixture - can mint
+    // variants like $"{TestUrl}?case=isolation" that still resolve to this same fake provider.
+    public bool CanHandle(string url) => url.StartsWith(TestUrl, StringComparison.Ordinal);
 
     public Task<SourceSearchResult> SearchAsync(string url, DateTime? lastRunDate = null)
     {

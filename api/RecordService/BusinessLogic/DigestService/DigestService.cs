@@ -9,48 +9,44 @@ namespace RecordService.BusinessLogic.DigestService;
 
 public class DigestService : IDigestService
 {
-    private readonly ISearchQueriesDataAccess _searchQueriesDataAccess;
     private readonly IUsersDataAccess _usersDataAccess;
     private readonly IEmailSender _emailSender;
     private readonly ILogger<DigestService> _logger;
 
     public DigestService(
-        ISearchQueriesDataAccess searchQueriesDataAccess,
         IUsersDataAccess usersDataAccess,
         IEmailSender emailSender,
         ILogger<DigestService> logger)
     {
-        _searchQueriesDataAccess = searchQueriesDataAccess;
         _usersDataAccess = usersDataAccess;
         _emailSender = emailSender;
         _logger = logger;
     }
 
-    public async Task<bool> SendDigestForSearchQueryAsync(int searchQueryId, string targetUrl, IReadOnlyList<LiteratureRecord> newRecords)
+    public async Task<IReadOnlyDictionary<(int UserId, int SearchQueryId), bool>> SendCombinedDigestsAsync(IReadOnlyList<PendingUserDigest> pendingDigests)
     {
-        if (newRecords.Count == 0)
+        var successByKey = pendingDigests.ToDictionary(p => (p.UserId, p.SearchQueryId), _ => true);
+        if (pendingDigests.Count == 0)
         {
-            return true;
+            return successByKey;
         }
 
-        var subject = $"{newRecords.Count} new record{(newRecords.Count == 1 ? "" : "s")} for your search";
-        var htmlBody = SourceDetector.DetectSource(targetUrl) switch
+        foreach (var group in pendingDigests.GroupBy(p => p.UserId))
         {
-            SourceDetector.SourceType.Pedro => PedroDigestMessageBuilder.BuildHtmlBody(targetUrl, newRecords),
-            SourceDetector.SourceType.PubMed => PubMedDigestMessageBuilder.BuildHtmlBody(targetUrl, newRecords),
-            _ => BuildHtmlBody(targetUrl, newRecords)
-        };
+            var userId = group.Key;
+            var userQueries = group.ToList();
 
-        var subscriberIds = await _searchQueriesDataAccess.GetUserSubscribersForQueryAsync(searchQueryId);
-        var allSucceeded = true;
-
-        foreach (var userId in subscriberIds)
-        {
             var user = await _usersDataAccess.GetUserByIdAsync(userId);
             if (user == null || user.IsMarkedForDeletion)
             {
-                continue;
+                continue; // not a failure - no one to send to
             }
+
+            var htmlBody = BuildCombinedHtmlBody(userQueries);
+            var totalRecords = userQueries.Sum(q => q.Records.Count);
+            var subject = userQueries.Count == 1
+                ? $"{totalRecords} new record{(totalRecords == 1 ? "" : "s")} for your search"
+                : $"{totalRecords} new record{(totalRecords == 1 ? "" : "s")} across {userQueries.Count} of your searches";
 
             try
             {
@@ -58,14 +54,33 @@ public class DigestService : IDigestService
             }
             catch (Exception ex)
             {
-                allSucceeded = false;
                 _logger.LogWarning(ex,
-                    "Failed to send digest for search query {SearchQueryId} to user {UserId}",
-                    searchQueryId, userId);
+                    "Failed to send combined digest to user {UserId} ({QueryCount} quer(ies))",
+                    userId, userQueries.Count);
+                foreach (var q in userQueries)
+                {
+                    successByKey[(userId, q.SearchQueryId)] = false;
+                }
             }
         }
 
-        return allSucceeded;
+        return successByKey;
+    }
+
+    public static string BuildCombinedHtmlBody(IReadOnlyList<PendingUserDigest> pendingQueries)
+    {
+        var sb = new StringBuilder();
+        foreach (var q in pendingQueries)
+        {
+            var section = SourceDetector.DetectSource(q.TargetUrl) switch
+            {
+                SourceDetector.SourceType.Pedro => PedroDigestMessageBuilder.BuildHtmlBody(q.TargetUrl, q.Records),
+                SourceDetector.SourceType.PubMed => PubMedDigestMessageBuilder.BuildHtmlBody(q.TargetUrl, q.Records),
+                _ => BuildHtmlBody(q.TargetUrl, q.Records)
+            };
+            sb.Append("<div style=\"margin:0 0 32px;\">").Append(section).Append("</div>");
+        }
+        return sb.ToString();
     }
 
     public static string BuildHtmlBody(string targetUrl, IReadOnlyList<LiteratureRecord> newRecords)

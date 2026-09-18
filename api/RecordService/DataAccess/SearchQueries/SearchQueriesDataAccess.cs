@@ -198,6 +198,21 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
                         }
                     }
 
+                    // Seeded to NOW() (not left null) so a brand new subscriber only gets records
+                    // first-seen after they subscribed, not the query's entire historical backlog.
+                    // ON CONFLICT DO UPDATE (not DO NOTHING) so re-subscribing after unsubscribing
+                    // always resets to "just subscribed" rather than resuming a stale watermark.
+                    using (var seedDigestWatermarkCommand = new NpgsqlCommand(
+                        @"INSERT INTO user_search_query_digests (user_id, search_query_id, last_digest_sent_at)
+                          VALUES (@userId, @searchQueryId, NOW())
+                          ON CONFLICT (user_id, search_query_id) DO UPDATE SET last_digest_sent_at = EXCLUDED.last_digest_sent_at",
+                        connection, transaction))
+                    {
+                        seedDigestWatermarkCommand.Parameters.AddWithValue("@userId", userId);
+                        seedDigestWatermarkCommand.Parameters.AddWithValue("@searchQueryId", searchQueryId);
+                        await seedDigestWatermarkCommand.ExecuteNonQueryAsync();
+                    }
+
                     await transaction.CommitAsync();
 
                     return new SearchQuery
@@ -232,19 +247,99 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
         }
     }
 
-    public async Task UpdateLastDigestSentAtAsync(int searchQueryId, DateTime timestamp)
+    public async Task<List<(int UserId, DateTime? LastDigestSentAt)>> GetUserDigestWatermarksForQueryAsync(int searchQueryId)
+    {
+        var result = new List<(int, DateTime?)>();
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var command = new NpgsqlCommand(
+                @"SELECT usq.user_id, uqd.last_digest_sent_at
+                  FROM user_search_queries usq
+                  LEFT JOIN user_search_query_digests uqd
+                      ON uqd.user_id = usq.user_id AND uqd.search_query_id = usq.search_query_id
+                  WHERE usq.search_query_id = @searchQueryId", connection))
+            {
+                command.Parameters.AddWithValue("@searchQueryId", searchQueryId);
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        result.Add((reader.GetInt32(0), reader.IsDBNull(1) ? null : reader.GetDateTime(1)));
+                    }
+                }
+            }
+        }
+        return result;
+    }
+
+    public async Task UpdateUserDigestWatermarkAsync(int userId, int searchQueryId, DateTime timestamp)
     {
         using (var connection = new NpgsqlConnection(_connectionString))
         {
             await connection.OpenAsync();
             using (var command = new NpgsqlCommand(
-                "UPDATE search_queries SET last_digest_sent_at = @timestamp WHERE id = @id", connection))
+                @"INSERT INTO user_search_query_digests (user_id, search_query_id, last_digest_sent_at)
+                  VALUES (@userId, @searchQueryId, @timestamp)
+                  ON CONFLICT (user_id, search_query_id) DO UPDATE SET last_digest_sent_at = EXCLUDED.last_digest_sent_at", connection))
             {
+                command.Parameters.AddWithValue("@userId", userId);
+                command.Parameters.AddWithValue("@searchQueryId", searchQueryId);
                 command.Parameters.AddWithValue("@timestamp", timestamp);
-                command.Parameters.AddWithValue("@id", searchQueryId);
                 await command.ExecuteNonQueryAsync();
             }
         }
+    }
+
+    public async Task<List<PendingUserDigest>> GetOtherPendingDigestsForUserAsync(int userId, IReadOnlyList<int> excludeSearchQueryIds)
+    {
+        var rows = new List<(int SearchQueryId, string TargetUrl, LiteratureRecord Record)>();
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var command = new NpgsqlCommand(
+                @"SELECT sqr.search_query_id, sq.target_url,
+                         r.external_id, r.doi, r.title, r.description, r.source_url, sqr.first_seen_at
+                  FROM user_search_queries usq
+                  JOIN search_queries sq ON sq.id = usq.search_query_id
+                  JOIN search_query_records sqr ON sqr.search_query_id = usq.search_query_id
+                  JOIN records r ON r.id = sqr.record_id
+                  LEFT JOIN user_search_query_digests uqd
+                      ON uqd.user_id = usq.user_id AND uqd.search_query_id = usq.search_query_id
+                  WHERE usq.user_id = @userId
+                    AND usq.search_query_id <> ALL(@excludeSearchQueryIds)
+                    AND sqr.first_seen_at > COALESCE(uqd.last_digest_sent_at, '-infinity'::timestamptz)
+                  ORDER BY sqr.search_query_id, sqr.first_seen_at", connection))
+            {
+                command.Parameters.AddWithValue("@userId", userId);
+                command.Parameters.AddWithValue("@excludeSearchQueryIds", excludeSearchQueryIds.ToArray());
+                using (var reader = await command.ExecuteReaderAsync())
+                {
+                    while (await reader.ReadAsync())
+                    {
+                        rows.Add((reader.GetInt32(0), reader.GetString(1), new LiteratureRecord
+                        {
+                            ExternalId = reader.GetString(2),
+                            Doi = reader.IsDBNull(3) ? null : reader.GetString(3),
+                            Title = reader.GetString(4),
+                            Abstract = reader.IsDBNull(5) ? null : reader.GetString(5),
+                            SourceUrl = reader.IsDBNull(6) ? null : reader.GetString(6),
+                            FirstSeenAt = reader.GetDateTime(7)
+                        }));
+                    }
+                }
+            }
+        }
+
+        return rows.GroupBy(r => (r.SearchQueryId, r.TargetUrl))
+            .Select(g => new PendingUserDigest
+            {
+                UserId = userId,
+                SearchQueryId = g.Key.SearchQueryId,
+                TargetUrl = g.Key.TargetUrl,
+                Records = g.Select(r => r.Record).ToList()
+            })
+            .ToList();
     }
 
     public async Task RecordPollCompletedAsync(int searchQueryId, DateTime polledAt, int? sourceRecordCount)

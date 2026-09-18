@@ -57,7 +57,7 @@ public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, I
         {
             services.RemoveAll<LiteratureSourceFactory>();
             services.AddSingleton(new LiteratureSourceFactory(
-                new ILiteratureSourceProvider[] { new FakeLiteratureSourceProvider() }));
+                new ILiteratureSourceProvider[] { new FakeLiteratureSourceProvider(), new FakePedroLiteratureSourceProvider() }));
 
             services.RemoveAll<IEmailSender>();
             services.AddSingleton<IEmailSender>(EmailSender);

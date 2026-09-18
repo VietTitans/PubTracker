@@ -5,9 +5,15 @@ namespace RecordService.BusinessLogic.DigestService;
 public interface IDigestService
 {
     /// <summary>
-    /// Emails every subscriber of the given search query a digest of the newly found records.
-    /// A failure sending to one subscriber does not stop the others from being notified.
+    /// Sends exactly one combined email per distinct UserId in pendingDigests, with one
+    /// section per PendingUserDigest belonging to that user - not one email per query.
+    /// A failure sending to one user does not stop other users from being notified.
     /// </summary>
-    /// <returns>True if the send succeeded for every subscriber (or there were none); false if any failed.</returns>
-    Task<bool> SendDigestForSearchQueryAsync(int searchQueryId, string targetUrl, IReadOnlyList<LiteratureRecord> newRecords);
+    /// <returns>
+    /// Per (UserId, SearchQueryId) pair present in the input: true if that user's combined
+    /// email sent successfully. A failure only marks the pairs in THAT user's email - other
+    /// subscribers of the same query, and other queries in a different user's email, are
+    /// unaffected.
+    /// </returns>
+    Task<IReadOnlyDictionary<(int UserId, int SearchQueryId), bool>> SendCombinedDigestsAsync(IReadOnlyList<PendingUserDigest> pendingDigests);
 }

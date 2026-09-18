@@ -95,8 +95,21 @@ public static class PedroDigestMessageBuilder
 
     public static string BuildHtmlBody(string targetUrl, IReadOnlyList<LiteratureRecord> newRecords)
     {
-        return DigestMessageFormatter.BuildHtmlBody("PEDro", GetBodyPartLabel(targetUrl), targetUrl, newRecords);
+        return DigestMessageFormatter.BuildHtmlBody("PEDro", GetCategory(targetUrl), targetUrl, newRecords);
     }
+
+    /// <summary>
+    /// PEDro's structured body_part field wins when the search actually set one; a search left
+    /// at "Any/all" (body_part=0, or the param missing entirely) has no structured field to read,
+    /// so this falls back to keyword-matching the free-text search fields against the same
+    /// taxonomy PubMed uses (CategoryKeywordMatcher) - otherwise those searches would always
+    /// show "your search" instead of a real category.
+    /// </summary>
+    public static string? GetCategory(string targetUrl) =>
+        GetBodyPartLabel(targetUrl)
+        ?? CategoryKeywordMatcher.Match(GetRawQueryValue(targetUrl, "abstract_with_title"))
+        ?? CategoryKeywordMatcher.Match(GetRawQueryValue(targetUrl, "title"))
+        ?? CategoryKeywordMatcher.Match(GetRawQueryValue(targetUrl, "calc_text"));
 
     public static string? GetBodyPartLabel(string targetUrl) => GetMappedValue(targetUrl, "body_part", BodyPartMap);
 

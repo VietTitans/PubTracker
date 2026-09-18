@@ -89,7 +89,7 @@ public class RecordsDataAccess : IRecordsDataAccess
         {
             await connection.OpenAsync();
             using (var command = new NpgsqlCommand(
-                @"SELECT r.external_id, r.doi, r.title, r.description, r.source_url
+                @"SELECT r.external_id, r.doi, r.title, r.description, r.source_url, sqr.first_seen_at
                   FROM search_query_records sqr
                   JOIN records r ON r.id = sqr.record_id
                   WHERE sqr.search_query_id = @searchQueryId AND sqr.first_seen_at > @since
@@ -107,7 +107,8 @@ public class RecordsDataAccess : IRecordsDataAccess
                             Doi = reader.IsDBNull(1) ? null : reader.GetString(1),
                             Title = reader.GetString(2),
                             Abstract = reader.IsDBNull(3) ? null : reader.GetString(3),
-                            SourceUrl = reader.IsDBNull(4) ? null : reader.GetString(4)
+                            SourceUrl = reader.IsDBNull(4) ? null : reader.GetString(4),
+                            FirstSeenAt = reader.GetDateTime(5)
                         });
                     }
                 }

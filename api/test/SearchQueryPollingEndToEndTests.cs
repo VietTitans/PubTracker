@@ -9,10 +9,17 @@ namespace test;
 
 /// <summary>
 /// End-to-end coverage of the full journey: create a search query over HTTP, persist it,
-/// then poll it and persist discovered records - and specifically that the last_digest_sent_at
-/// watermark (see RecordPollingService.PollAllSearchQueriesAsync) prevents a second poll from
+/// then poll it and persist discovered records - and specifically that the digest watermark
+/// (see RecordPollingService.PollAllSearchQueriesAsync) prevents a second poll from
 /// re-counting already-seen records as new.
+///
+/// [Collection] groups this with every other test class that uses PubTrackerWebApplicationFactory,
+/// so xunit never runs them in parallel with each other: PubTrackerWebApplicationFactory
+/// configures its app via process-wide environment variables (see its own doc comment), so two
+/// factory instances initializing concurrently would race and could point one test's app at
+/// another instance's Postgres container.
 /// </summary>
+[Collection("PubTrackerWebApplicationFactory")]
 public class SearchQueryPollingEndToEndTests : IClassFixture<PubTrackerWebApplicationFactory>
 {
     private readonly PubTrackerWebApplicationFactory _factory;
