@@ -94,11 +94,14 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'ghcr-token', usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
-                    sh "echo \$GHCR_TOKEN | docker login ghcr.io -u \$GHCR_USER --password-stdin"
-                    sh "docker tag pubtracker-api:${env.BUILD_NUMBER} ghcr.io/\$GHCR_USER/pubtracker-api:${env.BUILD_NUMBER}"
-                    sh "docker tag pubtracker-api:${env.BUILD_NUMBER} ghcr.io/\$GHCR_USER/pubtracker-api:latest"
-                    sh "docker push ghcr.io/\$GHCR_USER/pubtracker-api:${env.BUILD_NUMBER}"
-                    sh "docker push ghcr.io/\$GHCR_USER/pubtracker-api:latest"
+                    sh '''
+                        GHCR_USER_LC=$(echo "$GHCR_USER" | tr '[:upper:]' '[:lower:]')
+                        echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
+                        docker tag pubtracker-api:''' + env.BUILD_NUMBER + ''' ghcr.io/$GHCR_USER_LC/pubtracker-api:''' + env.BUILD_NUMBER + '''
+                        docker tag pubtracker-api:''' + env.BUILD_NUMBER + ''' ghcr.io/$GHCR_USER_LC/pubtracker-api:latest
+                        docker push ghcr.io/$GHCR_USER_LC/pubtracker-api:''' + env.BUILD_NUMBER + '''
+                        docker push ghcr.io/$GHCR_USER_LC/pubtracker-api:latest
+                    '''
                 }
             }
         }
