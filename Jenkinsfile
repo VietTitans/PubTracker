@@ -90,5 +90,14 @@ pipeline {
                 sh "docker build -f api/Dockerfile -t pubtracker-api:${env.BUILD_NUMBER} api"
             }
         }
+
+        stage('Push Docker Image') {
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'ghcr-token', usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
+                    sh "docker login -u ${GHCR_USER} -p ${GHCR_TOKEN}"
+                    sh "docker tag pubtracker-api:${env.BUILD_NUMBER} ${GHCR_USER}/pubtracker-api:${env.BUILD_NUMBER}"
+                    sh "docker push ${GHCR_USER}/pubtracker-api:${env.BUILD_NUMBER}"
+                }
+            }
     }
 }
