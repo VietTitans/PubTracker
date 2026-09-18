@@ -94,10 +94,13 @@ pipeline {
         stage('Push Docker Image') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'ghcr-token', usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
-                    sh "docker login -u ${GHCR_USER} -p ${GHCR_TOKEN}"
-                    sh "docker tag pubtracker-api:${env.BUILD_NUMBER} ${GHCR_USER}/pubtracker-api:${env.BUILD_NUMBER}"
-                    sh "docker push ${GHCR_USER}/pubtracker-api:${env.BUILD_NUMBER}"
+                    sh "echo \$GHCR_TOKEN | docker login ghcr.io -u \$GHCR_USER --password-stdin"
+                    sh "docker tag pubtracker-api:${env.BUILD_NUMBER} ghcr.io/\$GHCR_USER/pubtracker-api:${env.BUILD_NUMBER}"
+                    sh "docker tag pubtracker-api:${env.BUILD_NUMBER} ghcr.io/\$GHCR_USER/pubtracker-api:latest"
+                    sh "docker push ghcr.io/\$GHCR_USER/pubtracker-api:${env.BUILD_NUMBER}"
+                    sh "docker push ghcr.io/\$GHCR_USER/pubtracker-api:latest"
                 }
             }
+        }
     }
 }
