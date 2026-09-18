@@ -28,7 +28,7 @@ pipeline {
         TESTCONTAINERS_HOST_OVERRIDE = 'host.docker.internal'
     }
 
-    stages {
+    stages { 
         stage('Checkout') {
             steps {
                 checkout scm
