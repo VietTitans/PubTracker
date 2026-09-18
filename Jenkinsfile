@@ -82,7 +82,7 @@ pipeline {
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Build API Docker Image') {
             steps {
                 // Context is api/ (Dockerfile does `COPY . .` from WORKDIR /src and references
                 // RecordService/RecordService.csproj relatively) — matches how docker/docker-compose.yml
@@ -91,16 +91,32 @@ pipeline {
             }
         }
 
-        stage('Push Docker Image') {
+        stage('Build Web Docker Image') {
+            steps {
+                // Build args match the defaults docker/docker-compose.yml passes to this same
+                // Dockerfile; Vite bakes VITE_* vars into the static bundle at build time.
+                sh """
+                    docker build -f web/Dockerfile \
+                        --build-arg VITE_API_BASE_URL=http://localhost:8080 \
+                        --build-arg VITE_KEYCLOAK_AUTHORITY=http://localhost:8081/realms/science-alerts-saas \
+                        --build-arg VITE_KEYCLOAK_CLIENT_ID=science-alerts-web \
+                        -t pubtracker-web:${env.BUILD_NUMBER} web
+                """
+            }
+        }
+
+        stage('Push Docker Images') {
             steps {
                 withCredentials([usernamePassword(credentialsId: 'ghcr-token', usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
                     sh '''
                         GHCR_USER_LC=$(echo "$GHCR_USER" | tr '[:upper:]' '[:lower:]')
                         echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-                        docker tag pubtracker-api:''' + env.BUILD_NUMBER + ''' ghcr.io/$GHCR_USER_LC/pubtracker-api:''' + env.BUILD_NUMBER + '''
-                        docker tag pubtracker-api:''' + env.BUILD_NUMBER + ''' ghcr.io/$GHCR_USER_LC/pubtracker-api:latest
-                        docker push ghcr.io/$GHCR_USER_LC/pubtracker-api:''' + env.BUILD_NUMBER + '''
-                        docker push ghcr.io/$GHCR_USER_LC/pubtracker-api:latest
+                        for image in pubtracker-api pubtracker-web; do
+                            docker tag $image:''' + env.BUILD_NUMBER + ''' ghcr.io/$GHCR_USER_LC/$image:''' + env.BUILD_NUMBER + '''
+                            docker tag $image:''' + env.BUILD_NUMBER + ''' ghcr.io/$GHCR_USER_LC/$image:latest
+                            docker push ghcr.io/$GHCR_USER_LC/$image:''' + env.BUILD_NUMBER + '''
+                            docker push ghcr.io/$GHCR_USER_LC/$image:latest
+                        done
                     '''
                 }
             }
