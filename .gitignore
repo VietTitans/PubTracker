@@ -229,3 +229,5 @@ __marimo__/
 /.vs
 /api/test/bin
 /api/test/obj
+/api/RecordData/obj
+/api/test/obj
