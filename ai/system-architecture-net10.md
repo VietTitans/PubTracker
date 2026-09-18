@@ -102,6 +102,8 @@ The relational persistence tier tracks sources, individual unique queries, histo
 
 **Revision note:** the previous version of this schema linked `SearchQuery` to `Record` only indirectly, through `Source`. Since `Source` is coarse-grained (one row per platform), that path could not express "which records belong to which specific saved search," and the weekly digest job had no way to compute a per-search delta. This revision introduces an explicit `SearchQueryRecord` junction table between `SearchQuery` and `Record`, and replaces the `currentRecordCount` / `previousRecordCount` counters with a timestamp-based delta mechanism (`firstSeenAt`), which is both simpler and less prone to drifting out of sync with reality. The undefined `subscriptioners` field has been removed and replaced with an explicit `lastDigestSentAt` tracking column.
 
+**Revision note (per-user digest tracking):** `SearchQuery.lastDigestSentAt` above was a single watermark shared by every subscriber of a query - a failed send to any one subscriber blocked retry for all of them, and there was no way to combine a user's multiple subscribed searches (potentially across different sources) into one email, since "has this query's digest gone out" wasn't a question that could be asked per-user. This revision adds `UserSearchQueryDigest`, moving the watermark onto the `(userId, searchQueryId)` pair it actually describes. `SearchQuery.lastDigestSentAt` is kept only for backward read compatibility (existing API/frontend consumers) - it is no longer written to, and should eventually be removed once those consumers are migrated to the per-user data.
+
 ### Entity Relationship Layout
 
 ```
@@ -134,13 +136,24 @@ The relational persistence tier tracks sources, individual unique queries, histo
                                              │1
                                    ┌─────────┴─────────┐
                                    │       User        │
-                                   ├───────────────────┤
-                                   │ id (PK)           │
-                                   │ name              │
-                                   │ userName          │
-                                   │ email             │
-                                   └───────────────────┘
+                                   ├──────────┬────────┤
+                                   │ id (PK)  │        │
+                                   │ name     │        │
+                                   │ userName │        │
+                                   │ email    │        │
+                                   └──────────┴────────┘
+                                             │1
+                                             │n
+                          ┌──────────────────┴──────────────────┐
+                          │        UserSearchQueryDigest         │
+                          ├───────────────────────────────────────┤
+                          │ userId (FK)                           │
+                          │ searchQueryId (FK)                    │
+                          │ lastDigestSentAt (TIMESTAMPTZ, nullable)
+                          │ PK (userId, searchQueryId)             │
+                          └────────────────────────────────────────┘
 ```
+`UserSearchQueryDigest` is the digest-delta watermark, keyed per (user, search query) rather than per search query alone - see the revision note above. It has an implicit FK to `SearchQuery(id)` too, alongside `User(id)`; omitted from the diagram above only for layout space.
 
 ### Relational Table Implementations (SQL Specification)
 
@@ -203,6 +216,19 @@ CREATE TABLE UserSearchQuery (
     searchQueryId INTEGER NOT NULL REFERENCES SearchQuery(id) ON DELETE CASCADE,
     PRIMARY KEY (userId, searchQueryId)
 );
+
+-- Per-(user, searchQuery) digest watermark - supersedes SearchQuery.lastDigestSentAt as the
+-- source of truth for "what has this specific user already been sent for this query". Seeded
+-- to now() when a user subscribes (so they only get records seen after subscribing, not the
+-- query's entire historical backlog), and advanced only when that user's combined digest email
+-- actually sends successfully - a failed send blocks retry for this (user, query) pair alone,
+-- never for any other subscriber of the same query or any other query.
+CREATE TABLE UserSearchQueryDigest (
+    userId INTEGER NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
+    searchQueryId INTEGER NOT NULL REFERENCES SearchQuery(id) ON DELETE CASCADE,
+    lastDigestSentAt TIMESTAMPTZ,
+    PRIMARY KEY (userId, searchQueryId)
+);
 ```
 
 All timestamp columns use `TIMESTAMPTZ` (`TIMESTAMP WITH TIME ZONE`) rather than plain `TIMESTAMP`, following a "universal UTC" storage strategy: values are normalized to UTC internally on write regardless of the writing session's time zone, and converted for display only at read time. This keeps cross-timezone comparisons (e.g. the digest cutoff filter below) unambiguous regardless of where the application server, database, or a future admin client happens to be running.
@@ -223,19 +249,23 @@ The automated monitoring loop functions outside the Web API execution layer usin
    * For each record returned by a query, upsert into `Record` keyed on `doi` (`INSERT ... ON CONFLICT (doi) DO NOTHING`), ensuring global deduplication across all searches and users.
    * Insert the `(searchQueryId, recordId)` pair into `SearchQueryRecord` (`ON CONFLICT (searchQueryId, recordId) DO NOTHING`). This is the moment `firstSeenAt` is stamped for that query — regardless of whether the underlying `Record` was brand new to the system or already existed from a different search.
    * Bridge new source associations through `SourceRecord` as before.
-5. **Digest Assembly & Email Dispatch:**
-   * For each `SearchQuery`, compute the delta as every row in `SearchQueryRecord` where `firstSeenAt >= lastDigestSentAt` (falling back to a fixed lookback window, e.g. 7 days, if `lastDigestSentAt` is null on first run):
+5. **Digest Assembly & Email Dispatch:** dispatch is per-*user*, not per-`SearchQuery` - a user subscribed to several queries (across one or many sources) gets exactly one email per run, with one section per query that has pending content for them, rather than one email per query.
+   * For each `SearchQuery` just polled, compute the delta against `UserSearchQueryDigest` rather than a single query-wide watermark: read every subscriber's own `lastDigestSentAt` for that query (`null` counts as "never sent" - the delta then includes that query's full history for that subscriber, since a `null` watermark only occurs for a subscriber the seed-on-subscribe step hasn't reached, not for a deliberately-unbounded backlog request), then filter `SearchQueryRecord` rows per subscriber:
      ```sql
-     SELECT r.id, r.doi, r.title, r.description, sqr.firstSeenAt
-     FROM SearchQueryRecord sqr
+     SELECT usq.userId, r.id, r.doi, r.title, r.description, sqr.firstSeenAt
+     FROM UserSearchQuery usq
+     JOIN SearchQueryRecord sqr ON sqr.searchQueryId = usq.searchQueryId
      JOIN Record r ON r.id = sqr.recordId
-     WHERE sqr.searchQueryId = @searchQueryId
-       AND sqr.firstSeenAt >= @lastDigestSentAt
+     LEFT JOIN UserSearchQueryDigest uqd
+         ON uqd.userId = usq.userId AND uqd.searchQueryId = usq.searchQueryId
+     WHERE usq.searchQueryId = @searchQueryId
+       AND sqr.firstSeenAt > COALESCE(uqd.lastDigestSentAt, '-infinity'::timestamptz)
      ORDER BY sqr.firstSeenAt DESC;
      ```
-   * The worker joins `UserSearchQuery` with `"User"` to pull the complete roster of emails subscribed to that `searchQueryId`.
-   * The delta set is transformed via an automated HTML styling script into an elegant email digest template and dispatched asynchronously through the transmission vendor (e.g., Postmark or Resend API).
-   * On confirmed successful dispatch, `SearchQuery.lastDigestSentAt` is updated to the current run's timestamp. Using an explicit column here (rather than deriving the cutoff purely from the cron interval) makes the system robust to missed or delayed runs, retries, and manual backfills.
+   * The worker groups every pending `(user, searchQuery)` delta computed this run by `userId`, so a user with pending content in three of their subscribed queries gets one email containing three sections, not three emails.
+   * Each combined delta set is transformed via an automated HTML styling script into one email digest template (one section per query, still per-source-formatted) and dispatched asynchronously through the transmission vendor (e.g., Postmark or Resend API).
+   * On confirmed successful dispatch, only the `UserSearchQueryDigest` rows for the `(user, searchQuery)` pairs actually included in that one email are advanced to the current run's cutoff timestamp - never the whole `SearchQuery`. A failed send therefore blocks retry only for that one user's pending queries, not for any other subscriber of the same query. Using an explicit per-pair column here (rather than deriving the cutoff purely from the cron interval) makes the system robust to missed or delayed runs, retries, and manual backfills, without one subscriber's delivery trouble affecting anyone else's.
+   * A subscriber's brand new subscription seeds its `UserSearchQueryDigest` row to `now()` at subscribe time, so they receive only records seen from that point forward - not the query's entire historical backlog, which may already have been sent to that query's other subscribers long ago.
 
 ---
 

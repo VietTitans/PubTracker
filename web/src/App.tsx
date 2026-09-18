@@ -11,7 +11,7 @@ import {
   type User,
 } from "./api/client";
 import { useAuth } from "./auth/useAuth";
-import { detectSourceLabel } from "./lib/sourceLabel";
+import { detectSourceLabel } from "./lib/sourceLabel"; 
 import "./App.css";
 
 function ExternalLinkIcon() {

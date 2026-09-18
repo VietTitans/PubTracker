@@ -1,0 +1,29 @@
+# Local development entrypoint. Single port (80) in front of web/api/keycloak.
+# See the bottom of this file for what changes to go to a real domain later.
+
+:80 {
+	# Keycloak has KC_HTTP_RELATIVE_PATH=/auth (see docker-compose.yml), so its own
+	# routes already live under /auth/* - nothing to rewrite here.
+	handle /auth/* {
+		reverse_proxy keycloak:8080
+	}
+
+	# .NET controllers already route at api/[controller], and the frontend already
+	# calls e.g. "/api/Users/me" - so /api/* passes through unchanged.
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	# Everything else: the SPA's own Caddy instance (static files + client-side fallback).
+	handle {
+		reverse_proxy web:80
+	}
+}
+
+# --- Production follow-up (not done here - no domain/server chosen yet) ---
+# Swap ":80" above for your real domain (e.g. "app.example.com") and Caddy
+# automatically requests/renews a Let's Encrypt cert and serves HTTPS - the
+# three `handle` blocks don't need to change. At that point also add:
+#   - "443:443" alongside "80:80" in docker-compose.yml (ACME challenge + redirect)
+#   - a `caddy_data:/data` (+ `caddy_config:/config`) named volume so certs survive
+#     container recreation instead of re-issuing every time

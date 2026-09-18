@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.WebUtilities;
 using RecordService.Models;
 
@@ -12,74 +13,24 @@ namespace RecordService.BusinessLogic.DigestService;
 /// </summary>
 public static class PubMedDigestMessageBuilder
 {
-    private static readonly (string Keyword, string Category)[] MeshKeywordMap =
-    {
-        ("shoulder", DigestCategories.UpperArmShoulderOrShoulderGirdle),
-        ("rotator cuff", DigestCategories.UpperArmShoulderOrShoulderGirdle),
-        ("humerus", DigestCategories.UpperArmShoulderOrShoulderGirdle),
-        ("scapula", DigestCategories.UpperArmShoulderOrShoulderGirdle),
-        ("clavicle", DigestCategories.UpperArmShoulderOrShoulderGirdle),
-        ("arm", DigestCategories.UpperArmShoulderOrShoulderGirdle),
-
-        ("forearm", DigestCategories.ForearmOrElbow),
-        ("elbow", DigestCategories.ForearmOrElbow),
-        ("radius", DigestCategories.ForearmOrElbow),
-        ("ulna", DigestCategories.ForearmOrElbow),
-
-        ("wrist", DigestCategories.HandOrWrist),
-        ("hand", DigestCategories.HandOrWrist),
-        ("finger", DigestCategories.HandOrWrist),
-        ("thumb", DigestCategories.HandOrWrist),
-        ("carpal", DigestCategories.HandOrWrist),
-
-        ("head", DigestCategories.HeadOrNeck),
-        ("neck", DigestCategories.HeadOrNeck),
-        ("cervical", DigestCategories.HeadOrNeck),
-        ("face", DigestCategories.HeadOrNeck),
-        ("skull", DigestCategories.HeadOrNeck),
-        ("temporomandibular", DigestCategories.HeadOrNeck),
-
-        ("thorax", DigestCategories.Chest),
-        ("thoracic wall", DigestCategories.Chest),
-        ("chest", DigestCategories.Chest),
-        ("rib", DigestCategories.Chest),
-
-        ("thoracic vertebra", DigestCategories.ThoracicSpine),
-        ("thoracic spine", DigestCategories.ThoracicSpine),
-
-        ("lumbar", DigestCategories.LumbarSpineSijOrPelvis),
-        ("sacroiliac", DigestCategories.LumbarSpineSijOrPelvis),
-        ("pelvis", DigestCategories.LumbarSpineSijOrPelvis),
-        ("sacrum", DigestCategories.LumbarSpineSijOrPelvis),
-        ("low back", DigestCategories.LumbarSpineSijOrPelvis),
-
-        ("perineum", DigestCategories.PerineumOrGenitoUrinarySystem),
-        ("urogenital", DigestCategories.PerineumOrGenitoUrinarySystem),
-        ("pelvic floor", DigestCategories.PerineumOrGenitoUrinarySystem),
-
-        ("thigh", DigestCategories.ThighOrHip),
-        ("hip", DigestCategories.ThighOrHip),
-        ("femur", DigestCategories.ThighOrHip),
-
-        ("knee", DigestCategories.LowerLegOrKnee),
-        ("leg", DigestCategories.LowerLegOrKnee),
-        ("tibia", DigestCategories.LowerLegOrKnee),
-        ("fibula", DigestCategories.LowerLegOrKnee),
-
-        ("ankle", DigestCategories.FootOrAnkle),
-        ("foot", DigestCategories.FootOrAnkle),
-        ("toe", DigestCategories.FootOrAnkle),
-    };
-
     public static string BuildHtmlBody(string targetUrl, IReadOnlyList<LiteratureRecord> newRecords)
     {
         return DigestMessageFormatter.BuildHtmlBody("PubMed", GetCategory(targetUrl), targetUrl, newRecords);
     }
 
+    // PubMed's publication-date sidebar filter shows up in the URL as a "filter" query param
+    // (repeatable, alongside other unrelated filters like text availability) in one of three
+    // shapes: a custom year range ("years.2020-2023"), a custom exact-date range
+    // ("dates.2020/1/1-2023/6/30"), or a quick relative filter ("datesearch.y_5" = last 5 years).
+    private static readonly Regex YearsRangeFilter = new(@"^years\.(\d{4})-(\d{4})$", RegexOptions.Compiled);
+    private static readonly Regex DatesRangeFilter = new(@"^dates\.([\d/]+)-([\d/]+)$", RegexOptions.Compiled);
+    private static readonly Regex RelativeYearsFilter = new(@"^datesearch\.y_(\d+)$", RegexOptions.Compiled);
+
     /// <summary>
     /// PubMed has no structured fields like PEDro's advanced search - the whole query lives in
     /// the "term" param, which can be an arbitrary boolean expression. So unlike PEDro's
-    /// multi-tag breakdown, this returns at most a single "Search: ..." tag with the raw term.
+    /// multi-tag breakdown, this returns at most a "Search: ..." tag with the raw term, plus a
+    /// year-filter tag if the URL's publication-date filter is present.
     /// </summary>
     public static List<string> GetKeywordTags(string targetUrl)
     {
@@ -88,13 +39,58 @@ public static class PubMedDigestMessageBuilder
             return new();
         }
 
+        var tags = new List<string>();
         var query = QueryHelpers.ParseQuery(uri.Query);
-        if (!query.TryGetValue("term", out var term) || string.IsNullOrWhiteSpace(term.ToString()))
+
+        if (query.TryGetValue("term", out var term) && !string.IsNullOrWhiteSpace(term.ToString()))
         {
-            return new();
+            tags.Add($"Search: \"{term}\"");
         }
 
-        return new List<string> { $"Search: \"{term}\"" };
+        var yearFilterTag = GetYearFilterTag(query);
+        if (yearFilterTag is not null)
+        {
+            tags.Add(yearFilterTag);
+        }
+
+        return tags;
+    }
+
+    private static string? GetYearFilterTag(Dictionary<string, Microsoft.Extensions.Primitives.StringValues> query)
+    {
+        if (!query.TryGetValue("filter", out var filters))
+        {
+            return null;
+        }
+
+        foreach (var filter in filters)
+        {
+            if (string.IsNullOrWhiteSpace(filter))
+            {
+                continue;
+            }
+
+            var yearsMatch = YearsRangeFilter.Match(filter);
+            if (yearsMatch.Success)
+            {
+                return $"Years: {yearsMatch.Groups[1].Value}-{yearsMatch.Groups[2].Value}";
+            }
+
+            var datesMatch = DatesRangeFilter.Match(filter);
+            if (datesMatch.Success)
+            {
+                return $"Dates: {datesMatch.Groups[1].Value} to {datesMatch.Groups[2].Value}";
+            }
+
+            var relativeMatch = RelativeYearsFilter.Match(filter);
+            if (relativeMatch.Success)
+            {
+                var years = relativeMatch.Groups[1].Value;
+                return $"Last {years} year{(years == "1" ? "" : "s")}";
+            }
+        }
+
+        return null;
     }
 
     private static string? GetCategory(string targetUrl)
@@ -105,20 +101,6 @@ public static class PubMedDigestMessageBuilder
         }
 
         var query = QueryHelpers.ParseQuery(uri.Query);
-        if (!query.TryGetValue("term", out var term) || string.IsNullOrWhiteSpace(term.ToString()))
-        {
-            return null;
-        }
-
-        var lowerTerm = term.ToString().ToLowerInvariant();
-        foreach (var (keyword, category) in MeshKeywordMap)
-        {
-            if (lowerTerm.Contains(keyword))
-            {
-                return category;
-            }
-        }
-
-        return null;
+        return query.TryGetValue("term", out var term) ? CategoryKeywordMatcher.Match(term.ToString()) : null;
     }
 }

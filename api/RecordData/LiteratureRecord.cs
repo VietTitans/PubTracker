@@ -52,4 +52,12 @@ public class LiteratureRecord
     /// Source type (e.g., "PubMed", "PEDro")
     /// </summary>
     public string Source { get; set; } = string.Empty;
+
+    /// <summary>
+    /// When this record was first linked to the search query it was fetched for
+    /// (search_query_records.first_seen_at). Lets a query's once-fetched record set be sliced
+    /// per-subscriber in memory against each subscriber's own watermark, instead of re-querying
+    /// the DB once per subscriber.
+    /// </summary>
+    public DateTime FirstSeenAt { get; set; }
 }
