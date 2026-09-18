@@ -1,5 +1,17 @@
 name: pubtracker
 services:
+  proxy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - web
+      - api
+      - keycloak
   db:
     image: postgres:16-alpine
     container_name: postgres_db
@@ -26,8 +38,10 @@ services:
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
       KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-    ports:
-      - "8081:8080"
+      # Tells Keycloak its own routes live under /auth, so the login pages/redirects it
+      # generates are already correct once the `proxy` container forwards /auth/* to it
+      # unmodified - no path rewriting needed on the Caddy side.
+      KC_HTTP_RELATIVE_PATH: /auth
     volumes:
       - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
   api:
@@ -41,8 +55,6 @@ services:
         condition: service_healthy
       keycloak:
         condition: service_started
-    ports:
-      - "8080:8080"
     env_file:
       - .env
     environment:
@@ -58,9 +70,12 @@ services:
       # tokens); MetadataAddress is this container's own path to Keycloak over the Docker
       # network, for fetching signing keys - see the comment above ConfigureKeycloakBearer
       # in Program.cs for why these must differ inside Docker.
-      Keycloak__Authority: ${WEB_KEYCLOAK_AUTHORITY:-http://localhost:8081/realms/science-alerts-saas}
-      Keycloak__MetadataAddress: http://keycloak:8080/realms/science-alerts-saas/.well-known/openid-configuration
+      Keycloak__Authority: ${WEB_KEYCLOAK_AUTHORITY:-http://localhost/auth/realms/science-alerts-saas}
+      Keycloak__MetadataAddress: http://keycloak:8080/auth/realms/science-alerts-saas/.well-known/openid-configuration
       Keycloak__Audience: science-alerts-api
+      # Web and api now share one origin behind the proxy, so this is effectively same-origin -
+      # kept explicit for correctness/documentation rather than relying on that implicitly.
+      Cors__WebAppOrigin: ${WEB_API_BASE_URL:-http://localhost}
   web:
     container_name: web
     restart: unless-stopped
@@ -68,13 +83,11 @@ services:
       context: ../web
       dockerfile: Dockerfile
       args:
-        VITE_API_BASE_URL: ${WEB_API_BASE_URL:-http://localhost:8080}
-        VITE_KEYCLOAK_AUTHORITY: ${WEB_KEYCLOAK_AUTHORITY:-http://localhost:8081/realms/science-alerts-saas}
+        VITE_API_BASE_URL: ${WEB_API_BASE_URL:-http://localhost}
+        VITE_KEYCLOAK_AUTHORITY: ${WEB_KEYCLOAK_AUTHORITY:-http://localhost/auth/realms/science-alerts-saas}
         VITE_KEYCLOAK_CLIENT_ID: ${WEB_KEYCLOAK_CLIENT_ID:-science-alerts-web}
     depends_on:
       - api
-    ports:
-      - "5173:80"
 
 volumes:
   postgres_data:
