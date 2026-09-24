@@ -24,6 +24,7 @@ services:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ../database/schema:/docker-entrypoint-initdb.d
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U postgres"]
       interval: 10s
@@ -46,9 +47,6 @@ services:
   api:
     container_name: api
     restart: unless-stopped
-    # image: lets `docker compose pull` fetch the Jenkins-pushed tag on deploy hosts; build:
-    # still lets local dev do `docker compose up --build` without touching GHCR.
-    image: ghcr.io/${GHCR_OWNER:-viettitans}/pubtracker-api:latest
     build:
       context: ../api
       dockerfile: Dockerfile
@@ -81,7 +79,6 @@ services:
   web:
     container_name: web
     restart: unless-stopped
-    image: ghcr.io/${GHCR_OWNER:-viettitans}/pubtracker-web:latest
     build:
       context: ../web
       dockerfile: Dockerfile

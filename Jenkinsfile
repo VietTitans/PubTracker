@@ -6,14 +6,7 @@ pipeline {
         disableConcurrentBuilds()
     }
 
-    parameters {
-        string(name: 'DEPLOY_HOST', defaultValue: '', description: 'SSH host (user@host or host, with SSH_USER from the deploy-ssh-key credential) to deploy to')
-        string(name: 'DEPLOY_PATH', defaultValue: '', description: 'Absolute path to the docker/ directory (containing docker-compose.yml and .env) on DEPLOY_HOST')
-    }
-
     environment {
-        DEPLOY_HOST = "${params.DEPLOY_HOST}"
-        DEPLOY_PATH = "${params.DEPLOY_PATH}"
         DOTNET_CLI_TELEMETRY_OPTOUT = '1'
         DOTNET_NOLOGO = '1'
         // Restore/Build/Test each run in a fresh, throwaway SDK container. NuGet's default
@@ -124,23 +117,6 @@ pipeline {
                             docker push ghcr.io/$GHCR_USER_LC/$image:''' + env.BUILD_NUMBER + '''
                             docker push ghcr.io/$GHCR_USER_LC/$image:latest
                         done
-                    '''
-                }
-            }
-        }
-
-        stage('Deploy') {
-            when {
-                anyOf { branch 'main'; branch 'dev' }
-            }
-            steps {
-                // api/web now declare both `image:` (ghcr.io/<owner>/pubtracker-*:latest) and
-                // `build:` in docker-compose.yml, so `docker compose pull` on the deploy host
-                // fetches the tags this pipeline just pushed instead of trying to build locally.
-                withCredentials([sshUserPrivateKey(credentialsId: 'deploy-ssh-key', keyFileVariable: 'SSH_KEY', usernameVariable: 'SSH_USER')]) {
-                    sh '''
-                        ssh -o StrictHostKeyChecking=accept-new -i "$SSH_KEY" "$SSH_USER@$DEPLOY_HOST" \
-                            "cd $DEPLOY_PATH && docker compose pull && docker compose up -d"
                     '''
                 }
             }
