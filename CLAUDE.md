@@ -57,7 +57,7 @@ dotnet test api/test/Test.csproj
 ### Full stack via Docker
 ```bash
 cd docker
-docker compose up --build     # builds api/ (via api/Dockerfile) + postgres, applies database/schema/init.sql on first boot
+docker compose up --build     # builds api/ (via api/Dockerfile) + postgres; API applies pending migrations from api/RecordService/Migrations/ on startup
 ```
 Requires `docker/.env` (copy from `docker/.env.example.example`) with `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`, `ASPNETCORE_ENVIRONMENT`. The API reads its connection string from `ConnectionStrings__DefaultConnection`, which `docker-compose.yml` assembles from those same Postgres env vars. `Program.cs` throws at startup if this connection string is missing.
 
@@ -71,7 +71,7 @@ Two-project .NET solution:
 
 - **Controllers** (`Controllers/`) are thin: call the service, catch exceptions, return DTOs via mapping extensions. They don't touch `DataAccess` or `RecordData` models directly.
 - **BusinessLogic** (`BusinessLogic/`) holds orchestration/business rules and calls `DataAccess`.
-- **DataAccess** (`DataAccess/`) talks to Postgres directly via raw `Npgsql` `NpgsqlCommand`/parameterized SQL (no ORM/EF Core). Table/column names in SQL are `snake_case` (see `database/schema/init.sql`); C# model properties are `PascalCase` — data access classes are responsible for that mapping manually. Connection strings are injected as plain strings into constructors, not via `DbContext`.
+- **DataAccess** (`DataAccess/`) talks to Postgres directly via raw `Npgsql` `NpgsqlCommand`/parameterized SQL (no ORM/EF Core). Table/column names in SQL are `snake_case` (see `api/RecordService/Migrations/`); C# model properties are `PascalCase` — data access classes are responsible for that mapping manually. Connection strings are injected as plain strings into constructors, not via `DbContext`.
 - **DTOs** (`DTOs/`) + **Extensions** (`Extensions/`, e.g. `UserMappingExtensions.cs`) — API request/response shapes are always DTOs, never raw `RecordData` models. Mapping between DTOs and domain models is hand-written extension methods (`ToResponseDto()`, `ToUserModel()`, `UpdateFromDto()`), not AutoMapper. See `api/DTO_IMPLEMENTATION.md` for the full convention when adding DTOs for a new entity.
 - **ErrorHandling** (`ErrorHandling/IErrorHandler.cs`) — a `DefaultErrorHandler` provides consistent `{ message }`-shaped JSON error responses (`BadRequest`, `NotFound`, `InternalServerError`, etc.); prefer it over ad hoc `StatusCode(...)` results in new controller code.
 - **External literature sources** (`DataAccess/ExternalSources/`) — a strategy/factory pattern for pluggable source providers:
@@ -83,4 +83,4 @@ Two-project .NET solution:
 
 ## Database
 
-Single source of truth for schema is `database/schema/init.sql`, auto-applied to Postgres on container first-boot via the `docker-entrypoint-initdb.d` mount in `docker-compose.yml`. Current schema is the *old* flatter design (`source_records` table, no `search_query_records` junction, no `last_digest_sent_at`-driven delta computation). `ai/system-architecture-net10.md` §5 documents a revised schema (adds `SearchQueryRecord` junction table with `firstSeenAt`, drops raw record-count counters) that has **not** been migrated into `init.sql` yet — when doing schema-dependent work, check which shape is actually live rather than trusting the architecture doc.
+Single source of truth for schema is the ordered SQL files in `api/RecordService/Migrations/` (embedded resources), applied via DbUp at API startup (see `Program.cs`) — runs on every start, against any environment, not just first boot. Adding a schema change means adding a new numbered `.sql` file there, never editing an already-shipped one. `ai/system-architecture-net10.md` §5 documents further schema evolution (e.g. dropping raw record-count counters) not yet reflected in the migrations — when doing schema-dependent work, check the actual migration files rather than trusting the architecture doc.

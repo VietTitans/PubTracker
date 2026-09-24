@@ -2,7 +2,6 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Npgsql;
 using RecordService.DataAccess.Email;
 using RecordService.DataAccess.ExternalSources;
 using Testcontainers.PostgreSql;
@@ -11,9 +10,10 @@ namespace test;
 
 /// <summary>
 /// Boots the real RecordService app against an ephemeral Testcontainers Postgres instance
-/// (schema applied from database/schema/init.sql) and swaps the real PubMed/PEDro providers
-/// for FakeLiteratureSourceProvider, so tests exercise the real HTTP -> Service -> DataAccess
-/// -> Postgres path without depending on live external sources.
+/// (schema applied by the app's own DbUp migrations, same as any other environment - see
+/// Program.cs) and swaps the real PubMed/PEDro providers for FakeLiteratureSourceProvider, so
+/// tests exercise the real HTTP -> Service -> DataAccess -> Postgres path without depending on
+/// live external sources.
 ///
 /// The connection string and ASPNETCORE_ENVIRONMENT are set via environment variables (not
 /// ConfigureWebHost's ConfigureAppConfiguration) because Program.cs reads
@@ -41,14 +41,6 @@ public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, I
         Environment.SetEnvironmentVariable("Email__ApiKey", "test-api-key");
         Environment.SetEnvironmentVariable("Email__FromAddress", "digest@example.com");
         Environment.SetEnvironmentVariable("Email__FromName", "PubTracker");
-
-        var schemaPath = Path.Combine(AppContext.BaseDirectory, "schema", "init.sql");
-        var schemaSql = await File.ReadAllTextAsync(schemaPath);
-
-        await using var connection = new NpgsqlConnection(_postgres.GetConnectionString());
-        await connection.OpenAsync();
-        await using var command = new NpgsqlCommand(schemaSql, connection);
-        await command.ExecuteNonQueryAsync();
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)

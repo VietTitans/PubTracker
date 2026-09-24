@@ -25,8 +25,4 @@
     <ProjectReference Include="..\RecordService\RecordService.csproj" />
   </ItemGroup>
 
-  <ItemGroup>
-    <None Include="..\..\database\schema\init.sql" Link="schema\init.sql" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-
 </Project>

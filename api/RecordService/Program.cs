@@ -1,4 +1,5 @@
 using System.Security.Claims;
+using DbUp;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -21,6 +22,21 @@ var connectionString = builder.Configuration.GetConnectionString("DefaultConnect
 if (string.IsNullOrEmpty(connectionString))
 {
     throw new Exception("Database connection string is missing");
+}
+
+// Apply pending schema migrations (api/RecordService/Migrations/*.sql, embedded as resources)
+// before anything else touches the database. Runs on every app start, not just first boot, so
+// it's the single place schema changes reach any environment
+var migrator = DeployChanges.To
+    .PostgresqlDatabase(connectionString)
+    .WithScriptsEmbeddedInAssembly(typeof(Program).Assembly)
+    .LogToConsole()
+    .Build();
+
+var migrationResult = migrator.PerformUpgrade();
+if (!migrationResult.Successful)
+{
+    throw new Exception("Database migration failed", migrationResult.Error);
 }
 
 builder.Services.AddControllers();
