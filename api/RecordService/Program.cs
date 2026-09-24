@@ -1,4 +1,6 @@
 using System.Security.Claims;
+using Npgsql;
+using Pgvector.Npgsql;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
@@ -13,6 +15,9 @@ using RecordService.BusinessLogic.SearchQueriesService;
 using RecordService.BusinessLogic.RecordPollingService;
 using RecordService.BusinessLogic.SourcesService;
 using RecordService.BusinessLogic.DigestService;
+using RecordService.BusinessLogic.ChatService;
+using RecordService.DataAccess.Chat;
+using RecordService.DataAccess.Embeddings;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -61,8 +66,33 @@ builder.Services.AddScoped<ISourcesDataAccess>(serviceProvider =>
 builder.Services.AddScoped<ISearchQueriesDataAccess>(serviceProvider =>
     new SearchQueriesDataAccess(connectionString, serviceProvider.GetRequiredService<LiteratureSourceFactory>()));
 
+// Chat / RAG - OpenAI embeds records and questions, Anthropic generates the grounded answer.
+// RecordsDataAccess alone needs pgvector-aware type mapping, which requires building the
+// NpgsqlDataSource through Pgvector's type resolver rather than handing it a bare connection
+// string like every other DataAccess class here.
+var openAiApiKey = builder.Configuration["OpenAi:ApiKey"];
+var anthropicApiKey = builder.Configuration["Anthropic:ApiKey"];
+
+if (string.IsNullOrEmpty(openAiApiKey) || string.IsNullOrEmpty(anthropicApiKey))
+{
+    throw new Exception("OpenAI/Anthropic configuration is missing");
+}
+
+var vectorDataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
+#pragma warning disable NPG9001 // AddTypeInfoResolverFactory is Npgsql's documented extension point for plugins like Pgvector, marked experimental pending a stable API
+vectorDataSourceBuilder.AddTypeInfoResolverFactory(new VectorTypeInfoResolverFactory());
+#pragma warning restore NPG9001
+builder.Services.AddSingleton(vectorDataSourceBuilder.Build());
+
+builder.Services.AddScoped<IEmbeddingClient>(sp =>
+    new OpenAiEmbeddingClient(
+        sp.GetRequiredService<IHttpClientFactory>().CreateClient(),
+        openAiApiKey,
+        sp.GetRequiredService<ILogger<OpenAiEmbeddingClient>>()));
+builder.Services.AddSingleton<IChatCompletionClient>(new AnthropicChatCompletionClient(anthropicApiKey));
+
 builder.Services.AddScoped<IRecordsDataAccess>(serviceProvider =>
-    new RecordsDataAccess(connectionString));
+    new RecordsDataAccess(serviceProvider.GetRequiredService<NpgsqlDataSource>(), serviceProvider.GetRequiredService<IEmbeddingClient>()));
 
 // Email - swappable behind IEmailSender; BrevoEmailSender is the only provider-specific piece
 var emailApiKey = builder.Configuration["Email:ApiKey"];
@@ -86,6 +116,7 @@ builder.Services.AddScoped<ISearchQueriesService, SearchQueriesService>();
 builder.Services.AddScoped<ISourcesService, SourcesService>();
 builder.Services.AddScoped<IDigestService, DigestService>();
 builder.Services.AddScoped<IRecordPollingService, RecordPollingService>();
+builder.Services.AddScoped<IChatService, ChatService>();
 
 // Background scheduler - polls every search query for new records on an interval
 var pollIntervalHours = builder.Configuration.GetValue<double?>("Scheduler:PollIntervalHours") ?? 168;

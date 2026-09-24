@@ -21,6 +21,23 @@ export interface SearchQuery {
   tags: string[];
 }
 
+export interface CitedRecord {
+  externalId: string;
+  title: string;
+  doi: string | null;
+  sourceUrl: string | null;
+}
+
+export interface ChatResponse {
+  answer: string;
+  citations: CitedRecord[];
+}
+
+export interface ChatTurn {
+  role: "user" | "assistant";
+  text: string;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const oidcUser = await userManager.getUser();
 
@@ -80,5 +97,12 @@ export function subscribeToSearchQuery(targetUrl: string): Promise<SearchQuery> 
 export function unsubscribeFromSearchQuery(searchQueryId: number): Promise<void> {
   return request<void>(`/api/SearchQueries/${searchQueryId}`, {
     method: "DELETE",
+  });
+}
+
+export function askChat(question: string, history: ChatTurn[]): Promise<ChatResponse> {
+  return request<ChatResponse>("/api/Chat", {
+    method: "POST",
+    body: JSON.stringify({ question, history }),
   });
 }

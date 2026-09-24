@@ -3,7 +3,9 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using Npgsql;
+using RecordService.DataAccess.Chat;
 using RecordService.DataAccess.Email;
+using RecordService.DataAccess.Embeddings;
 using RecordService.DataAccess.ExternalSources;
 using Testcontainers.PostgreSql;
 
@@ -24,7 +26,7 @@ namespace test;
 /// </summary>
 public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
+    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("pgvector/pgvector:pg16")
         .WithDatabase("pubtracker_test")
         .WithUsername("pubtracker")
         .WithPassword("pubtracker")
@@ -41,6 +43,8 @@ public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, I
         Environment.SetEnvironmentVariable("Email__ApiKey", "test-api-key");
         Environment.SetEnvironmentVariable("Email__FromAddress", "digest@example.com");
         Environment.SetEnvironmentVariable("Email__FromName", "PubTracker");
+        Environment.SetEnvironmentVariable("OpenAi__ApiKey", "test-api-key");
+        Environment.SetEnvironmentVariable("Anthropic__ApiKey", "test-api-key");
 
         var schemaPath = Path.Combine(AppContext.BaseDirectory, "schema", "init.sql");
         var schemaSql = await File.ReadAllTextAsync(schemaPath);
@@ -61,6 +65,12 @@ public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, I
 
             services.RemoveAll<IEmailSender>();
             services.AddSingleton<IEmailSender>(EmailSender);
+
+            services.RemoveAll<IEmbeddingClient>();
+            services.AddSingleton<IEmbeddingClient>(new FakeEmbeddingClient());
+
+            services.RemoveAll<IChatCompletionClient>();
+            services.AddSingleton<IChatCompletionClient>(new FakeChatCompletionClient());
         });
     }
 

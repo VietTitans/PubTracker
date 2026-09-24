@@ -17,4 +17,11 @@ public interface IRecordsDataAccess
     /// previously failed digest send are picked up again on retry.
     /// </summary>
     Task<List<LiteratureRecord>> GetRecordsSeenSinceAsync(int searchQueryId, DateTime? since);
+
+    /// <summary>
+    /// The <paramref name="topK"/> records - among only those the user tracks via their
+    /// subscribed search queries - closest to <paramref name="queryEmbedding"/> by cosine distance.
+    /// Records with no embedding yet are excluded.
+    /// </summary>
+    Task<List<LiteratureRecord>> SearchSimilarRecordsAsync(int userId, float[] queryEmbedding, int topK);
 }

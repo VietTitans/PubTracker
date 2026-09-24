@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import {
+  askChat,
   deleteCurrentUser,
   getCurrentUser,
   getSearchQueriesForUser,
@@ -7,6 +8,7 @@ import {
   subscribeToSearchQuery,
   unsubscribeFromSearchQuery,
   updateCurrentUser,
+  type ChatResponse,
   type SearchQuery,
   type User,
 } from "./api/client";
@@ -476,6 +478,229 @@ function SettingsDialog({
   );
 }
 
+function ChatBubbleIcon() {
+  return (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    </svg>
+  );
+}
+
+function CloseIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="18" y1="6" x2="6" y2="18" />
+      <line x1="6" y1="6" x2="18" y2="18" />
+    </svg>
+  );
+}
+
+interface ChatMessage {
+  id: string;
+  role: "user" | "assistant";
+  text: string;
+  citations?: ChatResponse["citations"];
+}
+
+// citations holds every record retrieved for the answer (the full top-K), not just the ones
+// the model actually referenced - narrow it down to those actually cited inline, in the order
+// they're first mentioned, so the numbered list shown to the user only contains records that
+// were really used.
+function getCitedRecordsInOrder(text: string, citations: ChatResponse["citations"]): ChatResponse["citations"] {
+  const byExternalId = new Map(citations.map((c) => [c.externalId, c]));
+  const seen = new Set<string>();
+  const ordered: ChatResponse["citations"] = [];
+  const pattern = /\[([^\]\s]+)\]/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = pattern.exec(text)) !== null) {
+    const citation = byExternalId.get(match[1]);
+    if (citation && !seen.has(citation.externalId)) {
+      seen.add(citation.externalId);
+      ordered.push(citation);
+    }
+  }
+
+  return ordered;
+}
+
+// The assistant cites records inline as "[externalId]" (e.g. "[pubmed:31241244]") - a stable
+// ID, not something meant for display. Swap each one for a linked, numbered reference matching
+// its position in citedRecords, and leave any bracket text that isn't a known citation (the
+// model citing something outside the list) untouched.
+function renderAnswerText(text: string, citedRecords: ChatResponse["citations"]): React.ReactNode[] {
+  const indexByExternalId = new Map(citedRecords.map((c, i) => [c.externalId, i + 1]));
+  const parts: React.ReactNode[] = [];
+  const pattern = /\[([^\]\s]+)\]/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let key = 0;
+
+  while ((match = pattern.exec(text)) !== null) {
+    const refIndex = indexByExternalId.get(match[1]);
+    if (refIndex === undefined) {
+      continue;
+    }
+
+    parts.push(text.slice(lastIndex, match.index));
+    const citation = citedRecords[refIndex - 1];
+    parts.push(
+      citation.sourceUrl ? (
+        <a key={key++} href={citation.sourceUrl} target="_blank" rel="noreferrer" title={citation.title}>
+          [{refIndex}]
+        </a>
+      ) : (
+        `[${refIndex}]`
+      )
+    );
+    lastIndex = match.index + match[0].length;
+  }
+  parts.push(text.slice(lastIndex));
+
+  return parts;
+}
+
+function FloatingChat() {
+  const [isOpen, setIsOpen] = useState(false);
+  const [question, setQuestion] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [isAsking, setIsAsking] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const panelRef = useRef<HTMLDivElement>(null);
+  const nextId = useRef(0);
+
+  useEffect(() => {
+    if (isOpen) {
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, isOpen]);
+
+  useEffect(() => {
+    function onKeyDown(e: KeyboardEvent) {
+      if (e.key === "Escape") {
+        setIsOpen(false);
+      }
+    }
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      return;
+    }
+    function onPointerDown(e: MouseEvent) {
+      if (panelRef.current && !panelRef.current.contains(e.target as Node)) {
+        setIsOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", onPointerDown);
+    return () => document.removeEventListener("mousedown", onPointerDown);
+  }, [isOpen]);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    const trimmed = question.trim();
+    if (!trimmed || isAsking) {
+      return;
+    }
+
+    // Cap how much history we send so a long-running conversation doesn't grow the request
+    // (and the model's context) without bound.
+    const history = messages.slice(-20).map((m) => ({ role: m.role, text: m.text }));
+
+    setMessages((prev) => [...prev, { id: `${nextId.current++}`, role: "user", text: trimmed }]);
+    setQuestion("");
+    setIsAsking(true);
+    setError(null);
+    try {
+      const result = await askChat(trimmed, history);
+      setMessages((prev) => [
+        ...prev,
+        { id: `${nextId.current++}`, role: "assistant", text: result.answer, citations: result.citations },
+      ]);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setIsAsking(false);
+    }
+  }
+
+  if (!isOpen) {
+    return (
+      <button className="chat-fab" onClick={() => setIsOpen(true)} aria-label="Open chat">
+        <ChatBubbleIcon />
+      </button>
+    );
+  }
+
+  return (
+    <div className="chat-panel" ref={panelRef} role="dialog" aria-modal="false" aria-labelledby="chat-panel-title">
+      <div className="chat-panel-header">
+        <span id="chat-panel-title">Ask about your tracked literature</span>
+        <button className="btn btn-icon chat-panel-close" onClick={() => setIsOpen(false)} aria-label="Close chat">
+          <CloseIcon />
+        </button>
+      </div>
+
+      <div className="chat-messages">
+        {messages.length === 0 && (
+          <p className="chat-empty-hint">Ask a question about the papers you're tracking.</p>
+        )}
+        {messages.map((message) => {
+          const citedRecords = message.citations ? getCitedRecordsInOrder(message.text, message.citations) : [];
+          return (
+            <div key={message.id} className={`chat-bubble chat-bubble-${message.role}`}>
+              <p>{message.citations ? renderAnswerText(message.text, citedRecords) : message.text}</p>
+              {citedRecords.length > 0 && (
+                <ul className="chat-citations">
+                  {citedRecords.map((citation) => (
+                    <li key={citation.externalId}>
+                      {citation.sourceUrl ? (
+                        <a href={citation.sourceUrl} target="_blank" rel="noreferrer">
+                          {citation.title}
+                        </a>
+                      ) : (
+                        citation.title
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          );
+        })}
+        {isAsking && (
+          <div className="chat-bubble chat-bubble-assistant chat-bubble-pending">
+            <Spinner />
+          </div>
+        )}
+        {error && (
+          <p className="alert" role="alert">
+            {error}
+          </p>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <form className="chat-input-row" onSubmit={handleSubmit}>
+        <input
+          className="text-input"
+          value={question}
+          onChange={(e) => setQuestion(e.target.value)}
+          placeholder="Ask a question..."
+          aria-label="Question"
+          autoFocus
+        />
+        <button type="submit" disabled={isAsking || !question.trim()} aria-label="Send">
+          {isAsking ? <Spinner /> : "➤"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function App() {
   const { isLoading, isAuthenticated, login, logout } = useAuth();
   const [user, setUser] = useState<User | null>(null);
@@ -679,14 +904,16 @@ function App() {
     <main className="app">
       <header className="header-row">
         <h1>PubTracker</h1>
-        {user && (
-          <UserMenu
-            user={user}
-            onOpenProfile={() => setIsProfileOpen(true)}
-            onOpenSettings={() => setIsSettingsOpen(true)}
-            onSignOut={() => logout()}
-          />
-        )}
+        <div className="header-actions">
+          {user && (
+            <UserMenu
+              user={user}
+              onOpenProfile={() => setIsProfileOpen(true)}
+              onOpenSettings={() => setIsSettingsOpen(true)}
+              onSignOut={() => logout()}
+            />
+          )}
+        </div>
       </header>
 
       {error && (
@@ -839,6 +1066,8 @@ function App() {
           onCancel={() => setIsDeleteAccountConfirmOpen(false)}
         />
       )}
+
+      <FloatingChat />
     </main>
   );
 }
