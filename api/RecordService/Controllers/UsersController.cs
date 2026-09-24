@@ -19,7 +19,7 @@ public class UsersController : ControllerBase
         _userService = userService;
     }
 
-    //[Authorize(Policy = "UserOrAdmin")]
+    [Authorize(Policy = "UserOrAdmin")]
     [HttpGet("me")]
     public async Task<IActionResult> GetCurrentUser()
     {
@@ -46,7 +46,7 @@ public class UsersController : ControllerBase
         }
     }
 
-    //[Authorize(Policy = "UserOrAdmin")]
+    [Authorize(Policy = "AdminOnly")]
     [HttpGet("{id}")]
     public async Task<IActionResult> GetUserById(int id)
     {
@@ -74,27 +74,7 @@ public class UsersController : ControllerBase
         }
     }
 
-    [HttpGet("public/{id}")]
-    public async Task<IActionResult> GetUserByIdPublic(int id)
-    {
-        try
-        {
-            var user = await _userService.GetUserByIdAsync(id);
-
-            if (user == null)
-            {
-                return NotFound(new { message = "User not found." });
-            }
-
-            return Ok(user.ToResponseDto());
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { message = "Error retrieving user", error = ex.Message });
-        }
-    }
-
-    //[Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "AdminOnly")]
     [HttpGet]
     public async Task<IActionResult> GetUsers()
     {
@@ -109,10 +89,17 @@ public class UsersController : ControllerBase
         }
     }
 
-    //[Authorize(Policy = "AdminOnly")]
+    // Anonymous by design: this is the sign-up path for someone who doesn't have an account yet,
+    // so it can't require [Authorize]. An already-logged-in caller has no reason to hit it.
+    [AllowAnonymous]
     [HttpPost]
     public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)
     {
+        if (User.Identity?.IsAuthenticated == true)
+        {
+            return StatusCode(403, new { message = "Already logged in; cannot create a new user." });
+        }
+
         try
         {
             var user = dto.ToUserModel();
@@ -131,7 +118,7 @@ public class UsersController : ControllerBase
         }
     }
 
-    //[Authorize(Policy = "UserOrAdmin")]
+    [Authorize(Policy = "UserOrAdmin")]
     [HttpPut("me")]
     public async Task<IActionResult> UpdateCurrentUser([FromBody] UpdateUserDto dto)
     {
@@ -162,7 +149,7 @@ public class UsersController : ControllerBase
         }
     }
 
-    //[Authorize(Policy = "UserOrAdmin")]
+    [Authorize(Policy = "UserOrAdmin")]
     [HttpDelete("me")]
     public async Task<IActionResult> DeleteCurrentUser()
     {
@@ -183,13 +170,34 @@ public class UsersController : ControllerBase
         }
     }
 
-    //[Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "AdminOnly")]
     [HttpGet("{userId}/search-queries")]
     public async Task<IActionResult> GetUserSearchQueries(int userId)
     {
         try
         {
             var queries = await _userService.GetSearchQueriesByUserAsync(userId);
+            return Ok(queries.ToResponseDtoList());
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "Error retrieving search queries", error = ex.Message });
+        }
+    }
+
+    [Authorize(Policy = "UserOrAdmin")]
+    [HttpGet("me/search-queries")]
+    public async Task<IActionResult> GetCurrentUserSearchQueries()
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null)
+        {
+            return Unauthorized(new { message = "User ID not found in claims." });
+        }
+
+        try
+        {
+            var queries = await _userService.GetSearchQueriesByUserAsync(int.Parse(userId));
             return Ok(queries.ToResponseDtoList());
         }
         catch (Exception ex)

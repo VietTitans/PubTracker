@@ -22,7 +22,7 @@ public class SearchQueriesController : ControllerBase
         _recordPollingService = recordPollingService;
     }
 
-    //[Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "AdminOnly")]
     [HttpGet("{searchQueryId}")]
     public async Task<IActionResult> GetSearchQueryById(int searchQueryId)
     {
@@ -42,7 +42,7 @@ public class SearchQueriesController : ControllerBase
         }
     }
 
-    //[Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "AdminOnly")]
     [HttpGet("{searchQueryId}/users")]
     public async Task<IActionResult> GetSearchQueryUsers(int searchQueryId)
     {
@@ -57,7 +57,7 @@ public class SearchQueriesController : ControllerBase
         }
     }
 
-    //[Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "AdminOnly")]
     [HttpPost("{searchQueryId}/poll")]
     public async Task<IActionResult> PollSearchQuery(int searchQueryId)
     {
@@ -77,7 +77,7 @@ public class SearchQueriesController : ControllerBase
         }
     }
 
-    //[Authorize(Policy = "UserOrAdmin")]
+    [Authorize(Policy = "UserOrAdmin")]
     [HttpPost]
     public async Task<IActionResult> CreateSearchQuery([FromBody] CreateSearchQueryDto dto)
     {
@@ -111,7 +111,7 @@ public class SearchQueriesController : ControllerBase
         }
     }
 
-    //[Authorize(Policy = "UserOrAdmin")]
+    [Authorize(Policy = "UserOrAdmin")]
     [HttpDelete("{searchQueryId}")]
     public async Task<IActionResult> UnsubscribeFromSearchQuery(int searchQueryId)
     {

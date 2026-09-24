@@ -7,6 +7,27 @@
   "duplicateEmailsAllowed": false,
   "verifyEmail": false,
   "resetPasswordAllowed": true,
+  "defaultRole": {
+    "name": "default-roles-science-alerts-saas",
+    "description": "${role_default-roles}",
+    "composite": true,
+    "clientRole": false
+  },
+  "roles": {
+    "realm": [
+      { "name": "User", "description": "Standard PubTracker user" },
+      { "name": "Admin", "description": "PubTracker administrator" },
+      {
+        "name": "default-roles-science-alerts-saas",
+        "description": "${role_default-roles}",
+        "composite": true,
+        "composites": {
+          "realm": ["User"]
+        },
+        "clientRole": false
+      }
+    ]
+  },
   "clients": [
     {
       "clientId": "science-alerts-web",
@@ -33,6 +54,20 @@
             "included.custom.audience": "science-alerts-api",
             "id.token.claim": "false",
             "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
           }
         }
       ]

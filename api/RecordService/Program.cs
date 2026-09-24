@@ -146,7 +146,12 @@ void ConfigureKeycloakBearer(JwtBearerOptions options)
         ValidateAudience = true,
         ValidateIssuer = true,
         ValidIssuer = keycloakAuthority,
-        ClockSkew = TimeSpan.FromMinutes(5)
+        ClockSkew = TimeSpan.FromMinutes(5),
+        // Keycloak's realm roles normally live nested under "realm_access.roles"; the
+        // "realm-roles" protocol mapper (realm-export.json) flattens them onto a top-level
+        // "roles" claim instead, which is what RequireRole("Admin")/("User", "Admin") below
+        // actually reads from - without this, those policies would never match any real token.
+        RoleClaimType = "roles"
     };
     options.Events = new JwtBearerEvents
     {

@@ -131,9 +131,6 @@ GET /api/users/{id}
 Headers: X-User-Id: 1
 Response: UserResponseDto
 
-GET /api/users/public/{id}
-Response: UserResponseDto
-
 GET /api/users
 Headers: X-User-Id: 1, X-User-Role: Admin
 Response: List<UserResponseDto>
