@@ -5,6 +5,10 @@ namespace RecordService.DataAccess;
 
 public class UsersDataAccess : IUsersDataAccess
 {
+    // How long a soft-deleted account can be revived by signing back in before the purge
+    // worker (see UserPurgeBackgroundService) hard-deletes it for good.
+    private const int DeletionGracePeriodDays = 14;
+
     private readonly string _connectionString;
     private readonly IHttpContextAccessor _httpContextAccessor;
 
@@ -144,6 +148,7 @@ public class UsersDataAccess : IUsersDataAccess
         {
             await connection.OpenAsync();
 
+            User existingUser = null;
             using (var command = new NpgsqlCommand(
                 "SELECT id, name, username, email, is_marked_for_deletion, deletion_requested_at FROM users WHERE keycloak_sub = @keycloakSub", connection))
             {
@@ -152,9 +157,14 @@ public class UsersDataAccess : IUsersDataAccess
                 {
                     if (await reader.ReadAsync())
                     {
-                        return ReadUser(reader);
+                        existingUser = ReadUser(reader);
                     }
                 }
+            }
+
+            if (existingUser != null)
+            {
+                return await ReactivateIfWithinGracePeriodAsync(connection, existingUser);
             }
 
             using (var command = new NpgsqlCommand(
@@ -168,9 +178,14 @@ public class UsersDataAccess : IUsersDataAccess
                 {
                     if (await reader.ReadAsync())
                     {
-                        return ReadUser(reader);
+                        existingUser = ReadUser(reader);
                     }
                 }
+            }
+
+            if (existingUser != null)
+            {
+                return await ReactivateIfWithinGracePeriodAsync(connection, existingUser);
             }
 
             using (var command = new NpgsqlCommand(
@@ -187,6 +202,34 @@ public class UsersDataAccess : IUsersDataAccess
                     await reader.ReadAsync();
                     return ReadUser(reader);
                 }
+            }
+        }
+    }
+
+    // Signing back in within the grace period counts as "I didn't mean to delete my account" -
+    // undo the soft delete instead of leaving it marked. Applies regardless of whether this
+    // login found the user by an already-linked keycloak_sub or just linked one for the first
+    // time via the email fallback above - either way it's the same account signing back in.
+    private static async Task<User> ReactivateIfWithinGracePeriodAsync(NpgsqlConnection connection, User user)
+    {
+        var withinGracePeriod = user.DeletionRequestedAt.HasValue &&
+            user.DeletionRequestedAt.Value > DateTime.UtcNow.AddDays(-DeletionGracePeriodDays);
+
+        if (!user.IsMarkedForDeletion || !withinGracePeriod)
+        {
+            return user;
+        }
+
+        using (var command = new NpgsqlCommand(
+            @"UPDATE users SET is_marked_for_deletion = false, deletion_requested_at = NULL
+              WHERE id = @id
+              RETURNING id, name, username, email, is_marked_for_deletion, deletion_requested_at", connection))
+        {
+            command.Parameters.AddWithValue("@id", user.Id);
+            using (var reader = await command.ExecuteReaderAsync())
+            {
+                await reader.ReadAsync();
+                return ReadUser(reader);
             }
         }
     }
@@ -230,6 +273,35 @@ public class UsersDataAccess : IUsersDataAccess
                 command.Parameters.AddWithValue("@id", userId);
                 command.Parameters.AddWithValue("@deletionTime", DateTime.UtcNow);
                 await command.ExecuteNonQueryAsync();
+            }
+        }
+    }
+
+    public async Task<int> PurgeExpiredDeletedUsersAsync()
+    {
+        var cutoff = DateTime.UtcNow.AddDays(-DeletionGracePeriodDays);
+        const string expiredUserIds =
+            "SELECT id FROM users WHERE is_marked_for_deletion = true AND deletion_requested_at < @cutoff";
+
+        using (var connection = new NpgsqlConnection(_connectionString))
+        {
+            await connection.OpenAsync();
+            using (var transaction = await connection.BeginTransactionAsync())
+            {
+                async Task<int> ExecAsync(string sql)
+                {
+                    using var command = new NpgsqlCommand(sql, connection, transaction);
+                    command.Parameters.AddWithValue("@cutoff", cutoff);
+                    return await command.ExecuteNonQueryAsync();
+                }
+
+                await ExecAsync($"DELETE FROM user_search_query_digests WHERE user_id IN ({expiredUserIds})");
+                await ExecAsync($"DELETE FROM user_search_queries WHERE user_id IN ({expiredUserIds})");
+                var purgedCount = await ExecAsync(
+                    "DELETE FROM users WHERE is_marked_for_deletion = true AND deletion_requested_at < @cutoff");
+
+                await transaction.CommitAsync();
+                return purgedCount;
             }
         }
     }

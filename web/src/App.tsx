@@ -513,7 +513,7 @@ function SettingsDialog({
         <div className="danger-zone">
           <p className="danger-zone-title">Delete account</p>
           <p className="modal-message">
-            Permanently remove your account and all subscriptions. This can't be undone.
+            You have 14 days to recover your account by signing in again. After that, your account and all subscriptions will be permanently deleted.
           </p>
           <button className="btn btn-danger-outline" onClick={onRequestDeleteAccount}>
             Delete account
@@ -549,6 +549,14 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDeleteAccountConfirmOpen, setIsDeleteAccountConfirmOpen] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("notice") === "account_deleted") {
+      setError("This account has been deleted.");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -892,7 +900,7 @@ function App() {
       {isDeleteAccountConfirmOpen && (
         <ConfirmDialog
           title="Delete your account?"
-          message="This will permanently remove your account and all subscriptions. This can't be undone."
+          message="Are you sure you want to delete your account?"
           confirmLabel="Delete account"
           isBusy={isDeletingAccount}
           onConfirm={handleDeleteAccount}

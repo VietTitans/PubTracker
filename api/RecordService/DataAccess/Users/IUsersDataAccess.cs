@@ -18,4 +18,11 @@ public interface IUsersDataAccess
     Task<User> GetOrProvisionByKeycloakSubAsync(string keycloakSub, string email, string name, string username);
     Task UpdateUserAsync(int userId, User user);
     Task SoftDeleteUserAsync(int userId);
+
+    /// <summary>
+    /// Hard-deletes users whose soft-delete grace period has expired (see
+    /// UsersDataAccess.DeletionGracePeriodDays), along with their search query subscriptions.
+    /// Returns the number of users purged.
+    /// </summary>
+    Task<int> PurgeExpiredDeletedUsersAsync();
 }

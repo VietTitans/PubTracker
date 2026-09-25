@@ -110,6 +110,14 @@ builder.Services.AddHostedService(serviceProvider => new RecordPollingBackground
     serviceProvider.GetRequiredService<ILogger<RecordPollingBackgroundService>>(),
     TimeSpan.FromHours(pollIntervalHours)));
 
+// Background scheduler - purges users past their soft-delete grace period (see
+// UsersDataAccess.DeletionGracePeriodDays)
+var userPurgeIntervalHours = builder.Configuration.GetValue<double?>("Scheduler:UserPurgeIntervalHours") ?? 24;
+builder.Services.AddHostedService(serviceProvider => new UserPurgeBackgroundService(
+    serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+    serviceProvider.GetRequiredService<ILogger<UserPurgeBackgroundService>>(),
+    TimeSpan.FromHours(userPurgeIntervalHours)));
+
 // Cross-cutting Concerns
 builder.Services.AddScoped<IErrorHandler, DefaultErrorHandler>();
 
@@ -172,7 +180,31 @@ void ConfigureKeycloakBearer(JwtBearerOptions options)
             var usersService = context.HttpContext.RequestServices.GetRequiredService<IUsersService>();
             var user = await usersService.GetOrProvisionByKeycloakSubAsync(keycloakSub, email, name, username);
 
+            if (user.IsMarkedForDeletion)
+            {
+                var lockoutLogger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                lockoutLogger.LogWarning("Rejected request from user {UserId}: account is marked for deletion", user.Id);
+                // A JwtBearerEvents.OnTokenValidated context.Fail(message) does NOT surface that
+                // message in the 401's WWW-Authenticate error_description (unlike a standard
+                // TokenValidationParameters failure, e.g. audience mismatch, which does) - so the
+                // reason is stashed here for OnChallenge below to turn into a real response body
+                // the frontend can read.
+                context.HttpContext.Items["AuthFailureReason"] = "account_deleted";
+                context.Fail("This account has been deleted.");
+                return;
+            }
+
             ((ClaimsIdentity)principal.Identity!).AddClaim(new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()));
+        },
+        OnChallenge = async context =>
+        {
+            if (context.HttpContext.Items["AuthFailureReason"] as string == "account_deleted")
+            {
+                context.HandleResponse();
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync("{\"reason\":\"account_deleted\"}");
+            }
         }
     };
 }
