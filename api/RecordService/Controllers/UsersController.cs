@@ -170,10 +170,21 @@ public class UsersController : ControllerBase
         }
     }
 
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "UserOrAdmin")]
     [HttpGet("{userId}/search-queries")]
     public async Task<IActionResult> GetUserSearchQueries(int userId)
     {
+        var callerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (callerId == null)
+        {
+            return Unauthorized(new { message = "User ID not found in claims." });
+        }
+
+        if (!User.IsInRole("Admin") && int.Parse(callerId) != userId)
+        {
+            return StatusCode(403, new { message = "Cannot view another user's search queries." });
+        }
+
         try
         {
             var queries = await _userService.GetSearchQueriesByUserAsync(userId);
