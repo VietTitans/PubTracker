@@ -28,6 +28,24 @@
       }
     ]
   },
+  "users": [
+    {
+      "username": "test@test.com",
+      "email": "test@test.com",
+      "firstName": "Test",
+      "lastName": "User",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["User"]
+    }
+  ],
   "clients": [
     {
       "clientId": "science-alerts-web",
