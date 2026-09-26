@@ -10,7 +10,7 @@ namespace test;
 
 /// <summary>
 /// Boots the real RecordService app against an ephemeral Testcontainers Postgres instance
-/// (schema applied by the app's own DbUp migrations, same as any other environment - see
+/// (schema applied by the app's own EF Core migrations, same as any other environment - see
 /// Program.cs) and swaps the real PubMed/PEDro providers for FakeLiteratureSourceProvider, so
 /// tests exercise the real HTTP -> Service -> DataAccess -> Postgres path without depending on
 /// live external sources.

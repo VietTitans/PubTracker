@@ -27,8 +27,8 @@ entrypoint in front of the web app, API, and Keycloak, routing by path:
   `Npgsql` (no ORM). See `CLAUDE.md` for the layered Controller → BusinessLogic → DataAccess
   convention and how to add a new resource.
 - `web/` — React/Vite SPA, served by its own Caddy instance in production images.
-- `api/RecordService/Migrations/` — ordered SQL migrations, source of truth for the Postgres
-  schema. Applied automatically via DbUp on every API startup (see `Program.cs`).
+- `api/RecordService/Migrations/` — EF Core migrations, source of truth for the Postgres
+  schema. Applied automatically via `Database.Migrate()` on every API startup (see `Program.cs`).
 - `ai/system-architecture-net10.md` — target end-state architecture (scheduler, email
   digest pipeline, full Keycloak realm setup); check it before assuming a described piece
   is already implemented.

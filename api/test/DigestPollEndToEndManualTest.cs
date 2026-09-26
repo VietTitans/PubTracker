@@ -1,5 +1,6 @@
 using DotNetEnv;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using RecordService.BusinessLogic.DigestService;
@@ -56,9 +57,14 @@ public class DigestPollEndToEndManualTest
 
         await ResetDigestWatermarksAsync(connectionString, SearchQueryIds);
 
-        var searchQueriesDataAccess = new SearchQueriesDataAccess(connectionString, sourceFactory);
-        var recordsDataAccess = new RecordsDataAccess(connectionString);
-        var usersDataAccess = new UsersDataAccess(connectionString, new HttpContextAccessor());
+        var dbContextOptions = new DbContextOptionsBuilder<PubTrackerDbContext>()
+            .UseNpgsql(connectionString)
+            .Options;
+        var dbContext = new PubTrackerDbContext(dbContextOptions);
+
+        var searchQueriesDataAccess = new SearchQueriesDataAccess(dbContext, sourceFactory);
+        var recordsDataAccess = new RecordsDataAccess(dbContext);
+        var usersDataAccess = new UsersDataAccess(dbContext, new HttpContextAccessor());
         var emailSender = new BrevoEmailSender(new HttpClient(), emailApiKey!, emailFromAddress!, emailFromName);
         var digestService = new DigestService(usersDataAccess, emailSender, NullLogger<DigestService>.Instance);
         var pollingService = new RecordPollingService(searchQueriesDataAccess, recordsDataAccess, digestService, NullLogger<RecordPollingService>.Instance);

@@ -54,6 +54,13 @@ Tests live in `api/test/Test.csproj` (xunit; `Testcontainers.PostgreSql`-based e
 dotnet test api/test/Test.csproj
 ```
 
+EF Core migrations (from `api/RecordService/`, requires the `dotnet-ef` global tool):
+```bash
+dotnet ef migrations add <Name>   # add a migration after changing DataAccess/Entities or PubTrackerDbContext
+dotnet ef database update         # apply pending migrations to ConnectionStrings__DefaultConnection (env var; must be set and reachable)
+```
+`Program.cs` also applies pending migrations automatically at API startup (`Database.Migrate()`), same as any other environment.
+
 ### Full stack via Docker
 ```bash
 cd docker
@@ -71,7 +78,7 @@ Two-project .NET solution:
 
 - **Controllers** (`Controllers/`) are thin: call the service, catch exceptions, return DTOs via mapping extensions. They don't touch `DataAccess` or `RecordData` models directly.
 - **BusinessLogic** (`BusinessLogic/`) holds orchestration/business rules and calls `DataAccess`.
-- **DataAccess** (`DataAccess/`) talks to Postgres directly via raw `Npgsql` `NpgsqlCommand`/parameterized SQL (no ORM/EF Core). Table/column names in SQL are `snake_case` (see `api/RecordService/Migrations/`); C# model properties are `PascalCase` — data access classes are responsible for that mapping manually. Connection strings are injected as plain strings into constructors, not via `DbContext`.
+- **DataAccess** (`DataAccess/`) talks to Postgres via **EF Core** (`Npgsql.EntityFrameworkCore.PostgreSQL`), through the single `PubTrackerDbContext` (`DataAccess/PubTrackerDbContext.cs`), injected into each `I*DataAccess` implementation's constructor and registered per-request via `AddDbContext` in `Program.cs`. EF entity classes live in `DataAccess/Entities/` (`UserEntity`, `SourceEntity`, `SearchQueryEntity`, `RecordEntity`, and the join-table entities `UserSearchQueryEntity`, `UserSearchQueryDigestEntity`, `SourceRecordEntity`, `SearchQueryRecordEntity`) — these are separate from the `RecordData` model classes (`User`, `Source`, `SearchQuery`, `LiteratureRecord`) returned by the DataAccess layer, since the entities mirror raw column nullability/shape 1:1 while the `RecordData` models carry computed/derived fields (e.g. `SearchQuery.RecordCount`, `LastFetchedAt`) that aren't columns. Data access classes map between the two by hand (no AutoMapper), same convention as DTO↔model mapping. Table/column names are configured `snake_case` via Fluent API in `PubTrackerDbContext.OnModelCreating` (including `id`, to match raw SQL used elsewhere) — there are no `[Column]`/`[Table]` attributes on the entities. Plain CRUD goes through LINQ (`ExecuteUpdateAsync`/`ExecuteDeleteAsync` for updates/deletes); Postgres-specific upserts (`ON CONFLICT ... RETURNING`) and other statements EF's LINQ provider can't express go through `Database.SqlQuery<T>`/`ExecuteSqlInterpolatedAsync` raw SQL inside an explicit `Database.BeginTransactionAsync()` transaction — never `.SingleAsync()`/`.FirstAsync()` etc. directly on a `SqlQuery<T>` built from non-SELECT SQL (EF must compose those with a `LIMIT`, which fails on `INSERT ... RETURNING`; materialize with `.ToListAsync()` first and take the single element in memory instead).
 - **DTOs** (`DTOs/`) + **Extensions** (`Extensions/`, e.g. `UserMappingExtensions.cs`) — API request/response shapes are always DTOs, never raw `RecordData` models. Mapping between DTOs and domain models is hand-written extension methods (`ToResponseDto()`, `ToUserModel()`, `UpdateFromDto()`), not AutoMapper. See `api/DTO_IMPLEMENTATION.md` for the full convention when adding DTOs for a new entity.
 - **ErrorHandling** (`ErrorHandling/IErrorHandler.cs`) — a `DefaultErrorHandler` provides consistent `{ message }`-shaped JSON error responses (`BadRequest`, `NotFound`, `InternalServerError`, etc.); prefer it over ad hoc `StatusCode(...)` results in new controller code.
 - **External literature sources** (`DataAccess/ExternalSources/`) — a strategy/factory pattern for pluggable source providers:
@@ -83,4 +90,4 @@ Two-project .NET solution:
 
 ## Database
 
-Single source of truth for schema is the ordered SQL files in `api/RecordService/Migrations/` (embedded resources), applied via DbUp at API startup (see `Program.cs`) — runs on every start, against any environment, not just first boot. Adding a schema change means adding a new numbered `.sql` file there, never editing an already-shipped one. `ai/system-architecture-net10.md` §5 documents further schema evolution (e.g. dropping raw record-count counters) not yet reflected in the migrations — when doing schema-dependent work, check the actual migration files rather than trusting the architecture doc.
+Single source of truth for schema is the EF Core migrations in `api/RecordService/Migrations/` (generated `.cs` files via `dotnet ef migrations add`), applied via `Database.Migrate()` at API startup (see `Program.cs`) — runs on every start, against any environment, not just first boot. Adding a schema change means changing the entities in `DataAccess/Entities/` and/or the Fluent API config in `PubTrackerDbContext.OnModelCreating`, then generating a new migration — never editing an already-shipped one. (Schema was previously managed via hand-written DbUp SQL scripts; that's been fully replaced by EF Core migrations generated fresh from the current entity model, with no historical migration carried over.) `ai/system-architecture-net10.md` §5 documents further schema evolution (e.g. dropping raw record-count counters) not yet reflected in the migrations — when doing schema-dependent work, check the actual migration files rather than trusting the architecture doc.
