@@ -7,6 +7,7 @@ using RecordService.BusinessLogic.RecordPollingService;
 using RecordService.DataAccess;
 using RecordService.DataAccess.Email;
 using RecordService.DataAccess.ExternalSources;
+using RecordService.DataAccess.Summarization;
 
 namespace test;
 
@@ -44,6 +45,9 @@ public class DigestPollEndToEndManualTest
         var emailFromName = Environment.GetEnvironmentVariable("EMAIL_FROM_NAME") ?? "PubTracker";
         var ncbiApiKey = Environment.GetEnvironmentVariable("NCBI_API_KEY");
         var ncbiContactEmail = Environment.GetEnvironmentVariable("NCBI_CONTACT_EMAIL");
+        var llmBaseUrl = Environment.GetEnvironmentVariable("LLM_BASE_URL");
+        var llmApiKey = Environment.GetEnvironmentVariable("LLM_API_KEY");
+        var llmModel = Environment.GetEnvironmentVariable("LLM_MODEL");
 
         Assert.False(string.IsNullOrWhiteSpace(emailApiKey), "EMAIL_API_KEY must be set in docker/.env to run this test.");
         Assert.False(string.IsNullOrWhiteSpace(emailFromAddress), "EMAIL_FROM_ADDRESS must be set in docker/.env to run this test.");
@@ -60,7 +64,10 @@ public class DigestPollEndToEndManualTest
         var recordsDataAccess = new RecordsDataAccess(connectionString);
         var usersDataAccess = new UsersDataAccess(connectionString, new HttpContextAccessor());
         var emailSender = new BrevoEmailSender(new HttpClient(), emailApiKey!, emailFromAddress!, emailFromName);
-        var digestService = new DigestService(usersDataAccess, emailSender, NullLogger<DigestService>.Instance);
+        ISummaryGenerator summaryGenerator = string.IsNullOrEmpty(llmApiKey)
+            ? new NullSummaryGenerator()
+            : new ChatCompletionsSummaryGenerator(new HttpClient(), llmBaseUrl!, llmApiKey, llmModel!);
+        var digestService = new DigestService(usersDataAccess, emailSender, summaryGenerator, NullLogger<DigestService>.Instance);
         var pollingService = new RecordPollingService(searchQueriesDataAccess, recordsDataAccess, digestService, NullLogger<RecordPollingService>.Instance);
 
         var results = await pollingService.PollSearchQueriesAsync(SearchQueryIds);

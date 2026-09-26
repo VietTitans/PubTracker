@@ -7,6 +7,7 @@ using RecordService.Authentication;
 using RecordService.DataAccess;
 using RecordService.DataAccess.Email;
 using RecordService.DataAccess.ExternalSources;
+using RecordService.DataAccess.Summarization;
 using RecordService.ErrorHandling;
 using RecordService.Workers;
 using RecordService.BusinessLogic.UsersService;
@@ -95,6 +96,20 @@ builder.Services.AddScoped<IEmailSender>(serviceProvider =>
     new BrevoEmailSender(
         serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(),
         emailApiKey, emailFromAddress, emailFromName));
+
+// AI digest summary - swappable behind ISummaryGenerator via the OpenAI-compatible
+// chat-completions wire format (OpenAI, Azure OpenAI, Groq, local Ollama, OpenRouter all speak
+// it), so swapping vendors is a config change, not a code change. Additive feature - missing
+// config falls back to NullSummaryGenerator instead of failing startup like email does.
+var llmBaseUrl = builder.Configuration["Llm:BaseUrl"];
+var llmApiKey = builder.Configuration["Llm:ApiKey"];
+var llmModel = builder.Configuration["Llm:Model"];
+builder.Services.AddScoped<ISummaryGenerator>(serviceProvider =>
+    string.IsNullOrEmpty(llmApiKey)
+        ? new NullSummaryGenerator()
+        : new ChatCompletionsSummaryGenerator(
+            serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(),
+            llmBaseUrl!, llmApiKey, llmModel!));
 
 // Business Logic Layer - Register interfaces to implementations
 builder.Services.AddScoped<IUsersService, UsersService>();

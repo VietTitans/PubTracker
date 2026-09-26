@@ -3,6 +3,7 @@ using System.Text;
 using RecordService.DataAccess;
 using RecordService.DataAccess.Email;
 using RecordService.DataAccess.ExternalSources;
+using RecordService.DataAccess.Summarization;
 using RecordService.Models;
 
 namespace RecordService.BusinessLogic.DigestService;
@@ -11,15 +12,18 @@ public class DigestService : IDigestService
 {
     private readonly IUsersDataAccess _usersDataAccess;
     private readonly IEmailSender _emailSender;
+    private readonly ISummaryGenerator _summaryGenerator;
     private readonly ILogger<DigestService> _logger;
 
     public DigestService(
         IUsersDataAccess usersDataAccess,
         IEmailSender emailSender,
+        ISummaryGenerator summaryGenerator,
         ILogger<DigestService> logger)
     {
         _usersDataAccess = usersDataAccess;
         _emailSender = emailSender;
+        _summaryGenerator = summaryGenerator;
         _logger = logger;
     }
 
@@ -42,7 +46,13 @@ public class DigestService : IDigestService
                 continue; // not a failure - no one to send to
             }
 
+            var summary = await GenerateSummaryAsync(userId, userQueries);
             var htmlBody = BuildCombinedHtmlBody(userQueries);
+            if (!string.IsNullOrWhiteSpace(summary))
+            {
+                htmlBody = BuildSummaryBlock(summary) + htmlBody;
+            }
+
             var totalRecords = userQueries.Sum(q => q.Records.Count);
             var subject = userQueries.Count == 1
                 ? $"{totalRecords} new record{(totalRecords == 1 ? "" : "s")} for your search"
@@ -66,6 +76,24 @@ public class DigestService : IDigestService
 
         return successByKey;
     }
+
+    private async Task<string> GenerateSummaryAsync(int userId, IReadOnlyList<PendingUserDigest> userQueries)
+    {
+        try
+        {
+            var allRecords = userQueries.SelectMany(q => q.Records).ToList();
+            return await _summaryGenerator.SummarizeAsync(allRecords);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to generate digest summary for user {UserId}", userId);
+            return string.Empty;
+        }
+    }
+
+    private static string BuildSummaryBlock(string summary) =>
+        "<div style=\"margin:0 0 24px;padding:14px 18px;background:#eef3f0;border-radius:8px;font-size:14px;line-height:1.6;\">"
+        + WebUtility.HtmlEncode(summary) + "</div>";
 
     public static string BuildCombinedHtmlBody(IReadOnlyList<PendingUserDigest> pendingQueries)
     {

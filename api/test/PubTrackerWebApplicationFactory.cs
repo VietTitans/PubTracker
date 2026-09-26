@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RecordService.DataAccess.Email;
 using RecordService.DataAccess.ExternalSources;
+using RecordService.DataAccess.Summarization;
 using Testcontainers.PostgreSql;
 
 namespace test;
@@ -31,6 +32,7 @@ public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, I
         .Build();
 
     public readonly FakeEmailSender EmailSender = new();
+    public readonly FakeSummaryGenerator SummaryGenerator = new();
 
     public async Task InitializeAsync()
     {
@@ -53,6 +55,9 @@ public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, I
 
             services.RemoveAll<IEmailSender>();
             services.AddSingleton<IEmailSender>(EmailSender);
+
+            services.RemoveAll<ISummaryGenerator>();
+            services.AddSingleton<ISummaryGenerator>(SummaryGenerator);
         });
     }
 
