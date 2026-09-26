@@ -54,6 +54,7 @@ public class DigestSummaryEndToEndTests : IClassFixture<PubTrackerWebApplication
         await pollingService.PollAllSearchQueriesAsync();
 
         var sentEmail = Assert.Single(_factory.EmailSender.SentEmails, e => e.ToEmail == user.Email);
+        Assert.Contains("AI Summary", sentEmail.HtmlBody);
         Assert.Contains("Three new exercise trials were published this week.", sentEmail.HtmlBody);
     }
 

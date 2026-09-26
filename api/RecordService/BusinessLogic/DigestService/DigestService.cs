@@ -47,13 +47,15 @@ public class DigestService : IDigestService
             }
 
             var summary = await GenerateSummaryAsync(userId, userQueries);
-            var htmlBody = BuildCombinedHtmlBody(userQueries);
+            var totalRecords = userQueries.Sum(q => q.Records.Count);
+
+            var htmlBody = BuildRecordCountLine(totalRecords);
             if (!string.IsNullOrWhiteSpace(summary))
             {
-                htmlBody = BuildSummaryBlock(summary) + htmlBody;
+                htmlBody += BuildSummaryBlock(summary);
             }
+            htmlBody += BuildCombinedHtmlBody(userQueries);
 
-            var totalRecords = userQueries.Sum(q => q.Records.Count);
             var subject = userQueries.Count == 1
                 ? $"{totalRecords} new record{(totalRecords == 1 ? "" : "s")} for your search"
                 : $"{totalRecords} new record{(totalRecords == 1 ? "" : "s")} across {userQueries.Count} of your searches";
@@ -91,9 +93,14 @@ public class DigestService : IDigestService
         }
     }
 
+    private static string BuildRecordCountLine(int totalRecords) =>
+        $"<p style=\"margin:0 0 16px;font-size:14px;\">📈 <strong>{totalRecords} new record{(totalRecords == 1 ? "" : "s")} found</strong></p>";
+
     private static string BuildSummaryBlock(string summary) =>
         "<div style=\"margin:0 0 24px;padding:14px 18px;background:#eef3f0;border-radius:8px;font-size:14px;line-height:1.6;\">"
-        + WebUtility.HtmlEncode(summary) + "</div>";
+        + "<h4 style=\"margin:0 0 8px;font-size:15px;font-weight:600;\">🧠 AI Summary</h4>"
+        + "<p style=\"margin:0;\">" + WebUtility.HtmlEncode(summary) + "</p>"
+        + "</div>";
 
     public static string BuildCombinedHtmlBody(IReadOnlyList<PendingUserDigest> pendingQueries)
     {
