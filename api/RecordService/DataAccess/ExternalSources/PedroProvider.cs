@@ -1,6 +1,8 @@
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Playwright;
+using Polly;
+using Polly.CircuitBreaker;
 using RecordService.Models;
 
 namespace RecordService.DataAccess.ExternalSources;
@@ -19,6 +21,29 @@ public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
     // PEDro caps the `perpage` URL param at 1000 server-side regardless of what's requested.
     private const int ScrapePageSize = 1000;
 
+    // The only host this provider is allowed to drive its headless browser to. Without this,
+    // any URL merely containing "pedro" (a user-controlled subscription target) would be
+    // navigated to directly - an SSRF vector letting a subscriber point the server's browser
+    // at internal services/cloud metadata endpoints.
+    private const string AllowedHost = "search.pedro.org.au";
+
+    // Bounds how long one scrape can hang the caller (see PageTimeoutMs below), and how long a
+    // dead/hanging PEDro can hold RecordPollingService's global poll-cycle lock across many
+    // queries before this provider starts short-circuiting instead of retrying every one of
+    // them. Same reasoning and thresholds as PubMedHttpClientExtensions.AddPubMedHttpClient -
+    // sized for one poll cycle's real call volume, not Polly's much larger HTTP defaults.
+    private const int PageTimeoutMs = 15_000;
+
+    private static readonly ResiliencePipeline CircuitBreakerPipeline = new ResiliencePipelineBuilder()
+        .AddCircuitBreaker(new CircuitBreakerStrategyOptions
+        {
+            FailureRatio = 1.0,
+            MinimumThroughput = 3,
+            SamplingDuration = TimeSpan.FromSeconds(PageTimeoutMs / 1000.0 * 3),
+            BreakDuration = TimeSpan.FromMinutes(10)
+        })
+        .Build();
+
     private static readonly Regex CountRegex = new(@"Found\s+([\d,]+)\s+records", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex RecordIdRegex = new(@"record-detail/(\d+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -26,9 +51,13 @@ public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
     private IPlaywright? _playwright;
     private IBrowser? _browser;
 
-    public bool CanHandle(string url)
+    public bool CanHandle(string url) => IsAllowedPedroUrl(url);
+
+    private static bool IsAllowedPedroUrl(string url)
     {
-        return !string.IsNullOrWhiteSpace(url) && url.ToLowerInvariant().Contains("pedro");
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            && uri.Scheme == Uri.UriSchemeHttps
+            && string.Equals(uri.Host, AllowedHost, StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<SourceSearchResult> SearchAsync(string url, DateTime? lastRunDate = null)
@@ -128,10 +157,29 @@ public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
 
     private async Task<(int RecordCount, List<LiteratureRecord> Records)> ScrapeAsync(string url)
     {
+        // Defense-in-depth: CanHandle already gates every entry point via LiteratureSourceFactory,
+        // but re-check here too since this drives a real headless browser navigation (SSRF risk).
+        // Kept outside CircuitBreakerPipeline below - a rejected URL is a permanent, not a
+        // transient, failure and must not count against PEDro's own outage tracking.
+        if (!IsAllowedPedroUrl(url))
+        {
+            throw new InvalidOperationException($"Refusing to navigate to unrecognized PEDro URL: {url}");
+        }
+
+        return await CircuitBreakerPipeline.ExecuteAsync(async _ => await ScrapeCoreAsync(url));
+    }
+
+    private async Task<(int RecordCount, List<LiteratureRecord> Records)> ScrapeCoreAsync(string url)
+    {
         var browser = await GetBrowserAsync();
 
         await using var context = await browser.NewContextAsync();
         var page = await context.NewPageAsync();
+        // Applies to every wait/action below (GotoAsync, WaitForSelectorAsync, and the
+        // InnerTextAsync/GetAttributeAsync/CountAsync calls further down) - a single default
+        // rather than a per-call Timeout option on each, since Playwright's own default (30s)
+        // is unbounded per call and this method makes several such calls per scrape.
+        page.SetDefaultTimeout(PageTimeoutMs);
 
         await page.GotoAsync(url, new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
         await page.WaitForSelectorAsync("#search-content");

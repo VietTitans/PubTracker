@@ -7,8 +7,10 @@ public interface IRecordsDataAccess
     /// <summary>
     /// Upserts the given records and links them to the source and search query.
     /// </summary>
-    /// <returns>The subset of <paramref name="records"/> newly linked to <paramref name="searchQueryId"/>.</returns>
-    Task<List<LiteratureRecord>> PersistSearchResultsAsync(int searchQueryId, int sourceId, IReadOnlyList<LiteratureRecord> records);
+    Task<PersistResult> PersistSearchResultsAsync(int searchQueryId, int sourceId, IReadOnlyList<LiteratureRecord> records);
+
+    /// <summary>Sets the cached author-intention text for the record with the given external id.</summary>
+    Task UpdateAuthorIntentionAsync(string externalId, string authorIntention);
 
     /// <summary>
     /// Records linked to the search query whose search_query_records.first_seen_at is after

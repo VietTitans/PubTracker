@@ -78,6 +78,59 @@ function SignOutIcon() {
   );
 }
 
+function SunIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="5" />
+      <line x1="12" y1="1" x2="12" y2="3" />
+      <line x1="12" y1="21" x2="12" y2="23" />
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+      <line x1="1" y1="12" x2="3" y2="12" />
+      <line x1="21" y1="12" x2="23" y2="12" />
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  );
+}
+
+type Theme = "light" | "dark";
+
+function getInitialTheme(): Theme {
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+}
+
+function ThemeToggle() {
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  const label = theme === "dark" ? "Switch to day mode" : "Switch to night mode";
+
+  return (
+    <button
+      type="button"
+      className="btn btn-icon"
+      onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+      aria-label={label}
+      title={label}
+    >
+      {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+    </button>
+  );
+}
+
 function ConfirmDialog({
   title,
   message,
@@ -156,6 +209,9 @@ function DetailDialog({
   const lastFetch = detail?.lastFetchedAt
     ? new Date(detail.lastFetchedAt).toLocaleString(undefined, { hour12: false })
     : "Never";
+  const lastPollFailedAt = detail?.lastPollFailedAt
+    ? new Date(detail.lastPollFailedAt).toLocaleString(undefined, { hour12: false })
+    : null;
   const keywords = detail?.tags ?? [];
 
   return (
@@ -205,6 +261,14 @@ function DetailDialog({
             <dt>Last fetch</dt>
             <dd>{isLoading ? <Spinner /> : lastFetch}</dd>
           </div>
+          {!isLoading && lastPollFailedAt && (
+            <div>
+              <dt>Status</dt>
+              <dd className="detail-status-warning">
+                Last check failed ({lastPollFailedAt}) - will retry on the next scheduled check
+              </dd>
+            </div>
+          )}
         </dl>
 
         <a href={target.targetUrl} target="_blank" rel="noreferrer" className="detail-url">
@@ -457,11 +521,12 @@ function SettingsDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <h3 id="settings-title">Settings</h3>
+        <p className="modal-subtitle">Manage your account.</p>
 
         <div className="danger-zone">
           <p className="danger-zone-title">Delete account</p>
           <p className="modal-message">
-            Permanently remove your account and all subscriptions. This can't be undone.
+            You have 14 days to recover your account by signing in again. After that, your account and all subscriptions will be permanently deleted.
           </p>
           <button className="btn btn-danger-outline" onClick={onRequestDeleteAccount}>
             Delete account
@@ -722,6 +787,14 @@ function App() {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("notice") === "account_deleted") {
+      setError("This account has been deleted.");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
     if (isAuthenticated) {
       void loadCurrentUserAndSubscriptions();
     }
@@ -755,8 +828,12 @@ function App() {
             // Matches the condition the list actually renders a spinner for (App.tsx's
             // sourceRecordCount === null check) - not lastFetchedAt, which PEDro's baseline
             // poll (no individual records linked yet) can leave null indefinitely even once
-            // sourceRecordCount is populated.
-            const stillFetching = queries.some((q) => q.id === searchQueryId && q.sourceRecordCount === null);
+            // sourceRecordCount is populated. Also stops once a poll has actually failed
+            // (lastPollFailedAt set) - otherwise a down source (e.g. PubMed) leaves
+            // sourceRecordCount null forever and this polls every 4s indefinitely.
+            const stillFetching = queries.some(
+              (q) => q.id === searchQueryId && q.sourceRecordCount === null && !q.lastPollFailedAt,
+            );
             if (stillFetching) {
               poll();
             }
@@ -882,6 +959,9 @@ function App() {
   if (!isAuthenticated) {
     return (
       <div className="screen-center">
+        <div className="theme-toggle-corner">
+          <ThemeToggle />
+        </div>
         <div className="auth-card">
           <h1>PubTracker</h1>
           <p className="tagline">
@@ -905,6 +985,7 @@ function App() {
       <header className="header-row">
         <h1>PubTracker</h1>
         <div className="header-actions">
+          <ThemeToggle />
           {user && (
             <UserMenu
               user={user}
@@ -980,11 +1061,21 @@ function App() {
                   )}
                   <div className="record-count" title="Records registered">
                     <span className="record-count-label">Records</span>
-                    {sq.sourceRecordCount === null ? (
-                      <Spinner />
-                    ) : (
-                      <span className="record-count-value">{sq.sourceRecordCount}</span>
-                    )}
+                    <span className="record-count-row">
+                      {sq.sourceRecordCount === null && !sq.lastPollFailedAt ? (
+                        <Spinner />
+                      ) : (
+                        <span className="record-count-value">{sq.sourceRecordCount ?? "—"}</span>
+                      )}
+                      {sq.lastPollFailedAt && (
+                        <span
+                          className="record-count-status"
+                          title={`Couldn't reach ${source} on the last check - will retry on the next scheduled check`}
+                        >
+                          ⚠
+                        </span>
+                      )}
+                    </span>
                   </div>
                   <a
                     href={sq.targetUrl}
@@ -1059,7 +1150,7 @@ function App() {
       {isDeleteAccountConfirmOpen && (
         <ConfirmDialog
           title="Delete your account?"
-          message="This will permanently remove your account and all subscriptions. This can't be undone."
+          message="Are you sure you want to delete your account?"
           confirmLabel="Delete account"
           isBusy={isDeletingAccount}
           onConfirm={handleDeleteAccount}

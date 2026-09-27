@@ -28,4 +28,12 @@ public class SearchQueryResponseDto
     /// Empty for an unrecognized source or a URL with no recognized search fields.
     /// </summary>
     public List<string> Tags { get; set; } = new();
+
+    /// <summary>
+    /// When this query's source was last found unreachable, so the frontend can show a quiet
+    /// "retrying automatically" status - null whenever the most recent poll succeeded. This is
+    /// deliberately just a timestamp, not the underlying error text: that can contain internal
+    /// details (exception messages, hostnames) that shouldn't reach the browser.
+    /// </summary>
+    public DateTime? LastPollFailedAt { get; set; }
 }

@@ -1,5 +1,6 @@
 using DotNetEnv;
 using Microsoft.AspNetCore.Http;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using Pgvector.Npgsql;
@@ -10,6 +11,7 @@ using RecordService.DataAccess.Chat;
 using RecordService.DataAccess.Email;
 using RecordService.DataAccess.Embeddings;
 using RecordService.DataAccess.ExternalSources;
+using RecordService.DataAccess.Summarization;
 
 namespace test;
 
@@ -47,7 +49,9 @@ public class DigestPollEndToEndManualTest
         var emailFromName = Environment.GetEnvironmentVariable("EMAIL_FROM_NAME") ?? "PubTracker";
         var ncbiApiKey = Environment.GetEnvironmentVariable("NCBI_API_KEY");
         var ncbiContactEmail = Environment.GetEnvironmentVariable("NCBI_CONTACT_EMAIL");
-        var openAiApiKey = Environment.GetEnvironmentVariable("OPENAI_API_KEY");
+        var llmBaseUrl = Environment.GetEnvironmentVariable("LLM_BASE_URL");
+        var llmApiKey = Environment.GetEnvironmentVariable("LLM_API_KEY");
+        var llmModel = Environment.GetEnvironmentVariable("LLM_MODEL");
 
         Assert.False(string.IsNullOrWhiteSpace(emailApiKey), "EMAIL_API_KEY must be set in docker/.env to run this test.");
         Assert.False(string.IsNullOrWhiteSpace(emailFromAddress), "EMAIL_FROM_ADDRESS must be set in docker/.env to run this test.");
@@ -61,18 +65,20 @@ public class DigestPollEndToEndManualTest
 
         await ResetDigestWatermarksAsync(connectionString, SearchQueryIds);
 
-        var vectorDataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
-#pragma warning disable NPG9001 // see Program.cs's registration for why this is suppressed
-        vectorDataSourceBuilder.AddTypeInfoResolverFactory(new VectorTypeInfoResolverFactory());
-#pragma warning restore NPG9001
-        var embeddingClient = new OpenAiEmbeddingClient(new HttpClient(), openAiApiKey!, NullLogger<OpenAiEmbeddingClient>.Instance);
+        var dbContextOptions = new DbContextOptionsBuilder<PubTrackerDbContext>()
+            .UseNpgsql(connectionString)
+            .Options;
+        var dbContext = new PubTrackerDbContext(dbContextOptions);
 
-        var searchQueriesDataAccess = new SearchQueriesDataAccess(connectionString, sourceFactory);
-        var recordsDataAccess = new RecordsDataAccess(vectorDataSourceBuilder.Build(), embeddingClient);
-        var usersDataAccess = new UsersDataAccess(connectionString, new HttpContextAccessor());
+        var searchQueriesDataAccess = new SearchQueriesDataAccess(dbContext, sourceFactory);
+        var recordsDataAccess = new RecordsDataAccess(dbContext);
+        var usersDataAccess = new UsersDataAccess(dbContext, new HttpContextAccessor());
         var emailSender = new BrevoEmailSender(new HttpClient(), emailApiKey!, emailFromAddress!, emailFromName);
+        ISummaryGenerator summaryGenerator = string.IsNullOrEmpty(llmApiKey)
+            ? new NullSummaryGenerator()
+            : new ChatCompletionsSummaryGenerator(new HttpClient(), llmBaseUrl!, llmApiKey, llmModel!);
         var digestService = new DigestService(usersDataAccess, emailSender, NullLogger<DigestService>.Instance);
-        var pollingService = new RecordPollingService(searchQueriesDataAccess, recordsDataAccess, digestService, NullLogger<RecordPollingService>.Instance);
+        var pollingService = new RecordPollingService(searchQueriesDataAccess, recordsDataAccess, digestService, summaryGenerator, NullLogger<RecordPollingService>.Instance);
 
         var results = await pollingService.PollSearchQueriesAsync(SearchQueryIds);
 

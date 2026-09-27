@@ -93,9 +93,9 @@ public static class PedroDigestMessageBuilder
         ["clinical trial"] = "Clinical trial"
     };
 
-    public static string BuildHtmlBody(string targetUrl, IReadOnlyList<LiteratureRecord> newRecords)
+    public static string BuildHtmlBody(string targetUrl, IReadOnlyList<LiteratureRecord> newRecords, string? summary = null)
     {
-        return DigestMessageFormatter.BuildHtmlBody("PEDro", GetCategory(targetUrl), targetUrl, newRecords);
+        return DigestMessageFormatter.BuildHtmlBody("PEDro", GetCategory(targetUrl), targetUrl, newRecords, summary);
     }
 
     /// <summary>

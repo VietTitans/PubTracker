@@ -11,4 +11,5 @@ public interface IUsersService
     Task<User> GetOrProvisionByKeycloakSubAsync(string keycloakSub, string email, string name, string username);
     Task UpdateUserAsync(int userId, User user);
     Task SoftDeleteUserAsync(int userId);
+    Task<int> PurgeExpiredDeletedUsersAsync();
 }

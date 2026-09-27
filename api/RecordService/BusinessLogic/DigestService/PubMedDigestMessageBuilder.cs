@@ -13,9 +13,9 @@ namespace RecordService.BusinessLogic.DigestService;
 /// </summary>
 public static class PubMedDigestMessageBuilder
 {
-    public static string BuildHtmlBody(string targetUrl, IReadOnlyList<LiteratureRecord> newRecords)
+    public static string BuildHtmlBody(string targetUrl, IReadOnlyList<LiteratureRecord> newRecords, string? summary = null)
     {
-        return DigestMessageFormatter.BuildHtmlBody("PubMed", GetCategory(targetUrl), targetUrl, newRecords);
+        return DigestMessageFormatter.BuildHtmlBody("PubMed", GetCategory(targetUrl), targetUrl, newRecords, summary);
     }
 
     // PubMed's publication-date sidebar filter shows up in the URL as a "filter" query param

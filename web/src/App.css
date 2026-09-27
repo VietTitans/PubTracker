@@ -27,6 +27,10 @@
   line-height: 1.5;
 }
 
+.auth-card .alert {
+  margin-bottom: 20px;
+}
+
 .app {
   max-width: 640px;
   margin: 0 auto;
@@ -52,7 +56,13 @@
 .header-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
+}
+
+.theme-toggle-corner {
+  position: fixed;
+  top: 16px;
+  right: 16px;
 }
 
 .user-menu {
@@ -245,6 +255,19 @@
   font-size: 13px;
   font-weight: 700;
   color: var(--text-h);
+}
+
+.record-count-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.record-count-status,
+.detail-status-warning {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
 }
 
 .section-header-action {
@@ -491,7 +514,8 @@
 .modal-message {
   font-size: 13px;
   color: var(--text-dim);
-  word-break: break-all;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
   margin-bottom: 20px;
 }
 
@@ -759,8 +783,15 @@
   border-color: var(--accent);
 }
 
+.modal-subtitle {
+  font-size: 13px;
+  color: var(--text-dim);
+  margin: -2px 0 20px;
+}
+
 .danger-zone {
   border: 1px solid var(--danger-border);
+  background: var(--danger-bg);
   border-radius: var(--radius-sm);
   padding: 16px;
   margin-bottom: 20px;

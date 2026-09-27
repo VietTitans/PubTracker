@@ -19,6 +19,7 @@ export interface SearchQuery {
   lastFetchedAt: string | null;
   sourceRecordCount: number | null;
   tags: string[];
+  lastPollFailedAt: string | null;
 }
 
 export interface CitedRecord {
@@ -49,6 +50,23 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
       ...init?.headers,
     },
   });
+
+  if (response.status === 401) {
+    const reason = await response.json().then((b) => b?.reason as string | undefined).catch(() => undefined);
+    if (reason === "account_deleted") {
+      // A locked-out account's Keycloak SSO session is still alive - a local-only sign-out
+      // would let "Sign in" silently round-trip through Keycloak with no prompt and land
+      // right back here. End the SSO session too; the notice query param carries the
+      // message across the redirect since in-memory state doesn't survive it.
+      await userManager.signoutRedirect({
+        post_logout_redirect_uri: `${window.location.origin}?notice=account_deleted`,
+      });
+      throw new Error("This account has been deleted.");
+    }
+
+    await userManager.removeUser();
+    throw new Error("Your session has ended. Please sign in again.");
+  }
 
   if (!response.ok) {
     const body = await response.text();

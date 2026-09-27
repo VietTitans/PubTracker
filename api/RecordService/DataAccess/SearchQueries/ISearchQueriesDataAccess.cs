@@ -63,7 +63,17 @@ public interface ISearchQueriesDataAccess
     /// after any successful poll, regardless of digest outcome), and, when the source reported
     /// one, updates its current total match count (e.g. PEDro's "Found X records"). Pass null
     /// for sourceRecordCount when the source didn't report a total - the existing value is left
-    /// unchanged.
+    /// unchanged. Also clears LastPollFailedAt, since this call means the source is reachable
+    /// again.
     /// </summary>
     Task RecordPollCompletedAsync(int searchQueryId, DateTime polledAt, int? sourceRecordCount);
+
+    /// <summary>
+    /// Records that a poll of this search query's source just failed (timeout, connection
+    /// failure, circuit breaker open, ...) so the frontend can show a "retrying automatically"
+    /// status instead of looking identical to "nothing new yet". Deliberately does not touch
+    /// last_polled_at - the next poll should still retry from the last successful watermark,
+    /// not from this failed attempt.
+    /// </summary>
+    Task RecordPollFailedAsync(int searchQueryId, DateTime failedAt);
 }

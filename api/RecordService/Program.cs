@@ -2,12 +2,14 @@ using System.Security.Claims;
 using Npgsql;
 using Pgvector.Npgsql;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using RecordService.Authentication;
 using RecordService.DataAccess;
 using RecordService.DataAccess.Email;
 using RecordService.DataAccess.ExternalSources;
+using RecordService.DataAccess.Summarization;
 using RecordService.ErrorHandling;
 using RecordService.Workers;
 using RecordService.BusinessLogic.UsersService;
@@ -28,6 +30,9 @@ if (string.IsNullOrEmpty(connectionString))
     throw new Exception("Database connection string is missing");
 }
 
+builder.Services.AddDbContext<RecordService.DataAccess.PubTrackerDbContext>(options =>
+    options.UseNpgsql(connectionString));
+
 builder.Services.AddControllers();
 
 builder.Services.AddHttpContextAccessor();
@@ -43,8 +48,11 @@ builder.Services.AddCors(options =>
 // External Literature Sources - Register providers for factory pattern
 var ncbiApiKey = builder.Configuration["Ncbi:ApiKey"];
 var ncbiContactEmail = builder.Configuration["Ncbi:ContactEmail"];
+builder.Services.AddPubMedHttpClient(attemptTimeout: TimeSpan.FromSeconds(15));
 builder.Services.AddSingleton<PubMedProvider>(sp =>
-    new PubMedProvider(sp.GetRequiredService<IHttpClientFactory>().CreateClient(), ncbiApiKey, ncbiContactEmail));
+    new PubMedProvider(
+        sp.GetRequiredService<IHttpClientFactory>().CreateClient(PubMedHttpClientExtensions.HttpClientName),
+        ncbiApiKey, ncbiContactEmail));
 builder.Services.AddSingleton<PedroProvider>();
 builder.Services.AddSingleton<LiteratureSourceFactory>(serviceProvider =>
 {
@@ -57,42 +65,10 @@ builder.Services.AddSingleton<LiteratureSourceFactory>(serviceProvider =>
 });
 
 // Data Access Layer - Register interfaces to implementations
-builder.Services.AddScoped(serviceProvider => 
-    new UsersDataAccess(connectionString, serviceProvider.GetRequiredService<IHttpContextAccessor>()));
-builder.Services.AddScoped<IUsersDataAccess>(sp => sp.GetRequiredService<UsersDataAccess>());
-builder.Services.AddScoped<ISourcesDataAccess>(serviceProvider =>
-    new SourcesDataAccess(connectionString));
-
-builder.Services.AddScoped<ISearchQueriesDataAccess>(serviceProvider =>
-    new SearchQueriesDataAccess(connectionString, serviceProvider.GetRequiredService<LiteratureSourceFactory>()));
-
-// Chat / RAG - OpenAI embeds records and questions, Anthropic generates the grounded answer.
-// RecordsDataAccess alone needs pgvector-aware type mapping, which requires building the
-// NpgsqlDataSource through Pgvector's type resolver rather than handing it a bare connection
-// string like every other DataAccess class here.
-var openAiApiKey = builder.Configuration["OpenAi:ApiKey"];
-var anthropicApiKey = builder.Configuration["Anthropic:ApiKey"];
-
-if (string.IsNullOrEmpty(openAiApiKey) || string.IsNullOrEmpty(anthropicApiKey))
-{
-    throw new Exception("OpenAI/Anthropic configuration is missing");
-}
-
-var vectorDataSourceBuilder = new NpgsqlDataSourceBuilder(connectionString);
-#pragma warning disable NPG9001 // AddTypeInfoResolverFactory is Npgsql's documented extension point for plugins like Pgvector, marked experimental pending a stable API
-vectorDataSourceBuilder.AddTypeInfoResolverFactory(new VectorTypeInfoResolverFactory());
-#pragma warning restore NPG9001
-builder.Services.AddSingleton(vectorDataSourceBuilder.Build());
-
-builder.Services.AddScoped<IEmbeddingClient>(sp =>
-    new OpenAiEmbeddingClient(
-        sp.GetRequiredService<IHttpClientFactory>().CreateClient(),
-        openAiApiKey,
-        sp.GetRequiredService<ILogger<OpenAiEmbeddingClient>>()));
-builder.Services.AddSingleton<IChatCompletionClient>(new AnthropicChatCompletionClient(anthropicApiKey));
-
-builder.Services.AddScoped<IRecordsDataAccess>(serviceProvider =>
-    new RecordsDataAccess(serviceProvider.GetRequiredService<NpgsqlDataSource>(), serviceProvider.GetRequiredService<IEmbeddingClient>()));
+builder.Services.AddScoped<IUsersDataAccess, UsersDataAccess>();
+builder.Services.AddScoped<ISourcesDataAccess, SourcesDataAccess>();
+builder.Services.AddScoped<ISearchQueriesDataAccess, SearchQueriesDataAccess>();
+builder.Services.AddScoped<IRecordsDataAccess, RecordsDataAccess>();
 
 // Email - swappable behind IEmailSender; BrevoEmailSender is the only provider-specific piece
 var emailApiKey = builder.Configuration["Email:ApiKey"];
@@ -110,6 +86,20 @@ builder.Services.AddScoped<IEmailSender>(serviceProvider =>
         serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(),
         emailApiKey, emailFromAddress, emailFromName));
 
+// AI digest summary - swappable behind ISummaryGenerator via the OpenAI-compatible
+// chat-completions wire format (OpenAI, Azure OpenAI, Groq, local Ollama, OpenRouter all speak
+// it), so swapping vendors is a config change, not a code change. Additive feature - missing
+// config falls back to NullSummaryGenerator instead of failing startup like email does.
+var llmBaseUrl = builder.Configuration["Llm:BaseUrl"];
+var llmApiKey = builder.Configuration["Llm:ApiKey"];
+var llmModel = builder.Configuration["Llm:Model"];
+builder.Services.AddScoped<ISummaryGenerator>(serviceProvider =>
+    string.IsNullOrEmpty(llmApiKey)
+        ? new NullSummaryGenerator()
+        : new ChatCompletionsSummaryGenerator(
+            serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(),
+            llmBaseUrl!, llmApiKey, llmModel!));
+
 // Business Logic Layer - Register interfaces to implementations
 builder.Services.AddScoped<IUsersService, UsersService>();
 builder.Services.AddScoped<ISearchQueriesService, SearchQueriesService>();
@@ -124,6 +114,14 @@ builder.Services.AddHostedService(serviceProvider => new RecordPollingBackground
     serviceProvider.GetRequiredService<IServiceScopeFactory>(),
     serviceProvider.GetRequiredService<ILogger<RecordPollingBackgroundService>>(),
     TimeSpan.FromHours(pollIntervalHours)));
+
+// Background scheduler - purges users past their soft-delete grace period (see
+// UsersDataAccess.DeletionGracePeriodDays)
+var userPurgeIntervalHours = builder.Configuration.GetValue<double?>("Scheduler:UserPurgeIntervalHours") ?? 24;
+builder.Services.AddHostedService(serviceProvider => new UserPurgeBackgroundService(
+    serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+    serviceProvider.GetRequiredService<ILogger<UserPurgeBackgroundService>>(),
+    TimeSpan.FromHours(userPurgeIntervalHours)));
 
 // Cross-cutting Concerns
 builder.Services.AddScoped<IErrorHandler, DefaultErrorHandler>();
@@ -161,7 +159,12 @@ void ConfigureKeycloakBearer(JwtBearerOptions options)
         ValidateAudience = true,
         ValidateIssuer = true,
         ValidIssuer = keycloakAuthority,
-        ClockSkew = TimeSpan.FromMinutes(5)
+        ClockSkew = TimeSpan.FromMinutes(5),
+        // Keycloak's realm roles normally live nested under "realm_access.roles"; the
+        // "realm-roles" protocol mapper (realm-export.json) flattens them onto a top-level
+        // "roles" claim instead, which is what RequireRole("Admin")/("User", "Admin") below
+        // actually reads from - without this, those policies would never match any real token.
+        RoleClaimType = "roles"
     };
     options.Events = new JwtBearerEvents
     {
@@ -182,7 +185,31 @@ void ConfigureKeycloakBearer(JwtBearerOptions options)
             var usersService = context.HttpContext.RequestServices.GetRequiredService<IUsersService>();
             var user = await usersService.GetOrProvisionByKeycloakSubAsync(keycloakSub, email, name, username);
 
+            if (user.IsMarkedForDeletion)
+            {
+                var lockoutLogger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                lockoutLogger.LogWarning("Rejected request from user {UserId}: account is marked for deletion", user.Id);
+                // A JwtBearerEvents.OnTokenValidated context.Fail(message) does NOT surface that
+                // message in the 401's WWW-Authenticate error_description (unlike a standard
+                // TokenValidationParameters failure, e.g. audience mismatch, which does) - so the
+                // reason is stashed here for OnChallenge below to turn into a real response body
+                // the frontend can read.
+                context.HttpContext.Items["AuthFailureReason"] = "account_deleted";
+                context.Fail("This account has been deleted.");
+                return;
+            }
+
             ((ClaimsIdentity)principal.Identity!).AddClaim(new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()));
+        },
+        OnChallenge = async context =>
+        {
+            if (context.HttpContext.Items["AuthFailureReason"] as string == "account_deleted")
+            {
+                context.HandleResponse();
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync("{\"reason\":\"account_deleted\"}");
+            }
         }
     };
 }
@@ -232,6 +259,13 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+// Apply pending EF Core migrations before anything else touches the database. Runs on every
+// app start, not just first boot, so it's the single place schema changes reach any environment.
+using (var migrationScope = app.Services.CreateScope())
+{
+    migrationScope.ServiceProvider.GetRequiredService<RecordService.DataAccess.PubTrackerDbContext>().Database.Migrate();
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

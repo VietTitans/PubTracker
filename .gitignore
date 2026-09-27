@@ -229,3 +229,4 @@ __marimo__/
 /.vs
 /api/test/bin
 /api/test/obj
+.claude/settings.local.json
