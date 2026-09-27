@@ -12,9 +12,12 @@ public class RecordsDataAccess : IRecordsDataAccess
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     }
 
-    public async Task<List<LiteratureRecord>> PersistSearchResultsAsync(int searchQueryId, int sourceId, IReadOnlyList<LiteratureRecord> records)
+    private record RecordUpsertRow(int Id, bool WasInserted);
+
+    public async Task<PersistResult> PersistSearchResultsAsync(int searchQueryId, int sourceId, IReadOnlyList<LiteratureRecord> records)
     {
         var newlyLinkedRecords = new List<LiteratureRecord>();
+        var newlyInsertedRecords = new List<LiteratureRecord>();
 
         await using (var transaction = await _dbContext.Database.BeginTransactionAsync())
         {
@@ -22,14 +25,19 @@ public class RecordsDataAccess : IRecordsDataAccess
             {
                 foreach (var record in records)
                 {
-                    var recordId = (await _dbContext.Database.SqlQuery<int>(
+                    var upsertResult = (await _dbContext.Database.SqlQuery<RecordUpsertRow>(
                         $"""
                          INSERT INTO records (external_id, doi, title, description, source_url)
                          VALUES ({record.ExternalId}, {record.Doi}, {record.Title}, {record.Abstract}, {record.SourceUrl})
                          ON CONFLICT (external_id) DO UPDATE
                              SET doi = EXCLUDED.doi, title = EXCLUDED.title, description = EXCLUDED.description, source_url = EXCLUDED.source_url
-                         RETURNING id
+                         RETURNING id, (xmax = 0) AS "WasInserted"
                          """).ToListAsync()).Single();
+                    var recordId = upsertResult.Id;
+                    if (upsertResult.WasInserted)
+                    {
+                        newlyInsertedRecords.Add(record);
+                    }
 
                     await _dbContext.Database.ExecuteSqlInterpolatedAsync(
                         $"""
@@ -60,7 +68,14 @@ public class RecordsDataAccess : IRecordsDataAccess
             }
         }
 
-        return newlyLinkedRecords;
+        return new PersistResult { NewlyLinkedRecords = newlyLinkedRecords, NewlyInsertedRecords = newlyInsertedRecords };
+    }
+
+    public async Task UpdateAuthorIntentionAsync(string externalId, string authorIntention)
+    {
+        await _dbContext.Records
+            .Where(r => r.ExternalId == externalId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(r => r.AuthorIntention, authorIntention));
     }
 
     public async Task<List<LiteratureRecord>> GetRecordsSeenSinceAsync(int searchQueryId, DateTime? since)
@@ -79,6 +94,7 @@ public class RecordsDataAccess : IRecordsDataAccess
                 Title = r.Title,
                 Abstract = r.Description,
                 SourceUrl = r.SourceUrl,
+                AuthorIntention = r.AuthorIntention,
                 FirstSeenAt = sqr.FirstSeenAt ?? default
             }
         ).ToListAsync();

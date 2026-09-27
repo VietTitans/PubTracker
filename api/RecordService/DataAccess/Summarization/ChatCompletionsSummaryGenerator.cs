@@ -44,20 +44,34 @@ public class ChatCompletionsSummaryGenerator : ISummaryGenerator
             return string.Empty;
         }
 
+        return await RequestChatCompletionAsync(
+            "You write a short, friendly summary (2-4 sentences) of what's new in this email update about research articles. Use plain, everyday language a non-technical reader would understand - avoid jargon. Reply with the summary prose only - no title, heading, or markdown formatting. Avoid emdashes, bullet points, or lists. Do not include any text that is not part of the summary.",
+            BuildRecordsPrompt(records));
+    }
+
+    public async Task<string> GenerateAuthorIntentionAsync(LiteratureRecord record)
+    {
+        return await RequestChatCompletionAsync(
+            "In one short sentence, state what the study's authors set out to investigate or show, based on its title and abstract. Do not restate the title verbatim. Reply with that one sentence only - no title, heading, or markdown formatting. Avoid emdashes, bullet points, or lists. Do not include any text that is not part of the summary.",
+            BuildRecordPrompt(record));
+    }
+
+    private async Task<string> RequestChatCompletionAsync(string systemPrompt, string userPrompt)
+    {
         var response = await _httpClient.PostAsJsonAsync("chat/completions", new
         {
             model = _model,
             messages = new object[]
             {
-                new { role = "system", content = "You summarize what's new in a literature-monitoring email digest in 2-4 sentences, in plain prose suitable for an email." },
-                new { role = "user", content = BuildRecordsPrompt(records) }
+                new { role = "system", content = systemPrompt },
+                new { role = "user", content = userPrompt }
             }
         });
 
         if (!response.IsSuccessStatusCode)
         {
             var body = await response.Content.ReadAsStringAsync();
-            throw new HttpRequestException($"Chat completions summary request failed ({(int)response.StatusCode}): {body}");
+            throw new HttpRequestException($"Chat completions request failed ({(int)response.StatusCode}): {body}");
         }
 
         var completion = await response.Content.ReadFromJsonAsync<ChatCompletionResponse>();
@@ -66,7 +80,7 @@ public class ChatCompletionsSummaryGenerator : ISummaryGenerator
 
     private static string BuildRecordsPrompt(IReadOnlyList<LiteratureRecord> records)
     {
-        var sb = new StringBuilder("New records in this digest:\n");
+        var sb = new StringBuilder("New records to summarize:\n");
         foreach (var record in records.Take(RecordCap))
         {
             sb.Append("- ").Append(record.Title);
@@ -78,6 +92,19 @@ public class ChatCompletionsSummaryGenerator : ISummaryGenerator
                 sb.Append(": ").Append(truncated);
             }
             sb.Append('\n');
+        }
+        return sb.ToString();
+    }
+
+    private static string BuildRecordPrompt(LiteratureRecord record)
+    {
+        var sb = new StringBuilder("Title: ").Append(record.Title);
+        if (!string.IsNullOrWhiteSpace(record.Abstract))
+        {
+            var truncated = record.Abstract.Length > AbstractCharCap
+                ? record.Abstract[..AbstractCharCap] + "..."
+                : record.Abstract;
+            sb.Append("\nAbstract: ").Append(truncated);
         }
         return sb.ToString();
     }

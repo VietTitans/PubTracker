@@ -1,59 +1,92 @@
 using RecordData;
 using RecordService.BusinessLogic.DigestService;
 using RecordService.DataAccess;
+using RecordService.DataAccess.Summarization;
 using RecordService.Models;
 
 namespace RecordService.BusinessLogic.RecordPollingService;
 
 public class RecordPollingService : IRecordPollingService
 {
+    // Caps how many GenerateAuthorIntentionAsync calls run concurrently - bounded so a
+    // large batch of newly-inserted records doesn't blow through the LLM provider's rate limit.
+    private const int MaxConcurrentAuthorIntentionCalls = 5;
+
+    // Serializes every poll cycle (scheduled or targeted) so two overlapping calls - e.g. the
+    // scheduled background service firing at the same moment as a manual re-check - can't both
+    // read the same stale digest watermark and both send a duplicate digest. Static (not an
+    // instance field) because this service is registered scoped, but the lock must be shared
+    // across every scope/request in the process.
+    // ponytail: in-process lock only, not a distributed one - fine while docker-compose runs a
+    // single `api` container. Move to a Postgres advisory lock if the API is ever scaled out.
+    private static readonly SemaphoreSlim PollCycleLock = new(1, 1);
+
     private readonly ISearchQueriesDataAccess _searchQueriesDataAccess;
     private readonly IRecordsDataAccess _recordsDataAccess;
     private readonly IDigestService _digestService;
+    private readonly ISummaryGenerator _summaryGenerator;
     private readonly ILogger<RecordPollingService> _logger;
 
     public RecordPollingService(
         ISearchQueriesDataAccess searchQueriesDataAccess,
         IRecordsDataAccess recordsDataAccess,
         IDigestService digestService,
+        ISummaryGenerator summaryGenerator,
         ILogger<RecordPollingService> logger)
     {
         _searchQueriesDataAccess = searchQueriesDataAccess;
         _recordsDataAccess = recordsDataAccess;
         _digestService = digestService;
+        _summaryGenerator = summaryGenerator;
         _logger = logger;
     }
 
     public async Task<List<PollResult>> PollAllSearchQueriesAsync(CancellationToken cancellationToken = default)
     {
-        var searchQueries = await _searchQueriesDataAccess.GetAllSearchQueriesAsync();
-        var outcomes = new List<FetchOutcome>();
-
-        foreach (var searchQuery in searchQueries)
+        await PollCycleLock.WaitAsync(cancellationToken);
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            outcomes.Add(await FetchOneAsync(searchQuery));
-        }
+            var searchQueries = await _searchQueriesDataAccess.GetAllSearchQueriesAsync();
+            var outcomes = new List<FetchOutcome>();
 
-        return await DispatchDigestsAndBuildResultsAsync(outcomes, explicitSearchQueryIds: null);
+            foreach (var searchQuery in searchQueries)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                outcomes.Add(await FetchOneAsync(searchQuery));
+            }
+
+            return await DispatchDigestsAndBuildResultsAsync(outcomes, explicitSearchQueryIds: null);
+        }
+        finally
+        {
+            PollCycleLock.Release();
+        }
     }
 
     public async Task<List<PollResult>> PollSearchQueriesAsync(IReadOnlyList<int> searchQueryIds, CancellationToken cancellationToken = default)
     {
-        var outcomes = new List<FetchOutcome>();
-
-        foreach (var id in searchQueryIds)
+        await PollCycleLock.WaitAsync(cancellationToken);
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var searchQuery = await _searchQueriesDataAccess.GetSearchQueryByIdAsync(id);
-            if (searchQuery == null)
-            {
-                continue;
-            }
-            outcomes.Add(await FetchOneAsync(searchQuery));
-        }
+            var outcomes = new List<FetchOutcome>();
 
-        return await DispatchDigestsAndBuildResultsAsync(outcomes, explicitSearchQueryIds: searchQueryIds);
+            foreach (var id in searchQueryIds)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var searchQuery = await _searchQueriesDataAccess.GetSearchQueryByIdAsync(id);
+                if (searchQuery == null)
+                {
+                    continue;
+                }
+                outcomes.Add(await FetchOneAsync(searchQuery));
+            }
+
+            return await DispatchDigestsAndBuildResultsAsync(outcomes, explicitSearchQueryIds: searchQueryIds);
+        }
+        finally
+        {
+            PollCycleLock.Release();
+        }
     }
 
     public async Task<PollResult?> PollSearchQueryAsync(int searchQueryId, CancellationToken cancellationToken = default)
@@ -73,6 +106,11 @@ public class RecordPollingService : IRecordPollingService
         public int NewlyLinkedCount { get; init; }
         public List<LiteratureRecord> FetchedPendingRecords { get; init; } = new(); // superset across all subscribers
         public List<(int UserId, DateTime? LastDigestSentAt)> SubscriberWatermarks { get; init; } = new();
+
+        // AI summary of this cycle's fresh batch (searchResult.NewRecords), generated once per
+        // query rather than once per subscriber - every subscriber of this query sees the same
+        // text. Null if there was nothing new, no one subscribed, or generation failed.
+        public string? Summary { get; init; }
 
         // Captured right before the read, not "now" at dispatch time (which can be much later
         // once combining across many users) - stamping this as the new watermark on success
@@ -106,14 +144,19 @@ public class RecordPollingService : IRecordPollingService
             // re-fetch the same window, or worse, never advance past its first baseline poll.
             await _searchQueriesDataAccess.RecordPollCompletedAsync(searchQuery.Id, DateTime.UtcNow, searchResult.TotalRecordCount);
 
-            var newlyLinkedRecords = searchResult.NewRecords.Count > 0
+            var persistResult = searchResult.NewRecords.Count > 0
                 ? await _recordsDataAccess.PersistSearchResultsAsync(searchQuery.Id, searchQuery.SourceId, searchResult.NewRecords)
-                : new List<LiteratureRecord>();
+                : new PersistResult { NewlyLinkedRecords = new(), NewlyInsertedRecords = new() };
+
+            await GenerateAuthorIntentionsAsync(persistResult.NewlyInsertedRecords);
+
+            var newlyLinkedRecords = persistResult.NewlyLinkedRecords;
 
             var subscriberWatermarks = await _searchQueriesDataAccess.GetUserDigestWatermarksForQueryAsync(searchQuery.Id);
 
             var fetchedPendingRecords = new List<LiteratureRecord>();
             var fetchReadAt = DateTime.UtcNow;
+            string? summary = null;
             if (subscriberWatermarks.Count > 0)
             {
                 // Read from the earliest watermark across all subscribers (or from the very
@@ -122,6 +165,11 @@ public class RecordPollingService : IRecordPollingService
                 var anyNeverSent = subscriberWatermarks.Any(w => w.LastDigestSentAt == null);
                 var floorWatermark = anyNeverSent ? (DateTime?)null : subscriberWatermarks.Min(w => w.LastDigestSentAt);
                 fetchedPendingRecords = await _recordsDataAccess.GetRecordsSeenSinceAsync(searchQuery.Id, floorWatermark);
+
+                if (searchResult.NewRecords.Count > 0)
+                {
+                    summary = await GenerateQuerySummaryAsync(searchQuery.Id, searchResult.NewRecords);
+                }
             }
 
             _logger.LogInformation(
@@ -135,13 +183,77 @@ public class RecordPollingService : IRecordPollingService
                 NewlyLinkedCount = newlyLinkedRecords.Count,
                 FetchedPendingRecords = fetchedPendingRecords,
                 SubscriberWatermarks = subscriberWatermarks,
-                FetchReadAt = fetchReadAt
+                FetchReadAt = fetchReadAt,
+                Summary = summary
             };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Unexpected error polling search query {SearchQueryId}", searchQuery.Id);
             return new FetchOutcome { SearchQuery = searchQuery, FetchSucceeded = false, ErrorMessage = ex.Message };
+        }
+    }
+
+    // Runs once per query per poll cycle (not once per subscriber), so every subscriber of this
+    // query gets the same summary text instead of paying for the same content N times. A
+    // generation failure is logged and skipped - the digest still sends without one.
+    private async Task<string?> GenerateQuerySummaryAsync(int searchQueryId, IReadOnlyList<LiteratureRecord> newRecords)
+    {
+        try
+        {
+            var summary = await _summaryGenerator.SummarizeAsync(newRecords);
+            return string.IsNullOrWhiteSpace(summary) ? null : summary;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to generate digest summary for search query {SearchQueryId}", searchQueryId);
+            return null;
+        }
+    }
+
+    // Runs once per genuinely new record (not per subscriber, not per digest send - see
+    // RecordsDataAccess.PersistSearchResultsAsync's xmax = 0 check for how "genuinely new" is
+    // determined), so the same record is never re-summarized just because a second search query
+    // later links to it too. A generation failure is logged and skipped, never blocks the poll.
+    //
+    // The LLM calls run concurrently (bounded by MaxConcurrentAuthorIntentionCalls) since they
+    // only hit HttpClient, which is safe for concurrent use. The resulting DB writes then run
+    // sequentially afterward, since _recordsDataAccess shares one scoped PubTrackerDbContext
+    // (EF Core's DbContext is not safe for concurrent use) - this still gets nearly the whole
+    // latency win, since the LLM round-trips are what dominate (~1s each vs. a single-row update).
+    private async Task GenerateAuthorIntentionsAsync(IReadOnlyList<LiteratureRecord> newlyInsertedRecords)
+    {
+        if (newlyInsertedRecords.Count == 0)
+        {
+            return;
+        }
+
+        using var throttle = new SemaphoreSlim(MaxConcurrentAuthorIntentionCalls);
+
+        var intentions = await Task.WhenAll(newlyInsertedRecords.Select(async record =>
+        {
+            await throttle.WaitAsync();
+            try
+            {
+                return (record.ExternalId, Intention: await _summaryGenerator.GenerateAuthorIntentionAsync(record));
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to generate author intention for record {ExternalId}", record.ExternalId);
+                return (record.ExternalId, Intention: (string?)null);
+            }
+            finally
+            {
+                throttle.Release();
+            }
+        }));
+
+        foreach (var (externalId, intention) in intentions)
+        {
+            if (!string.IsNullOrWhiteSpace(intention))
+            {
+                await _recordsDataAccess.UpdateAuthorIntentionAsync(externalId, intention);
+            }
         }
     }
 
@@ -169,7 +281,8 @@ public class RecordPollingService : IRecordPollingService
                         UserId = userId,
                         SearchQueryId = outcome.SearchQuery.Id,
                         TargetUrl = outcome.SearchQuery.TargetUrl,
-                        Records = recordsForUser
+                        Records = recordsForUser,
+                        Summary = outcome.Summary
                     },
                     outcome.FetchReadAt);
             }

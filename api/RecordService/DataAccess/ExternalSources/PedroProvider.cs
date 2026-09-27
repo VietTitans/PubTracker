@@ -1,6 +1,8 @@
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.WebUtilities;
 using Microsoft.Playwright;
+using Polly;
+using Polly.CircuitBreaker;
 using RecordService.Models;
 
 namespace RecordService.DataAccess.ExternalSources;
@@ -24,6 +26,23 @@ public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
     // navigated to directly - an SSRF vector letting a subscriber point the server's browser
     // at internal services/cloud metadata endpoints.
     private const string AllowedHost = "search.pedro.org.au";
+
+    // Bounds how long one scrape can hang the caller (see PageTimeoutMs below), and how long a
+    // dead/hanging PEDro can hold RecordPollingService's global poll-cycle lock across many
+    // queries before this provider starts short-circuiting instead of retrying every one of
+    // them. Same reasoning and thresholds as PubMedHttpClientExtensions.AddPubMedHttpClient -
+    // sized for one poll cycle's real call volume, not Polly's much larger HTTP defaults.
+    private const int PageTimeoutMs = 15_000;
+
+    private static readonly ResiliencePipeline CircuitBreakerPipeline = new ResiliencePipelineBuilder()
+        .AddCircuitBreaker(new CircuitBreakerStrategyOptions
+        {
+            FailureRatio = 1.0,
+            MinimumThroughput = 3,
+            SamplingDuration = TimeSpan.FromSeconds(PageTimeoutMs / 1000.0 * 3),
+            BreakDuration = TimeSpan.FromMinutes(10)
+        })
+        .Build();
 
     private static readonly Regex CountRegex = new(@"Found\s+([\d,]+)\s+records", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex RecordIdRegex = new(@"record-detail/(\d+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);

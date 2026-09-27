@@ -43,8 +43,11 @@ builder.Services.AddCors(options =>
 // External Literature Sources - Register providers for factory pattern
 var ncbiApiKey = builder.Configuration["Ncbi:ApiKey"];
 var ncbiContactEmail = builder.Configuration["Ncbi:ContactEmail"];
+builder.Services.AddPubMedHttpClient(attemptTimeout: TimeSpan.FromSeconds(15));
 builder.Services.AddSingleton<PubMedProvider>(sp =>
-    new PubMedProvider(sp.GetRequiredService<IHttpClientFactory>().CreateClient(), ncbiApiKey, ncbiContactEmail));
+    new PubMedProvider(
+        sp.GetRequiredService<IHttpClientFactory>().CreateClient(PubMedHttpClientExtensions.HttpClientName),
+        ncbiApiKey, ncbiContactEmail));
 builder.Services.AddSingleton<PedroProvider>();
 builder.Services.AddSingleton<LiteratureSourceFactory>(serviceProvider =>
 {

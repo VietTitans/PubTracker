@@ -10,4 +10,6 @@ namespace RecordService.DataAccess.Summarization;
 public class NullSummaryGenerator : ISummaryGenerator
 {
     public Task<string> SummarizeAsync(IReadOnlyList<LiteratureRecord> records) => Task.FromResult(string.Empty);
+
+    public Task<string> GenerateAuthorIntentionAsync(LiteratureRecord record) => Task.FromResult(string.Empty);
 }

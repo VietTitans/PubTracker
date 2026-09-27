@@ -24,7 +24,7 @@ internal static class DigestMessageFormatter
     private const string OtherBorderColor = "#a6592e";
     private const string OtherBackgroundColor = "#f1e2d6";
 
-    public static string BuildHtmlBody(string sourceLabel, string? category, string targetUrl, IReadOnlyList<LiteratureRecord> newRecords)
+    public static string BuildHtmlBody(string sourceLabel, string? category, string targetUrl, IReadOnlyList<LiteratureRecord> newRecords, string? summary = null)
     {
         var sb = new StringBuilder();
         sb.Append("<div style=\"font-family:").Append(FontFamily).Append(";max-width:640px;margin:0 auto;color:").Append(InkColor).Append(";\">");
@@ -39,6 +39,11 @@ internal static class DigestMessageFormatter
         sb.Append("</strong><br/>🔗 Search URL: <a href=\"");
         sb.Append(WebUtility.HtmlEncode(targetUrl));
         sb.Append("\" style=\"color:").Append(AccentColor).Append(";\">Link</a></p>");
+
+        if (!string.IsNullOrWhiteSpace(summary))
+        {
+            sb.Append(BuildSummaryBlock(summary));
+        }
 
         var byCluster = newRecords.ToLookup(RecordTopicClassifier.Classify);
 
@@ -60,6 +65,12 @@ internal static class DigestMessageFormatter
         sb.Append("</div>");
         return sb.ToString();
     }
+
+    internal static string BuildSummaryBlock(string summary) =>
+        "<div style=\"margin:0 0 24px;padding:14px 18px;background:#eef3f0;border-radius:8px;font-size:14px;line-height:1.6;\">"
+        + "<h4 style=\"margin:0 0 8px;font-size:15px;font-weight:600;\">🤖 AI Summary</h4>"
+        + "<p style=\"margin:0;\">" + WebUtility.HtmlEncode(summary) + "</p>"
+        + "</div>";
 
     private static void AppendCluster(StringBuilder sb, string clusterName, List<LiteratureRecord> records, bool isOther)
     {
@@ -89,6 +100,7 @@ internal static class DigestMessageFormatter
             sb.Append("<span style=\"display:inline-block;min-width:26px;color:#8b948d;\">")
               .Append(i + 1).Append(".</span>");
             AppendRecordLink(sb, records[i]);
+            AppendAuthorIntention(sb, records[i]);
             sb.Append("</li>");
         }
         sb.Append("</ul>");
@@ -110,5 +122,17 @@ internal static class DigestMessageFormatter
         {
             sb.Append(WebUtility.HtmlEncode(record.Title));
         }
+    }
+
+    private static void AppendAuthorIntention(StringBuilder sb, LiteratureRecord record)
+    {
+        if (string.IsNullOrWhiteSpace(record.AuthorIntention))
+        {
+            return;
+        }
+
+        sb.Append("<div style=\"margin:4px 0 0 26px;font-size:13px;color:#5b645d;font-style:italic;\">Authors intent: ")
+          .Append(WebUtility.HtmlEncode(record.AuthorIntention))
+          .Append("</div>");
     }
 }

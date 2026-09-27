@@ -8,4 +8,5 @@ public class RecordEntity
     public string Title { get; set; } = string.Empty;
     public string? Description { get; set; }
     public string? SourceUrl { get; set; }
+    public string? AuthorIntention { get; set; }
 }

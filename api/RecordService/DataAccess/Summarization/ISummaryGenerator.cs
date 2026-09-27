@@ -10,4 +10,10 @@ namespace RecordService.DataAccess.Summarization;
 public interface ISummaryGenerator
 {
     Task<string> SummarizeAsync(IReadOnlyList<LiteratureRecord> records);
+
+    /// <summary>
+    /// One-sentence description of what the record's authors set out to investigate/show.
+    /// Called once per record, when first discovered (see RecordPollingService) - not per digest.
+    /// </summary>
+    Task<string> GenerateAuthorIntentionAsync(LiteratureRecord record);
 }
