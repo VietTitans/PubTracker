@@ -73,8 +73,8 @@ public class DigestPollEndToEndManualTest
         ISummaryGenerator summaryGenerator = string.IsNullOrEmpty(llmApiKey)
             ? new NullSummaryGenerator()
             : new ChatCompletionsSummaryGenerator(new HttpClient(), llmBaseUrl!, llmApiKey, llmModel!);
-        var digestService = new DigestService(usersDataAccess, emailSender, summaryGenerator, NullLogger<DigestService>.Instance);
-        var pollingService = new RecordPollingService(searchQueriesDataAccess, recordsDataAccess, digestService, NullLogger<RecordPollingService>.Instance);
+        var digestService = new DigestService(usersDataAccess, emailSender, NullLogger<DigestService>.Instance);
+        var pollingService = new RecordPollingService(searchQueriesDataAccess, recordsDataAccess, digestService, summaryGenerator, NullLogger<RecordPollingService>.Instance);
 
         var results = await pollingService.PollSearchQueriesAsync(SearchQueryIds);
 

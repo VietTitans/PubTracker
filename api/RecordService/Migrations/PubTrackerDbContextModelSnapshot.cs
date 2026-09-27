@@ -17,7 +17,7 @@ namespace RecordService.Migrations
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "10.0.12")
+                .HasAnnotation("ProductVersion", "10.0.4")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -30,6 +30,10 @@ namespace RecordService.Migrations
                         .HasColumnName("id");
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("AuthorIntention")
+                        .HasColumnType("text")
+                        .HasColumnName("author_intention");
 
                     b.Property<string>("Description")
                         .HasColumnType("text")
@@ -73,6 +77,10 @@ namespace RecordService.Migrations
                     b.Property<DateTime?>("LastDigestSentAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("last_digest_sent_at");
+
+                    b.Property<DateTime?>("LastPollFailedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_poll_failed_at");
 
                     b.Property<DateTime?>("LastPolledAt")
                         .HasColumnType("timestamp with time zone")

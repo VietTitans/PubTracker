@@ -33,6 +33,7 @@ public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, I
 
     public readonly FakeEmailSender EmailSender = new();
     public readonly FakeSummaryGenerator SummaryGenerator = new();
+    public readonly FakeLiteratureSourceProvider LiteratureSourceProvider = new();
 
     public async Task InitializeAsync()
     {
@@ -51,7 +52,7 @@ public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, I
         {
             services.RemoveAll<LiteratureSourceFactory>();
             services.AddSingleton(new LiteratureSourceFactory(
-                new ILiteratureSourceProvider[] { new FakeLiteratureSourceProvider(), new FakePedroLiteratureSourceProvider() }));
+                new ILiteratureSourceProvider[] { LiteratureSourceProvider, new FakePedroLiteratureSourceProvider(), new FakeUniqueLiteratureSourceProvider() }));
 
             services.RemoveAll<IEmailSender>();
             services.AddSingleton<IEmailSender>(EmailSender);
