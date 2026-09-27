@@ -19,7 +19,7 @@ public class UsersController : ControllerBase
         _userService = userService;
     }
 
-    [Authorize(Policy = "UserOrAdmin")]
+    [Authorize]
     [HttpGet("me")]
     public async Task<IActionResult> GetCurrentUser()
     {
@@ -46,7 +46,7 @@ public class UsersController : ControllerBase
         }
     }
 
-    [Authorize(Policy = "AdminOnly")]
+    [Authorize]
     [HttpGet("{id}")]
     public async Task<IActionResult> GetUserById(int id)
     {
@@ -55,6 +55,11 @@ public class UsersController : ControllerBase
         if (userId == null)
         {
             return Unauthorized(new { message = "User ID not found in claims." });
+        }
+
+        if (!User.IsInRole("Admin") && int.Parse(userId) != id)
+        {
+            return Forbid();
         }
 
         try
@@ -89,9 +94,7 @@ public class UsersController : ControllerBase
         }
     }
 
-    // Anonymous by design: this is the sign-up path for someone who doesn't have an account yet,
-    // so it can't require [Authorize]. An already-logged-in caller has no reason to hit it.
-    [AllowAnonymous]
+    [Authorize(Policy = "AdminOnly")]
     [HttpPost]
     public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)
     {
@@ -118,7 +121,7 @@ public class UsersController : ControllerBase
         }
     }
 
-    [Authorize(Policy = "UserOrAdmin")]
+    [Authorize]
     [HttpPut("me")]
     public async Task<IActionResult> UpdateCurrentUser([FromBody] UpdateUserDto dto)
     {
@@ -149,7 +152,7 @@ public class UsersController : ControllerBase
         }
     }
 
-    [Authorize(Policy = "UserOrAdmin")]
+    [Authorize]
     [HttpDelete("me")]
     public async Task<IActionResult> DeleteCurrentUser()
     {
@@ -170,7 +173,7 @@ public class UsersController : ControllerBase
         }
     }
 
-    [Authorize(Policy = "UserOrAdmin")]
+    [Authorize]
     [HttpGet("{userId}/search-queries")]
     public async Task<IActionResult> GetUserSearchQueries(int userId)
     {
@@ -182,7 +185,7 @@ public class UsersController : ControllerBase
 
         if (!User.IsInRole("Admin") && int.Parse(callerId) != userId)
         {
-            return StatusCode(403, new { message = "Cannot view another user's search queries." });
+            return Forbid();
         }
 
         try
@@ -196,7 +199,7 @@ public class UsersController : ControllerBase
         }
     }
 
-    [Authorize(Policy = "UserOrAdmin")]
+    [Authorize]
     [HttpGet("me/search-queries")]
     public async Task<IActionResult> GetCurrentUserSearchQueries()
     {

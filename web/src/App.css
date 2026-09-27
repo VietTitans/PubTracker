@@ -257,6 +257,19 @@
   color: var(--text-h);
 }
 
+.record-count-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.record-count-status,
+.detail-status-warning {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-dim);
+}
+
 .section-header-action {
   margin-left: auto;
 }

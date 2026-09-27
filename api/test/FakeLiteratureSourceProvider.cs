@@ -19,8 +19,25 @@ public class FakeLiteratureSourceProvider : ILiteratureSourceProvider
     // variants like $"{TestUrl}?case=isolation" that still resolve to this same fake provider.
     public bool CanHandle(string url) => url.StartsWith(TestUrl, StringComparison.Ordinal);
 
+    /// <summary>Exact URLs (including query string) to simulate an unreachable source for, so
+    /// tests can prove the "source is down" path without a real outage - mirrors
+    /// FakeEmailSender.FailForAddresses.</summary>
+    public HashSet<string> FailForUrls { get; } = new();
+
     public Task<SourceSearchResult> SearchAsync(string url, DateTime? lastRunDate = null)
     {
+        if (FailForUrls.Contains(url))
+        {
+            return Task.FromResult(new SourceSearchResult
+            {
+                Source = ProviderName,
+                IsSuccessful = false,
+                ErrorMessage = "Simulated source outage",
+                NewRecordCount = 0,
+                NewRecords = new()
+            });
+        }
+
         var allRecords = new List<LiteratureRecord>
         {
             new() { ExternalId = "fake:1", Title = "Fake Record 1", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-2) },

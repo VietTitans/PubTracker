@@ -1,12 +1,13 @@
 using System.Security.Claims;
-using DbUp;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using RecordService.Authentication;
 using RecordService.DataAccess;
 using RecordService.DataAccess.Email;
 using RecordService.DataAccess.ExternalSources;
+using RecordService.DataAccess.Summarization;
 using RecordService.ErrorHandling;
 using RecordService.Workers;
 using RecordService.BusinessLogic.UsersService;
@@ -24,20 +25,8 @@ if (string.IsNullOrEmpty(connectionString))
     throw new Exception("Database connection string is missing");
 }
 
-// Apply pending schema migrations (api/RecordService/Migrations/*.sql, embedded as resources)
-// before anything else touches the database. Runs on every app start, not just first boot, so
-// it's the single place schema changes reach any environment
-var migrator = DeployChanges.To
-    .PostgresqlDatabase(connectionString)
-    .WithScriptsEmbeddedInAssembly(typeof(Program).Assembly)
-    .LogToConsole()
-    .Build();
-
-var migrationResult = migrator.PerformUpgrade();
-if (!migrationResult.Successful)
-{
-    throw new Exception("Database migration failed", migrationResult.Error);
-}
+builder.Services.AddDbContext<RecordService.DataAccess.PubTrackerDbContext>(options =>
+    options.UseNpgsql(connectionString));
 
 builder.Services.AddControllers();
 
@@ -54,8 +43,11 @@ builder.Services.AddCors(options =>
 // External Literature Sources - Register providers for factory pattern
 var ncbiApiKey = builder.Configuration["Ncbi:ApiKey"];
 var ncbiContactEmail = builder.Configuration["Ncbi:ContactEmail"];
+builder.Services.AddPubMedHttpClient(attemptTimeout: TimeSpan.FromSeconds(15));
 builder.Services.AddSingleton<PubMedProvider>(sp =>
-    new PubMedProvider(sp.GetRequiredService<IHttpClientFactory>().CreateClient(), ncbiApiKey, ncbiContactEmail));
+    new PubMedProvider(
+        sp.GetRequiredService<IHttpClientFactory>().CreateClient(PubMedHttpClientExtensions.HttpClientName),
+        ncbiApiKey, ncbiContactEmail));
 builder.Services.AddSingleton<PedroProvider>();
 builder.Services.AddSingleton<LiteratureSourceFactory>(serviceProvider =>
 {
@@ -68,17 +60,10 @@ builder.Services.AddSingleton<LiteratureSourceFactory>(serviceProvider =>
 });
 
 // Data Access Layer - Register interfaces to implementations
-builder.Services.AddScoped(serviceProvider => 
-    new UsersDataAccess(connectionString, serviceProvider.GetRequiredService<IHttpContextAccessor>()));
-builder.Services.AddScoped<IUsersDataAccess>(sp => sp.GetRequiredService<UsersDataAccess>());
-builder.Services.AddScoped<ISourcesDataAccess>(serviceProvider =>
-    new SourcesDataAccess(connectionString));
-
-builder.Services.AddScoped<ISearchQueriesDataAccess>(serviceProvider =>
-    new SearchQueriesDataAccess(connectionString, serviceProvider.GetRequiredService<LiteratureSourceFactory>()));
-
-builder.Services.AddScoped<IRecordsDataAccess>(serviceProvider =>
-    new RecordsDataAccess(connectionString));
+builder.Services.AddScoped<IUsersDataAccess, UsersDataAccess>();
+builder.Services.AddScoped<ISourcesDataAccess, SourcesDataAccess>();
+builder.Services.AddScoped<ISearchQueriesDataAccess, SearchQueriesDataAccess>();
+builder.Services.AddScoped<IRecordsDataAccess, RecordsDataAccess>();
 
 // Email - swappable behind IEmailSender; BrevoEmailSender is the only provider-specific piece
 var emailApiKey = builder.Configuration["Email:ApiKey"];
@@ -95,6 +80,20 @@ builder.Services.AddScoped<IEmailSender>(serviceProvider =>
     new BrevoEmailSender(
         serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(),
         emailApiKey, emailFromAddress, emailFromName));
+
+// AI digest summary - swappable behind ISummaryGenerator via the OpenAI-compatible
+// chat-completions wire format (OpenAI, Azure OpenAI, Groq, local Ollama, OpenRouter all speak
+// it), so swapping vendors is a config change, not a code change. Additive feature - missing
+// config falls back to NullSummaryGenerator instead of failing startup like email does.
+var llmBaseUrl = builder.Configuration["Llm:BaseUrl"];
+var llmApiKey = builder.Configuration["Llm:ApiKey"];
+var llmModel = builder.Configuration["Llm:Model"];
+builder.Services.AddScoped<ISummaryGenerator>(serviceProvider =>
+    string.IsNullOrEmpty(llmApiKey)
+        ? new NullSummaryGenerator()
+        : new ChatCompletionsSummaryGenerator(
+            serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(),
+            llmBaseUrl!, llmApiKey, llmModel!));
 
 // Business Logic Layer - Register interfaces to implementations
 builder.Services.AddScoped<IUsersService, UsersService>();
@@ -254,6 +253,13 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+
+// Apply pending EF Core migrations before anything else touches the database. Runs on every
+// app start, not just first boot, so it's the single place schema changes reach any environment.
+using (var migrationScope = app.Services.CreateScope())
+{
+    migrationScope.ServiceProvider.GetRequiredService<RecordService.DataAccess.PubTrackerDbContext>().Database.Migrate();
+}
 
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())

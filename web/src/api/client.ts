@@ -19,6 +19,7 @@ export interface SearchQuery {
   lastFetchedAt: string | null;
   sourceRecordCount: number | null;
   tags: string[];
+  lastPollFailedAt: string | null;
 }
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {

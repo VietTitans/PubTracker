@@ -1,5 +1,7 @@
 {
   "realm": "science-alerts-saas",
+  "displayName": "PubTracker",
+  "displayNameHtml": "PubTracker",
   "enabled": true,
   "registrationAllowed": true,
   "registrationEmailAsUsername": true,

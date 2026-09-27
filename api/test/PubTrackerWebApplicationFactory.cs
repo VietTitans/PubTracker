@@ -4,13 +4,14 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RecordService.DataAccess.Email;
 using RecordService.DataAccess.ExternalSources;
+using RecordService.DataAccess.Summarization;
 using Testcontainers.PostgreSql;
 
 namespace test;
 
 /// <summary>
 /// Boots the real RecordService app against an ephemeral Testcontainers Postgres instance
-/// (schema applied by the app's own DbUp migrations, same as any other environment - see
+/// (schema applied by the app's own EF Core migrations, same as any other environment - see
 /// Program.cs) and swaps the real PubMed/PEDro providers for FakeLiteratureSourceProvider, so
 /// tests exercise the real HTTP -> Service -> DataAccess -> Postgres path without depending on
 /// live external sources.
@@ -31,6 +32,8 @@ public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, I
         .Build();
 
     public readonly FakeEmailSender EmailSender = new();
+    public readonly FakeSummaryGenerator SummaryGenerator = new();
+    public readonly FakeLiteratureSourceProvider LiteratureSourceProvider = new();
 
     public async Task InitializeAsync()
     {
@@ -49,10 +52,13 @@ public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, I
         {
             services.RemoveAll<LiteratureSourceFactory>();
             services.AddSingleton(new LiteratureSourceFactory(
-                new ILiteratureSourceProvider[] { new FakeLiteratureSourceProvider(), new FakePedroLiteratureSourceProvider() }));
+                new ILiteratureSourceProvider[] { LiteratureSourceProvider, new FakePedroLiteratureSourceProvider(), new FakeUniqueLiteratureSourceProvider() }));
 
             services.RemoveAll<IEmailSender>();
             services.AddSingleton<IEmailSender>(EmailSender);
+
+            services.RemoveAll<ISummaryGenerator>();
+            services.AddSingleton<ISummaryGenerator>(SummaryGenerator);
         });
     }
 

@@ -66,6 +66,9 @@ services:
       Email__FromName: ${EMAIL_FROM_NAME}
       Ncbi__ApiKey: ${NCBI_API_KEY}
       Ncbi__ContactEmail: ${NCBI_CONTACT_EMAIL}
+      Llm__BaseUrl: ${LLM_BASE_URL}
+      Llm__ApiKey: ${LLM_API_KEY}
+      Llm__Model: ${LLM_MODEL}
       # Authority is the browser-facing URL (must match the `iss` claim Keycloak stamps on
       # tokens); MetadataAddress is this container's own path to Keycloak over the Docker
       # network, for fetching signing keys - see the comment above ConfigureKeycloakBearer

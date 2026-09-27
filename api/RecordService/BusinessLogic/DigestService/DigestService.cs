@@ -42,8 +42,10 @@ public class DigestService : IDigestService
                 continue; // not a failure - no one to send to
             }
 
-            var htmlBody = BuildCombinedHtmlBody(userQueries);
             var totalRecords = userQueries.Sum(q => q.Records.Count);
+
+            var htmlBody = BuildCombinedHtmlBody(userQueries);
+
             var subject = userQueries.Count == 1
                 ? $"{totalRecords} new record{(totalRecords == 1 ? "" : "s")} for your search"
                 : $"{totalRecords} new record{(totalRecords == 1 ? "" : "s")} across {userQueries.Count} of your searches";
@@ -74,21 +76,28 @@ public class DigestService : IDigestService
         {
             var section = SourceDetector.DetectSource(q.TargetUrl) switch
             {
-                SourceDetector.SourceType.Pedro => PedroDigestMessageBuilder.BuildHtmlBody(q.TargetUrl, q.Records),
-                SourceDetector.SourceType.PubMed => PubMedDigestMessageBuilder.BuildHtmlBody(q.TargetUrl, q.Records),
-                _ => BuildHtmlBody(q.TargetUrl, q.Records)
+                SourceDetector.SourceType.Pedro => PedroDigestMessageBuilder.BuildHtmlBody(q.TargetUrl, q.Records, q.Summary),
+                SourceDetector.SourceType.PubMed => PubMedDigestMessageBuilder.BuildHtmlBody(q.TargetUrl, q.Records, q.Summary),
+                _ => BuildHtmlBody(q.TargetUrl, q.Records, q.Summary)
             };
             sb.Append("<div style=\"margin:0 0 32px;\">").Append(section).Append("</div>");
         }
         return sb.ToString();
     }
 
-    public static string BuildHtmlBody(string targetUrl, IReadOnlyList<LiteratureRecord> newRecords)
+    public static string BuildHtmlBody(string targetUrl, IReadOnlyList<LiteratureRecord> newRecords, string? summary = null)
     {
         var sb = new StringBuilder();
         sb.Append("<p>New records found for your search: ");
         sb.Append(WebUtility.HtmlEncode(targetUrl));
-        sb.Append("</p><ul>");
+        sb.Append("</p>");
+
+        if (!string.IsNullOrWhiteSpace(summary))
+        {
+            sb.Append(DigestMessageFormatter.BuildSummaryBlock(summary));
+        }
+
+        sb.Append("<ul>");
 
         foreach (var record in newRecords)
         {
@@ -113,6 +122,11 @@ public class DigestService : IDigestService
             {
                 sb.Append("<br/>");
                 sb.Append(WebUtility.HtmlEncode(record.Abstract));
+            }
+
+            if (!string.IsNullOrWhiteSpace(record.AuthorIntention))
+            {
+                sb.Append("<br/>Author Intention: ").Append(WebUtility.HtmlEncode(record.AuthorIntention));
             }
 
             sb.Append("</li>");

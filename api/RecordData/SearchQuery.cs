@@ -42,4 +42,14 @@ public class SearchQuery
     /// first successful poll.
     /// </summary>
     public int? SourceRecordCount { get; set; }
+
+    /// <summary>
+    /// When this search query's source was last found unreachable (timeout, connection
+    /// failure, or its circuit breaker open - see PubMedHttpClientExtensions/PedroProvider's
+    /// CircuitBreakerPipeline), so the frontend can show a quiet "retrying automatically"
+    /// status instead of leaving a failed source looking identical to "nothing new yet". Set
+    /// on a failed poll, cleared on the next successful one - see RecordPollingService and
+    /// RecordPollFailedAsync/RecordPollCompletedAsync.
+    /// </summary>
+    public DateTime? LastPollFailedAt { get; set; }
 }
