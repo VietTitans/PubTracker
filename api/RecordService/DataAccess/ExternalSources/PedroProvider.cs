@@ -19,6 +19,12 @@ public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
     // PEDro caps the `perpage` URL param at 1000 server-side regardless of what's requested.
     private const int ScrapePageSize = 1000;
 
+    // The only host this provider is allowed to drive its headless browser to. Without this,
+    // any URL merely containing "pedro" (a user-controlled subscription target) would be
+    // navigated to directly - an SSRF vector letting a subscriber point the server's browser
+    // at internal services/cloud metadata endpoints.
+    private const string AllowedHost = "search.pedro.org.au";
+
     private static readonly Regex CountRegex = new(@"Found\s+([\d,]+)\s+records", RegexOptions.IgnoreCase | RegexOptions.Compiled);
     private static readonly Regex RecordIdRegex = new(@"record-detail/(\d+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
@@ -26,9 +32,13 @@ public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
     private IPlaywright? _playwright;
     private IBrowser? _browser;
 
-    public bool CanHandle(string url)
+    public bool CanHandle(string url) => IsAllowedPedroUrl(url);
+
+    private static bool IsAllowedPedroUrl(string url)
     {
-        return !string.IsNullOrWhiteSpace(url) && url.ToLowerInvariant().Contains("pedro");
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            && uri.Scheme == Uri.UriSchemeHttps
+            && string.Equals(uri.Host, AllowedHost, StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<SourceSearchResult> SearchAsync(string url, DateTime? lastRunDate = null)
@@ -128,6 +138,13 @@ public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
 
     private async Task<(int RecordCount, List<LiteratureRecord> Records)> ScrapeAsync(string url)
     {
+        // Defense-in-depth: CanHandle already gates every entry point via LiteratureSourceFactory,
+        // but re-check here too since this drives a real headless browser navigation (SSRF risk).
+        if (!IsAllowedPedroUrl(url))
+        {
+            throw new InvalidOperationException($"Refusing to navigate to unrecognized PEDro URL: {url}");
+        }
+
         var browser = await GetBrowserAsync();
 
         await using var context = await browser.NewContextAsync();

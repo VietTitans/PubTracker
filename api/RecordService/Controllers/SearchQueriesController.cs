@@ -22,12 +22,27 @@ public class SearchQueriesController : ControllerBase
         _recordPollingService = recordPollingService;
     }
 
-    //[Authorize(Policy = "AdminOnly")]
+    [Authorize]
     [HttpGet("{searchQueryId}")]
     public async Task<IActionResult> GetSearchQueryById(int searchQueryId)
     {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null)
+        {
+            return Unauthorized(new { message = "User ID not found in claims." });
+        }
+
         try
         {
+            if (!User.IsInRole("Admin"))
+            {
+                var subscriberIds = await _searchQueriesService.GetUserSubscribersForQueryAsync(searchQueryId);
+                if (!subscriberIds.Contains(int.Parse(userId)))
+                {
+                    return Forbid();
+                }
+            }
+
             var searchQuery = await _searchQueriesService.GetSearchQueryByIdAsync(searchQueryId);
             if (searchQuery == null)
             {
@@ -42,7 +57,7 @@ public class SearchQueriesController : ControllerBase
         }
     }
 
-    //[Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "AdminOnly")]
     [HttpGet("{searchQueryId}/users")]
     public async Task<IActionResult> GetSearchQueryUsers(int searchQueryId)
     {
@@ -57,7 +72,7 @@ public class SearchQueriesController : ControllerBase
         }
     }
 
-    //[Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "AdminOnly")]
     [HttpPost("{searchQueryId}/poll")]
     public async Task<IActionResult> PollSearchQuery(int searchQueryId)
     {
@@ -77,7 +92,7 @@ public class SearchQueriesController : ControllerBase
         }
     }
 
-    //[Authorize(Policy = "UserOrAdmin")]
+    [Authorize]
     [HttpPost]
     public async Task<IActionResult> CreateSearchQuery([FromBody] CreateSearchQueryDto dto)
     {
@@ -111,7 +126,7 @@ public class SearchQueriesController : ControllerBase
         }
     }
 
-    //[Authorize(Policy = "UserOrAdmin")]
+    [Authorize]
     [HttpDelete("{searchQueryId}")]
     public async Task<IActionResult> UnsubscribeFromSearchQuery(int searchQueryId)
     {
