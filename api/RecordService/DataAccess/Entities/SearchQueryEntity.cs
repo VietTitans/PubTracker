@@ -8,4 +8,5 @@ public class SearchQueryEntity
     public DateTime? LastDigestSentAt { get; set; }
     public DateTime? LastPolledAt { get; set; }
     public int? SourceRecordCount { get; set; }
+    public DateTime? LastPollFailedAt { get; set; }
 }

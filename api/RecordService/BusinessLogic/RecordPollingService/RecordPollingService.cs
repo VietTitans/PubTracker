@@ -130,6 +130,7 @@ public class RecordPollingService : IRecordPollingService
                 _logger.LogWarning(
                     "Search query {SearchQueryId} failed: {ErrorMessage}",
                     searchQuery.Id, searchResult.ErrorMessage);
+                await _searchQueriesDataAccess.RecordPollFailedAsync(searchQuery.Id, DateTime.UtcNow);
                 return new FetchOutcome
                 {
                     SearchQuery = searchQuery,
@@ -189,6 +190,11 @@ public class RecordPollingService : IRecordPollingService
         }
         catch (Exception ex)
         {
+            // Deliberately does NOT call RecordPollFailedAsync - everything in this try block
+            // past ExecuteSourceSearchAsync is our own DB access, so an exception here (e.g. a
+            // transient Postgres error) is not "the source is unreachable", and that write would
+            // likely fail the same way anyway, which would abort this foreach and skip every
+            // remaining query in the cycle.
             _logger.LogError(ex, "Unexpected error polling search query {SearchQueryId}", searchQuery.Id);
             return new FetchOutcome { SearchQuery = searchQuery, FetchSucceeded = false, ErrorMessage = ex.Message };
         }

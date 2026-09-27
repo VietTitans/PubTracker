@@ -159,15 +159,27 @@ public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
     {
         // Defense-in-depth: CanHandle already gates every entry point via LiteratureSourceFactory,
         // but re-check here too since this drives a real headless browser navigation (SSRF risk).
+        // Kept outside CircuitBreakerPipeline below - a rejected URL is a permanent, not a
+        // transient, failure and must not count against PEDro's own outage tracking.
         if (!IsAllowedPedroUrl(url))
         {
             throw new InvalidOperationException($"Refusing to navigate to unrecognized PEDro URL: {url}");
         }
 
+        return await CircuitBreakerPipeline.ExecuteAsync(async _ => await ScrapeCoreAsync(url));
+    }
+
+    private async Task<(int RecordCount, List<LiteratureRecord> Records)> ScrapeCoreAsync(string url)
+    {
         var browser = await GetBrowserAsync();
 
         await using var context = await browser.NewContextAsync();
         var page = await context.NewPageAsync();
+        // Applies to every wait/action below (GotoAsync, WaitForSelectorAsync, and the
+        // InnerTextAsync/GetAttributeAsync/CountAsync calls further down) - a single default
+        // rather than a per-call Timeout option on each, since Playwright's own default (30s)
+        // is unbounded per call and this method makes several such calls per scrape.
+        page.SetDefaultTimeout(PageTimeoutMs);
 
         await page.GotoAsync(url, new PageGotoOptions { WaitUntil = WaitUntilState.NetworkIdle });
         await page.WaitForSelectorAsync("#search-content");

@@ -31,7 +31,7 @@ public static class PubMedHttpClientExtensions
         return services.AddHttpClient(HttpClientName)
             .AddResilienceHandler("pubmed", builder =>
             {
-                builder.AddCircuitBreaker(new CircuitBreakerStrategyOptions<HttpResponseMessage>
+                builder.AddCircuitBreaker(new HttpCircuitBreakerStrategyOptions
                 {
                     FailureRatio = 1.0,
                     MinimumThroughput = 3,

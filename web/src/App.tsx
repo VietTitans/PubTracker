@@ -154,6 +154,9 @@ function DetailDialog({
   const lastFetch = detail?.lastFetchedAt
     ? new Date(detail.lastFetchedAt).toLocaleString(undefined, { hour12: false })
     : "Never";
+  const lastPollFailedAt = detail?.lastPollFailedAt
+    ? new Date(detail.lastPollFailedAt).toLocaleString(undefined, { hour12: false })
+    : null;
   const keywords = detail?.tags ?? [];
 
   return (
@@ -203,6 +206,14 @@ function DetailDialog({
             <dt>Last fetch</dt>
             <dd>{isLoading ? <Spinner /> : lastFetch}</dd>
           </div>
+          {!isLoading && lastPollFailedAt && (
+            <div>
+              <dt>Status</dt>
+              <dd className="detail-status-warning">
+                Last check failed ({lastPollFailedAt}) - will retry on the next scheduled check
+              </dd>
+            </div>
+          )}
         </dl>
 
         <a href={target.targetUrl} target="_blank" rel="noreferrer" className="detail-url">
@@ -530,8 +541,12 @@ function App() {
             // Matches the condition the list actually renders a spinner for (App.tsx's
             // sourceRecordCount === null check) - not lastFetchedAt, which PEDro's baseline
             // poll (no individual records linked yet) can leave null indefinitely even once
-            // sourceRecordCount is populated.
-            const stillFetching = queries.some((q) => q.id === searchQueryId && q.sourceRecordCount === null);
+            // sourceRecordCount is populated. Also stops once a poll has actually failed
+            // (lastPollFailedAt set) - otherwise a down source (e.g. PubMed) leaves
+            // sourceRecordCount null forever and this polls every 4s indefinitely.
+            const stillFetching = queries.some(
+              (q) => q.id === searchQueryId && q.sourceRecordCount === null && !q.lastPollFailedAt,
+            );
             if (stillFetching) {
               poll();
             }
@@ -753,11 +768,21 @@ function App() {
                   )}
                   <div className="record-count" title="Records registered">
                     <span className="record-count-label">Records</span>
-                    {sq.sourceRecordCount === null ? (
-                      <Spinner />
-                    ) : (
-                      <span className="record-count-value">{sq.sourceRecordCount}</span>
-                    )}
+                    <span className="record-count-row">
+                      {sq.sourceRecordCount === null && !sq.lastPollFailedAt ? (
+                        <Spinner />
+                      ) : (
+                        <span className="record-count-value">{sq.sourceRecordCount ?? "—"}</span>
+                      )}
+                      {sq.lastPollFailedAt && (
+                        <span
+                          className="record-count-status"
+                          title={`Couldn't reach ${source} on the last check - will retry on the next scheduled check`}
+                        >
+                          ⚠
+                        </span>
+                      )}
+                    </span>
                   </div>
                   <a
                     href={sq.targetUrl}

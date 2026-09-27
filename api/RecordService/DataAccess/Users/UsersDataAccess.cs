@@ -43,7 +43,8 @@ public class UsersDataAccess : IUsersDataAccess
                 LastFetchedAt = _dbContext.SearchQueryRecords
                     .Where(sqr => sqr.SearchQueryId == sq.Id)
                     .Max(sqr => (DateTime?)sqr.FirstSeenAt),
-                SourceRecordCount = sq.SourceRecordCount
+                SourceRecordCount = sq.SourceRecordCount,
+                LastPollFailedAt = sq.LastPollFailedAt
             })
             .ToListAsync();
     }

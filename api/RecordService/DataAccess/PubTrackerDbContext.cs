@@ -51,6 +51,7 @@ public class PubTrackerDbContext : DbContext
             entity.Property(e => e.LastDigestSentAt).HasColumnName("last_digest_sent_at");
             entity.Property(e => e.LastPolledAt).HasColumnName("last_polled_at");
             entity.Property(e => e.SourceRecordCount).HasColumnName("source_record_count");
+            entity.Property(e => e.LastPollFailedAt).HasColumnName("last_poll_failed_at");
             entity.HasIndex(e => new { e.SourceId, e.TargetUrl }).IsUnique();
             entity.HasOne<SourceEntity>().WithMany().HasForeignKey(e => e.SourceId).OnDelete(DeleteBehavior.NoAction);
         });

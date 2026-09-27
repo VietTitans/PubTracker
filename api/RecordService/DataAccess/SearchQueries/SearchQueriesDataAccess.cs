@@ -32,7 +32,8 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
                     .Where(sqr => sqr.SearchQueryId == sq.Id)
                     .Max(sqr => (DateTime?)sqr.FirstSeenAt),
                 SourceRecordCount = sq.SourceRecordCount,
-                LastPolledAt = sq.LastPolledAt
+                LastPolledAt = sq.LastPolledAt,
+                LastPollFailedAt = sq.LastPollFailedAt
             })
             .FirstOrDefaultAsync();
     }
@@ -251,6 +252,14 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
             .Where(sq => sq.Id == searchQueryId)
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(sq => sq.LastPolledAt, polledAt)
-                .SetProperty(sq => sq.SourceRecordCount, sq => sourceRecordCount ?? sq.SourceRecordCount));
+                .SetProperty(sq => sq.SourceRecordCount, sq => sourceRecordCount ?? sq.SourceRecordCount)
+                .SetProperty(sq => sq.LastPollFailedAt, (DateTime?)null));
+    }
+
+    public async Task RecordPollFailedAsync(int searchQueryId, DateTime failedAt)
+    {
+        await _dbContext.SearchQueries
+            .Where(sq => sq.Id == searchQueryId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(sq => sq.LastPollFailedAt, failedAt));
     }
 }
