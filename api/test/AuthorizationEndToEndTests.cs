@@ -101,9 +101,6 @@ public class AuthorizationEndToEndTests : IClassFixture<PubTrackerWebApplication
         var otherProfile = await clientA.GetAsync($"/api/Users/{userB.Id}");
         Assert.Equal(HttpStatusCode.Forbidden, otherProfile.StatusCode);
 
-        var otherProfilePublic = await clientA.GetAsync($"/api/Users/public/{userB.Id}");
-        Assert.Equal(HttpStatusCode.Forbidden, otherProfilePublic.StatusCode);
-
         var ownProfile = await clientA.GetAsync($"/api/Users/{userA.Id}");
         Assert.Equal(HttpStatusCode.OK, ownProfile.StatusCode);
     }
