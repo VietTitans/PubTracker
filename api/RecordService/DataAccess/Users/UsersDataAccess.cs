@@ -6,6 +6,10 @@ namespace RecordService.DataAccess;
 
 public class UsersDataAccess : IUsersDataAccess
 {
+    // How long a soft-deleted account can be revived by signing back in before the purge
+    // worker (see UserPurgeBackgroundService) hard-deletes it for good.
+    private const int DeletionGracePeriodDays = 14;
+
     private readonly PubTrackerDbContext _dbContext;
     private readonly IHttpContextAccessor _httpContextAccessor;
 
@@ -130,5 +134,37 @@ public class UsersDataAccess : IUsersDataAccess
             .ExecuteUpdateAsync(setters => setters
                 .SetProperty(u => u.IsMarkedForDeletion, true)
                 .SetProperty(u => u.DeletionRequestedAt, deletionTime));
+    }
+
+    public async Task<int> PurgeExpiredDeletedUsersAsync()
+    {
+        var cutoff = DateTime.UtcNow.AddDays(-DeletionGracePeriodDays);
+
+        await using var transaction = await _dbContext.Database.BeginTransactionAsync();
+
+        await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+             DELETE FROM user_search_query_digests
+             WHERE user_id IN (
+                 SELECT id FROM users WHERE is_marked_for_deletion = true AND deletion_requested_at < {cutoff}
+             )
+             """);
+
+        await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+             DELETE FROM user_search_queries
+             WHERE user_id IN (
+                 SELECT id FROM users WHERE is_marked_for_deletion = true AND deletion_requested_at < {cutoff}
+             )
+             """);
+
+        var purgedCount = await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+             DELETE FROM users
+             WHERE is_marked_for_deletion = true AND deletion_requested_at < {cutoff}
+             """);
+
+        await transaction.CommitAsync();
+        return purgedCount;
     }
 }
