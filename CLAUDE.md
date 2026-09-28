@@ -37,18 +37,29 @@ These are working if: fewer unnecessary changes in diffs, fewer rewrites due to 
 
 ## Project overview
 
-PubTracker is a literature-monitoring SaaS: users paste a search URL from a scientific database (PubMed, PEDro, later IEEE/Scopus), the system polls it on a schedule, deduplicates new records, and emails a digest of what's new. Full target architecture (Keycloak auth, Quartz/Hangfire scheduler, Playwright scraping, email digest pipeline) is documented in `ai/system-architecture-net10.md` — read it when working on anything beyond basic CRUD, since large parts of that design (background worker, scheduling, email dispatch, auth) are not implemented yet.
+PubTracker is a literature-monitoring SaaS: users paste a search URL from a scientific database (PubMed, PEDro, later IEEE/Scopus), the system polls it on a schedule, deduplicates new records, and emails a digest of what's new, optionally with an AI-generated summary. Full target architecture is documented in `ai/system-architecture-net10.md` — it's aspirational in places (e.g. Quartz/Hangfire, Playwright scraping), so check the actual code before trusting a design detail from it; the core loop (auth, scheduled polling, email digest, AI summaries) described below is implemented and running.
 
-The backend lives in `api/` — **.NET 10 / ASP.NET Core** Web API. (An earlier Python/FastAPI prototype previously lived at `app/`; it has been removed.)
+The backend lives in `api/` — **.NET 10 / ASP.NET Core** Web API. The frontend lives in `web/` — **React 19 / TypeScript / Vite**. (An earlier Python/FastAPI prototype previously lived at `app/`; it has been removed.)
 
 ## Commands
+
+### Web app (`web/`)
+```bash
+cd web
+npm install       # install deps
+npm run dev       # Vite dev server (localhost:5173 by default)
+npm run build     # production build
+```
+Auth in the browser is handled by `oidc-client-ts` against Keycloak (`src/auth/`); the API's CORS policy (`Cors:WebAppOrigin`, see `Program.cs`) must match whatever origin the dev server runs on.
 
 ### .NET API (`api/`)
 ```bash
 dotnet restore api/RecordService/RecordService.csproj   # restore deps
 dotnet build api/RecordService/RecordService.csproj      # build
-dotnet run --project api/RecordService                   # run locally (needs DefaultConnection configured, see below)
+dotnet run --project api/RecordService                   # run locally (needs config below)
 ```
+`Program.cs` throws at startup if required config is missing. Required: `ConnectionStrings__DefaultConnection` (Postgres), `Email:ApiKey`/`Email:FromAddress`/`Email:FromName` (Brevo — digest emails). Optional, with fallbacks: `Keycloak:Authority`/`Keycloak:MetadataAddress`/`Keycloak:Audience` (defaults point at a local Keycloak on `:8081`; in `Development` a `DebugAuthenticationHandler` also lets unauthenticated requests through as a fake user when no `Authorization` header is sent), `Llm:BaseUrl`/`Llm:ApiKey`/`Llm:Model` (AI digest summaries — any OpenAI-compatible chat-completions endpoint; missing key falls back to `NullSummaryGenerator`, i.e. no summaries, not a startup failure), `Cors:WebAppOrigin` (default `http://localhost:5173`), `Scheduler:PollIntervalHours` (default 168), `Scheduler:UserPurgeIntervalHours` (default 24), `Ncbi:ApiKey`/`Ncbi:ContactEmail` (PubMed rate limits).
+
 Tests live in `api/test/Test.csproj` (xunit; `Testcontainers.PostgreSql`-based end-to-end tests):
 ```bash
 dotnet test api/test/Test.csproj
@@ -64,9 +75,9 @@ dotnet ef database update         # apply pending migrations to ConnectionString
 ### Full stack via Docker
 ```bash
 cd docker
-docker compose up --build     # builds api/ (via api/Dockerfile) + postgres; API applies pending migrations from api/RecordService/Migrations/ on startup
+docker compose up --build     # proxy (Caddy) + db (postgres) + keycloak + api + web
 ```
-Requires `docker/.env` (copy from `docker/.env.example.example`) with `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`, `ASPNETCORE_ENVIRONMENT`. The API reads its connection string from `ConnectionStrings__DefaultConnection`, which `docker-compose.yml` assembles from those same Postgres env vars. `Program.cs` throws at startup if this connection string is missing.
+Five services, all behind the `proxy` (Caddy, port 80): `web` (React build), `api` (.NET, builds from `api/Dockerfile`, applies pending EF migrations on startup), `db` (Postgres), and `keycloak` (dev-mode, realm auto-imported from `docker/keycloak/realm-export.json`, served under `/auth` so Caddy can forward `/auth/*` to it unmodified). Requires `docker/.env` (copy from `docker/.env.example.example`) — Postgres creds plus `EMAIL_*`, `NCBI_*`, `LLM_*`, `SCHEDULER_POLL_INTERVAL_HOURS`, and the `WEB_*`/`KEYCLOAK_*` origin vars `docker-compose.yml` uses to wire CORS, Keycloak's browser-facing vs. in-network URLs, and the web build's `VITE_*` args — see `docker-compose.yml` for the full mapping.
 
 ## Architecture (`api/`)
 
@@ -85,8 +96,11 @@ Two-project .NET solution:
   - `ILiteratureSourceProvider` — `CanHandle(url)`, `SearchAsync(url, lastRunDate)`, `RefreshAsync(url)`.
   - `LiteratureSourceFactory` — picks the right provider for a URL from the registered set.
   - `SourceDetector` — a separate, simpler URL→`SourceType` sniffer used for factory error messages (currently substring-matches `"pubmed"`/`"pedro"` in the URL; note this logic is duplicated, not shared, with each provider's own `CanHandle`).
-  - `PubMedProvider`, `PedroProvider` — one per source. New sources are added by implementing this interface and registering the provider as a singleton in `Program.cs`'s `LiteratureSourceFactory` setup. Current provider implementations are scaffolded/placeholder (the actual NCBI/PEDro fetch-and-parse logic is not yet implemented) — check current state in the file before assuming a source is functional. A new provider needs its own per-call timeout and circuit breaker (see `PubMedHttpClientExtensions.AddPubMedHttpClient` for an HTTP-based source, `PedroProvider.CircuitBreakerPipeline` for a non-HTTP one) — without one, a hung/dead source can hold `RecordPollingService`'s global poll-cycle lock for a long time on every poll cycle.
-- Auth is scaffolded but mostly inactive: `Program.cs` defines `AdminOnly` / `UserOrAdmin` authorization policies (role-based), but most `[Authorize]` attributes on controller actions are currently commented out. The target design uses Keycloak/OIDC JWTs (see `ai/system-architecture-net10.md` §4) — this is not yet wired up.
+  - `PubMedProvider`, `PedroProvider` — one per source, both implemented (real NCBI/PEDro fetch-and-parse, not placeholders). New sources are added by implementing this interface and registering the provider as a singleton in `Program.cs`'s `LiteratureSourceFactory` setup. A new provider needs its own per-call timeout and circuit breaker (see `PubMedHttpClientExtensions.AddPubMedHttpClient` for an HTTP-based source, `PedroProvider.CircuitBreakerPipeline` for a non-HTTP one) — without one, a hung/dead source can hold `RecordPollingService`'s global poll-cycle lock for a long time on every poll cycle.
+- **Auth** is wired up and enforced (most controller actions carry `[Authorize]`, some `[Authorize(Policy = "AdminOnly")]`): real Keycloak/OIDC JWTs are validated by `ConfigureKeycloakBearer` in `Program.cs`, resolving the JWT's `sub` (a Keycloak UUID) to an internal `users` row via `UsersService.GetOrProvisionByKeycloakSubAsync` (auto-provisions on first login). In `Development` only, a `Smart` policy scheme (`Authentication/DebugAuthenticationHandler.cs`) falls back to a fake debug identity for requests with no `Authorization` header, so Swagger/Postman testing doesn't need a live Keycloak login; a request that does carry a bearer token is always routed to real JWT validation, even in `Development`.
+- **Background workers** (`Workers/`, both `IHostedService`s registered in `Program.cs`): `RecordPollingBackgroundService` runs `RecordPollingService` (`BusinessLogic/RecordPollingService/`) on an interval (`Scheduler:PollIntervalHours`, default weekly) — polls every search query via the source providers, dedupes new records, and triggers digest emails through `IDigestService`. `UserPurgeBackgroundService` runs on `Scheduler:UserPurgeIntervalHours` (default daily) and hard-deletes users past their soft-delete grace period (`UsersDataAccess.DeletionGracePeriodDays`).
+- **Digest & email** (`BusinessLogic/DigestService/`, `DataAccess/Email/`): `DigestService` builds per-user digest content from new records — `RecordTopicClassifier`/`CategoryKeywordMatcher`/`DigestCategories` group records by topic, `PubMedDigestMessageBuilder`/`PedroDigestMessageBuilder` format the per-source sections, `DigestMessageFormatter` assembles the final message. `IEmailSender` is implemented by `BrevoEmailSender` (`DataAccess/Email/`, uses the Brevo transactional email API) — swap providers by implementing `IEmailSender`, not by touching `DigestService`.
+- **AI summaries** (`DataAccess/Summarization/`): `ISummaryGenerator` is implemented by `ChatCompletionsSummaryGenerator`, which speaks the OpenAI-compatible chat-completions wire format (works against OpenAI, Azure OpenAI, Groq, local Ollama, OpenRouter, etc. — vendor is a config change via `Llm:BaseUrl`/`Llm:Model`, not a code change). This is additive: if `Llm:ApiKey` isn't configured, `Program.cs` wires up `NullSummaryGenerator` instead (digests still send, just without AI summaries) rather than failing startup.
 
 ## Database
 
