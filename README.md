@@ -23,8 +23,8 @@ entrypoint in front of the web app, API, and Keycloak, routing by path:
 
 ## Architecture
 
-- `api/` — .NET 10 / ASP.NET Core Web API (`RecordService`), backed by Postgres via raw
-  `Npgsql` (no ORM). See `CLAUDE.md` for the layered Controller → BusinessLogic → DataAccess
+- `api/` — .NET 10 / ASP.NET Core Web API (`RecordService`), backed by Postgres via EF Core
+  (`Npgsql.EntityFrameworkCore.PostgreSQL`). See `CLAUDE.md` for the layered Controller → BusinessLogic → DataAccess
   convention and how to add a new resource.
 - `web/` — React/Vite SPA, served by its own Caddy instance in production images.
 - `api/RecordService/Migrations/` — EF Core migrations, source of truth for the Postgres
