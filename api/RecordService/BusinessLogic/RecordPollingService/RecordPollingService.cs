@@ -17,14 +17,15 @@ public class RecordPollingService : IRecordPollingService
     // read the same stale digest watermark and both send a duplicate digest. Static (not an
     // instance field) because this service is registered scoped, but the lock must be shared
     // across every scope/request in the process.
-    // ponytail: in-process lock only, not a distributed one - fine while docker-compose runs a
-    // single `api` container. Move to a Postgres advisory lock if the API is ever scaled out.
+    // The Postgres advisory lock (_advisoryLock) extends that across processes - a second `api`
+    // instance or an overlapping rolling deploy. The semaphore stays as the in-process queue.
     private static readonly SemaphoreSlim PollCycleLock = new(1, 1);
 
     private readonly ISearchQueriesDataAccess _searchQueriesDataAccess;
     private readonly IRecordsDataAccess _recordsDataAccess;
     private readonly IDigestService _digestService;
     private readonly ISummaryGenerator _summaryGenerator;
+    private readonly PollCycleAdvisoryLock _advisoryLock;
     private readonly ILogger<RecordPollingService> _logger;
 
     public RecordPollingService(
@@ -32,12 +33,14 @@ public class RecordPollingService : IRecordPollingService
         IRecordsDataAccess recordsDataAccess,
         IDigestService digestService,
         ISummaryGenerator summaryGenerator,
+        PollCycleAdvisoryLock advisoryLock,
         ILogger<RecordPollingService> logger)
     {
         _searchQueriesDataAccess = searchQueriesDataAccess;
         _recordsDataAccess = recordsDataAccess;
         _digestService = digestService;
         _summaryGenerator = summaryGenerator;
+        _advisoryLock = advisoryLock;
         _logger = logger;
     }
 
@@ -46,6 +49,15 @@ public class RecordPollingService : IRecordPollingService
         await PollCycleLock.WaitAsync(cancellationToken);
         try
         {
+            // Scheduled cycle: if another instance is already polling, skip the current cycle
+            var held = await _advisoryLock.TryAcquireAsync(cancellationToken);
+            if (held == null)
+            {
+                _logger.LogInformation("Poll cycle skipped: another instance holds the poll lock");
+                return new List<PollResult>();
+            }
+            await using var _ = held;
+
             var searchQueries = await _searchQueriesDataAccess.GetAllSearchQueriesAsync();
             var outcomes = new List<FetchOutcome>();
 
@@ -68,6 +80,9 @@ public class RecordPollingService : IRecordPollingService
         await PollCycleLock.WaitAsync(cancellationToken);
         try
         {
+            // Manual re-check: wait for any in-flight cycle (this or another instance) instead of failing.
+            await using var _ = await _advisoryLock.AcquireAsync(cancellationToken);
+
             var outcomes = new List<FetchOutcome>();
 
             foreach (var id in searchQueryIds)
@@ -268,7 +283,7 @@ public class RecordPollingService : IRecordPollingService
     {
         // 1. Per-(user, query) pending content from this cycle's fresh fetches, filtered
         //    against each subscriber's own watermark.
-        var pendingByUserAndQuery = new Dictionary<(int UserId, int SearchQueryId), (PendingUserDigest Digest, DateTime WatermarkToStamp)>();
+        var pendingByUserAndQuery = new Dictionary<(int UserId, int SearchQueryId), (PendingUserDigest Digest, DateTime WatermarkToStamp, DateTime? ExpectedOld)>();
 
         foreach (var outcome in outcomes.Where(o => o.FetchSucceeded))
         {
@@ -290,7 +305,8 @@ public class RecordPollingService : IRecordPollingService
                         Records = recordsForUser,
                         Summary = outcome.Summary
                     },
-                    outcome.FetchReadAt);
+                    outcome.FetchReadAt,
+                    lastSentAt);
             }
         }
 
@@ -309,25 +325,43 @@ public class RecordPollingService : IRecordPollingService
                 var otherPending = await _searchQueriesDataAccess.GetOtherPendingDigestsForUserAsync(userId, explicitSearchQueryIds);
                 foreach (var pending in otherPending)
                 {
-                    pendingByUserAndQuery[(userId, pending.SearchQueryId)] = (pending, sweepReadAt);
+                    pendingByUserAndQuery[(userId, pending.SearchQueryId)] = (pending, sweepReadAt, pending.LastDigestSentAt);
                 }
             }
         }
 
-        var successByKey = pendingByUserAndQuery.Count > 0
-            ? await TrySendCombinedDigestsAsync(pendingByUserAndQuery.Values.Select(v => v.Digest).ToList())
-            : new Dictionary<(int, int), bool>();
-
-        foreach (var ((userId, searchQueryId), (_, watermarkToStamp)) in pendingByUserAndQuery)
+        // 3. Claim each watermark atomically BEFORE sending, so only the poll that wins the
+        //    claim sends. A lost claim (another poll already advanced it) is dropped - its
+        //    digest is that other poll's job.
+        //    ponytail: at-most-once on crash - if the process dies between claim and send, that
+        //    digest is lost (watermark already advanced). Add a claim lease column if that matters.
+        var claimed = new Dictionary<(int UserId, int SearchQueryId), (PendingUserDigest Digest, DateTime WatermarkToStamp, DateTime? ExpectedOld)>();
+        foreach (var (key, value) in pendingByUserAndQuery)
         {
-            if (successByKey[(userId, searchQueryId)])
+            if (await _searchQueriesDataAccess.TryClaimUserDigestWatermarkAsync(
+                    key.UserId, key.SearchQueryId, value.ExpectedOld, value.WatermarkToStamp))
             {
-                await _searchQueriesDataAccess.UpdateUserDigestWatermarkAsync(userId, searchQueryId, watermarkToStamp);
+                claimed[key] = value;
             }
             else
             {
+                _logger.LogInformation(
+                    "User {UserId}, search query {SearchQueryId}: watermark already claimed by another poll, skipping send",
+                    key.UserId, key.SearchQueryId);
+            }
+        }
+
+        var successByKey = claimed.Count > 0
+            ? await TrySendCombinedDigestsAsync(claimed.Values.Select(v => v.Digest).ToList())
+            : new Dictionary<(int, int), bool>();
+
+        foreach (var ((userId, searchQueryId), (_, watermarkToStamp, expectedOld)) in claimed)
+        {
+            if (!successByKey[(userId, searchQueryId)])
+            {
+                await _searchQueriesDataAccess.ReleaseUserDigestClaimAsync(userId, searchQueryId, expectedOld, watermarkToStamp);
                 _logger.LogWarning(
-                    "User {UserId}, search query {SearchQueryId}: digest send failed, watermark not advanced",
+                    "User {UserId}, search query {SearchQueryId}: digest send failed, watermark rolled back",
                     userId, searchQueryId);
             }
         }

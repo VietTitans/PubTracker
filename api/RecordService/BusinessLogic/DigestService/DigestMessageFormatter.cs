@@ -8,14 +8,17 @@ namespace RecordService.BusinessLogic.DigestService;
 /// Shared HTML formatting for the per-category digest message body, used by every
 /// source's message builder (e.g. PedroDigestMessageBuilder, PubMedDigestMessageBuilder)
 /// so the layout stays identical across sources - only the category resolution differs.
-/// Records are grouped by RecordTopicClassifier instead of listed flat; every record is
-/// still listed in full under its cluster, nothing is capped or linked out.
+/// Records are grouped by RecordTopicClassifier instead of listed flat. At most
+/// MaxRecordsPerQuery are listed (in cluster order); the rest collapse into a
+/// "+ N more, see the app" line so a huge first-poll batch can't blow up the email.
 /// Styling is inline on every element rather than a &lt;style&gt; block or classes, since
 /// most email clients (Gmail included) strip both - inline is the only styling that
 /// reliably survives into an inbox.
 /// </summary>
 internal static class DigestMessageFormatter
 {
+    internal const int MaxRecordsPerQuery = 50;
+
     private const string FontFamily = "Arial, Helvetica, sans-serif";
     private const string InkColor = "#1b221f";
     private const string BorderColor = "#dfe3de";
@@ -46,21 +49,24 @@ internal static class DigestMessageFormatter
         }
 
         var byCluster = newRecords.ToLookup(RecordTopicClassifier.Classify);
+        var remaining = MaxRecordsPerQuery;
 
         foreach (var clusterName in RecordTopicClassifier.DisplayOrder)
         {
             var records = byCluster[clusterName].ToList();
-            if (records.Count > 0)
+            if (records.Count > 0 && remaining > 0)
             {
-                AppendCluster(sb, clusterName, records, isOther: false);
+                remaining -= AppendCluster(sb, clusterName, records, remaining, isOther: false);
             }
         }
 
         var uncategorized = byCluster[null].ToList();
-        if (uncategorized.Count > 0)
+        if (uncategorized.Count > 0 && remaining > 0)
         {
-            AppendCluster(sb, "Other / uncategorized", uncategorized, isOther: true);
+            remaining -= AppendCluster(sb, "Other / uncategorized", uncategorized, remaining, isOther: true);
         }
+
+        AppendOverflowNotice(sb, newRecords.Count - (MaxRecordsPerQuery - remaining));
 
         sb.Append("</div>");
         return sb.ToString();
@@ -72,8 +78,22 @@ internal static class DigestMessageFormatter
         + "<p style=\"margin:0;\">" + WebUtility.HtmlEncode(summary) + "</p>"
         + "</div>";
 
-    private static void AppendCluster(StringBuilder sb, string clusterName, List<LiteratureRecord> records, bool isOther)
+    internal static void AppendOverflowNotice(StringBuilder sb, int hiddenCount)
     {
+        if (hiddenCount <= 0)
+        {
+            return;
+        }
+
+        sb.Append("<p style=\"margin:0 0 16px;font-size:14px;color:#5b645d;\">+ ")
+          .Append(hiddenCount).Append(" more, see the app</p>");
+    }
+
+    // Lists at most `budget` of the cluster's records; the heading still shows the full count.
+    // Returns how many were listed.
+    private static int AppendCluster(StringBuilder sb, string clusterName, List<LiteratureRecord> allRecords, int budget, bool isOther)
+    {
+        var records = allRecords.Take(budget).ToList();
         var borderColor = isOther ? OtherBorderColor : BorderColor;
         var background = isOther ? OtherBackgroundColor : "#ffffff";
 
@@ -81,7 +101,7 @@ internal static class DigestMessageFormatter
           .Append(";border-radius:8px;background:").Append(background).Append(";\">");
 
         sb.Append("<h4 style=\"margin:0 0 10px;font-size:15px;font-weight:600;color:").Append(InkColor).Append(";\">")
-          .Append(WebUtility.HtmlEncode(clusterName)).Append(" (").Append(records.Count).Append(")</h4>");
+          .Append(WebUtility.HtmlEncode(clusterName)).Append(" (").Append(allRecords.Count).Append(")</h4>");
 
         sb.Append("<ul style=\"margin:0;padding:0;list-style:none;\">");
         for (var i = 0; i < records.Count; i++)
@@ -106,6 +126,7 @@ internal static class DigestMessageFormatter
         sb.Append("</ul>");
 
         sb.Append("</div>");
+        return records.Count;
     }
 
     private static void AppendRecordLink(StringBuilder sb, LiteratureRecord record)

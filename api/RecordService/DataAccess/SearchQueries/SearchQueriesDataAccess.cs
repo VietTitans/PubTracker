@@ -52,6 +52,15 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
             .ToListAsync();
     }
 
+    public async Task<DateTime?> GetOldestLastPolledAtAsync()
+    {
+        if (await _dbContext.SearchQueries.AnyAsync(sq => sq.LastPolledAt == null))
+        {
+            return null;
+        }
+        return await _dbContext.SearchQueries.MinAsync(sq => sq.LastPolledAt);
+    }
+
     public async Task<List<int>> GetUserSubscribersForQueryAsync(int searchQueryId)
     {
         return await _dbContext.UserSearchQueries
@@ -198,6 +207,28 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
              """);
     }
 
+    public async Task<bool> TryClaimUserDigestWatermarkAsync(int userId, int searchQueryId, DateTime? expected, DateTime claimed)
+    {
+        // Compare-and-swap: only succeeds if the watermark still equals what the caller read.
+        // With no row yet (expected null) the INSERT path claims it; ON CONFLICT ... WHERE turns
+        // a lost race into 0 affected rows.
+        var rows = await _dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"""
+             INSERT INTO user_search_query_digests AS d (user_id, search_query_id, last_digest_sent_at)
+             VALUES ({userId}, {searchQueryId}, {claimed})
+             ON CONFLICT (user_id, search_query_id) DO UPDATE SET last_digest_sent_at = EXCLUDED.last_digest_sent_at
+             WHERE d.last_digest_sent_at IS NOT DISTINCT FROM CAST({expected} AS timestamptz)
+             """);
+        return rows > 0;
+    }
+
+    public async Task ReleaseUserDigestClaimAsync(int userId, int searchQueryId, DateTime? expected, DateTime claimed)
+    {
+        await _dbContext.UserSearchQueryDigests
+            .Where(d => d.UserId == userId && d.SearchQueryId == searchQueryId && d.LastDigestSentAt == claimed)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(d => d.LastDigestSentAt, expected));
+    }
+
     public async Task<List<PendingUserDigest>> GetOtherPendingDigestsForUserAsync(int userId, IReadOnlyList<int> excludeSearchQueryIds)
     {
         var excludeArray = excludeSearchQueryIds.ToArray();
@@ -223,7 +254,8 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
                 r.Title,
                 r.Description,
                 r.SourceUrl,
-                sqr.FirstSeenAt
+                sqr.FirstSeenAt,
+                d.LastDigestSentAt
             }
         ).ToListAsync();
 
@@ -233,6 +265,7 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
                 UserId = userId,
                 SearchQueryId = g.Key.SearchQueryId,
                 TargetUrl = g.Key.TargetUrl,
+                LastDigestSentAt = g.First().LastDigestSentAt,
                 Records = g.Select(r => new LiteratureRecord
                 {
                     ExternalId = r.ExternalId,

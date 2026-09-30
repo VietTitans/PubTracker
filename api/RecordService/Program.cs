@@ -65,7 +65,7 @@ builder.Services.AddScoped<ISourcesDataAccess, SourcesDataAccess>();
 builder.Services.AddScoped<ISearchQueriesDataAccess, SearchQueriesDataAccess>();
 builder.Services.AddScoped<IRecordsDataAccess, RecordsDataAccess>();
 
-// Email - swappable behind IEmailSender; BrevoEmailSender is the only provider-specific piece
+// Send Email provider
 var emailApiKey = builder.Configuration["Email:ApiKey"];
 var emailFromAddress = builder.Configuration["Email:FromAddress"];
 var emailFromName = builder.Configuration["Email:FromName"];
@@ -100,6 +100,7 @@ builder.Services.AddScoped<IUsersService, UsersService>();
 builder.Services.AddScoped<ISearchQueriesService, SearchQueriesService>();
 builder.Services.AddScoped<ISourcesService, SourcesService>();
 builder.Services.AddScoped<IDigestService, DigestService>();
+builder.Services.AddSingleton(new PollCycleAdvisoryLock(connectionString));
 builder.Services.AddScoped<IRecordPollingService, RecordPollingService>();
 
 // Background scheduler - polls every search query for new records on an interval

@@ -99,7 +99,7 @@ public class DigestService : IDigestService
 
         sb.Append("<ul>");
 
-        foreach (var record in newRecords)
+        foreach (var record in newRecords.Take(DigestMessageFormatter.MaxRecordsPerQuery))
         {
             sb.Append("<li><strong>");
 
@@ -133,6 +133,7 @@ public class DigestService : IDigestService
         }
 
         sb.Append("</ul>");
+        DigestMessageFormatter.AppendOverflowNotice(sb, newRecords.Count - DigestMessageFormatter.MaxRecordsPerQuery);
         return sb.ToString();
     }
 }

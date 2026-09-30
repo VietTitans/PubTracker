@@ -49,6 +49,20 @@ public interface ISearchQueriesDataAccess
     Task UpdateUserDigestWatermarkAsync(int userId, int searchQueryId, DateTime timestamp);
 
     /// <summary>
+    /// Atomically advances the watermark to <paramref name="claimed"/> only if it still equals
+    /// <paramref name="expected"/> (null = never sent). Returns false if another poll got there
+    /// first - the caller must then NOT send. Called before the email goes out, so only the
+    /// winner sends; on send failure the caller calls <see cref="ReleaseUserDigestClaimAsync"/>.
+    /// </summary>
+    Task<bool> TryClaimUserDigestWatermarkAsync(int userId, int searchQueryId, DateTime? expected, DateTime claimed);
+
+    /// <summary>
+    /// Rolls a claim back to <paramref name="expected"/>, only if the watermark is still
+    /// <paramref name="claimed"/> (so it never clobbers a later legitimate advance).
+    /// </summary>
+    Task ReleaseUserDigestClaimAsync(int userId, int searchQueryId, DateTime? expected, DateTime claimed);
+
+    /// <summary>
     /// For the given user, every OTHER search query they're subscribed to (excluding
     /// excludeSearchQueryIds) that has at least one already-persisted record newer than that
     /// user's own watermark for it. Used only by the targeted-poll sweep - never re-fetches
@@ -76,4 +90,11 @@ public interface ISearchQueriesDataAccess
     /// not from this failed attempt.
     /// </summary>
     Task RecordPollFailedAsync(int searchQueryId, DateTime failedAt);
+
+    /// <summary>
+    /// The oldest last_polled_at across all search queries, or null if any query has never been
+    /// polled (or there are none) - i.e. null means a poll cycle is due now. Used by the
+    /// scheduler to avoid re-polling everything on every restart.
+    /// </summary>
+    Task<DateTime?> GetOldestLastPolledAtAsync();
 }

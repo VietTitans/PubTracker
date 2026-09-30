@@ -21,4 +21,12 @@ public class PendingUserDigest
     /// query actually polled this cycle.
     /// </summary>
     public string? Summary { get; init; }
+
+    /// <summary>
+    /// The user's digest watermark for this query at the time this pending set was computed.
+    /// Only filled by the "sweep other pending queries" path (GetOtherPendingDigestsForUserAsync);
+    /// RecordPollingService needs it as the expected old value when claiming the watermark
+    /// before sending.
+    /// </summary>
+    public DateTime? LastDigestSentAt { get; init; }
 }
