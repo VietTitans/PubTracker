@@ -77,7 +77,7 @@ public class UsersDataAccess : IUsersDataAccess
             .FirstOrDefaultAsync();
         if (existing != null)
         {
-            return existing;
+            return await ReactivateIfWithinGraceAsync(existing);
         }
 
         var linkedRows = await _dbContext.Database.SqlQuery<int>(
@@ -89,7 +89,7 @@ public class UsersDataAccess : IUsersDataAccess
             .ToListAsync();
         if (linkedRows.Count > 0)
         {
-            return await GetUserByIdAsync(linkedRows[0]);
+            return await ReactivateIfWithinGraceAsync(await GetUserByIdAsync(linkedRows[0]));
         }
 
         var entity = new UserEntity { Name = name, Username = username, Email = email, KeycloakSub = keycloakSub };
@@ -104,6 +104,27 @@ public class UsersDataAccess : IUsersDataAccess
             IsMarkedForDeletion = entity.IsMarkedForDeletion,
             DeletionRequestedAt = entity.DeletionRequestedAt
         };
+    }
+
+    // Signing back in within the grace period undoes the soft delete; after it the account stays
+    // marked and the purge worker removes it. The boundary matches PurgeExpiredDeletedUsersAsync.
+    private async Task<User> ReactivateIfWithinGraceAsync(User user)
+    {
+        var cutoff = DateTime.UtcNow.AddDays(-DeletionGracePeriodDays);
+        if (!user.IsMarkedForDeletion || user.DeletionRequestedAt is not { } requestedAt || requestedAt < cutoff)
+        {
+            return user;
+        }
+
+        await _dbContext.Users
+            .Where(u => u.Id == user.Id)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(u => u.IsMarkedForDeletion, false)
+                .SetProperty(u => u.DeletionRequestedAt, (DateTime?)null));
+
+        user.IsMarkedForDeletion = false;
+        user.DeletionRequestedAt = null;
+        return user;
     }
 
     private static readonly System.Linq.Expressions.Expression<Func<UserEntity, User>> ToUser = u => new User
