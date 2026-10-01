@@ -49,7 +49,7 @@ public class AuthorizationEndToEndTests : IClassFixture<PubTrackerWebApplication
 
         var clientB = _factory.CreateClient();
         clientB.DefaultRequestHeaders.Add("X-Debug-User-Id", userB.Id.ToString());
-        var createResponse = await clientB.PostAsJsonAsync("/api/SearchQueries",
+        var createResponse = await clientB.PostAsJsonAsync("/api/v1/SearchQueries",
             new CreateSearchQueryDto { TargetUrl = $"{FakeLiteratureSourceProvider.TestUrl}?case=idor" });
         createResponse.EnsureSuccessStatusCode();
         var searchQuery = await createResponse.Content.ReadFromJsonAsync<SearchQueryResponseDto>();
@@ -58,21 +58,21 @@ public class AuthorizationEndToEndTests : IClassFixture<PubTrackerWebApplication
         clientA.DefaultRequestHeaders.Add("X-Debug-User-Id", userA.Id.ToString());
 
         // A is neither B nor an Admin - both of B's endpoints must reject A.
-        var otherUsersQueries = await clientA.GetAsync($"/api/Users/{userB.Id}/search-queries");
+        var otherUsersQueries = await clientA.GetAsync($"/api/v1/Users/{userB.Id}/search-queries");
         Assert.Equal(HttpStatusCode.Forbidden, otherUsersQueries.StatusCode);
 
-        var otherSearchQuery = await clientA.GetAsync($"/api/SearchQueries/{searchQuery!.Id}");
+        var otherSearchQuery = await clientA.GetAsync($"/api/v1/SearchQueries/{searchQuery!.Id}");
         Assert.Equal(HttpStatusCode.Forbidden, otherSearchQuery.StatusCode);
 
         // B can read their own data through both endpoints.
-        var ownQueries = await clientB.GetAsync($"/api/Users/{userB.Id}/search-queries");
+        var ownQueries = await clientB.GetAsync($"/api/v1/Users/{userB.Id}/search-queries");
         Assert.Equal(HttpStatusCode.OK, ownQueries.StatusCode);
 
-        var ownSearchQuery = await clientB.GetAsync($"/api/SearchQueries/{searchQuery.Id}");
+        var ownSearchQuery = await clientB.GetAsync($"/api/v1/SearchQueries/{searchQuery.Id}");
         Assert.Equal(HttpStatusCode.OK, ownSearchQuery.StatusCode);
 
         // A can still read their own (empty) search-query list.
-        var aOwnQueries = await clientA.GetAsync($"/api/Users/{userA.Id}/search-queries");
+        var aOwnQueries = await clientA.GetAsync($"/api/v1/Users/{userA.Id}/search-queries");
         Assert.Equal(HttpStatusCode.OK, aOwnQueries.StatusCode);
     }
 
@@ -98,10 +98,10 @@ public class AuthorizationEndToEndTests : IClassFixture<PubTrackerWebApplication
         var clientA = _factory.CreateClient();
         clientA.DefaultRequestHeaders.Add("X-Debug-User-Id", userA.Id.ToString());
 
-        var otherProfile = await clientA.GetAsync($"/api/Users/{userB.Id}");
+        var otherProfile = await clientA.GetAsync($"/api/v1/Users/{userB.Id}");
         Assert.Equal(HttpStatusCode.Forbidden, otherProfile.StatusCode);
 
-        var ownProfile = await clientA.GetAsync($"/api/Users/{userA.Id}");
+        var ownProfile = await clientA.GetAsync($"/api/v1/Users/{userA.Id}");
         Assert.Equal(HttpStatusCode.OK, ownProfile.StatusCode);
     }
 }

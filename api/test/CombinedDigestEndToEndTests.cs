@@ -53,7 +53,7 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
         var createdSearchQueryIds = new List<int>();
         foreach (var targetUrl in new[] { FakeLiteratureSourceProvider.TestUrl, FakePedroLiteratureSourceProvider.TestUrl })
         {
-            var createResponse = await client.PostAsJsonAsync("/api/SearchQueries", new CreateSearchQueryDto { TargetUrl = targetUrl });
+            var createResponse = await client.PostAsJsonAsync("/api/v1/SearchQueries", new CreateSearchQueryDto { TargetUrl = targetUrl });
             createResponse.EnsureSuccessStatusCode();
             var created = await createResponse.Content.ReadFromJsonAsync<SearchQueryResponseDto>();
             createdSearchQueryIds.Add(created!.Id);
@@ -108,7 +108,7 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
             // Postgres container/class fixture), and reusing either would mean this test's poll
             // finds zero "new" records (the fake's records are fixed at "2 days ago"/"1 day
             // ago", already older than that other test's already-advanced last_polled_at).
-            var createResponse = await client.PostAsJsonAsync("/api/SearchQueries",
+            var createResponse = await client.PostAsJsonAsync("/api/v1/SearchQueries",
                 new CreateSearchQueryDto { TargetUrl = $"{FakeLiteratureSourceProvider.TestUrl}?case=isolation" });
             createResponse.EnsureSuccessStatusCode();
             var created = await createResponse.Content.ReadFromJsonAsync<SearchQueryResponseDto>();

@@ -49,7 +49,7 @@ public class DigestSummaryEndToEndTests : IClassFixture<PubTrackerWebApplication
 
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Debug-User-Id", user.Id.ToString());
-        var createResponse = await client.PostAsJsonAsync("/api/SearchQueries",
+        var createResponse = await client.PostAsJsonAsync("/api/v1/SearchQueries",
             new CreateSearchQueryDto { TargetUrl = $"{FakeLiteratureSourceProvider.TestUrl}?case=summary-success" });
         createResponse.EnsureSuccessStatusCode();
 
@@ -79,7 +79,7 @@ public class DigestSummaryEndToEndTests : IClassFixture<PubTrackerWebApplication
 
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Debug-User-Id", user.Id.ToString());
-        var createResponse = await client.PostAsJsonAsync("/api/SearchQueries",
+        var createResponse = await client.PostAsJsonAsync("/api/v1/SearchQueries",
             new CreateSearchQueryDto { TargetUrl = $"{FakeLiteratureSourceProvider.TestUrl}?case=summary-failure" });
         createResponse.EnsureSuccessStatusCode();
 
@@ -116,7 +116,7 @@ public class DigestSummaryEndToEndTests : IClassFixture<PubTrackerWebApplication
         {
             var client = _factory.CreateClient();
             client.DefaultRequestHeaders.Add("X-Debug-User-Id", userId.ToString());
-            var createResponse = await client.PostAsJsonAsync("/api/SearchQueries", new CreateSearchQueryDto { TargetUrl = targetUrl });
+            var createResponse = await client.PostAsJsonAsync("/api/v1/SearchQueries", new CreateSearchQueryDto { TargetUrl = targetUrl });
             createResponse.EnsureSuccessStatusCode();
         }
 

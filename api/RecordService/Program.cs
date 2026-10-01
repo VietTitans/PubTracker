@@ -30,6 +30,17 @@ builder.Services.AddDbContext<RecordService.DataAccess.PubTrackerDbContext>(opti
 
 builder.Services.AddControllers();
 
+// URL-segment versioning: /api/v1/... . Group name "v1" matches Swagger's default doc.
+builder.Services.AddApiVersioning(options =>
+{
+    options.DefaultApiVersion = new Asp.Versioning.ApiVersion(1, 0);
+    options.ReportApiVersions = true;
+}).AddMvc().AddApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'V";
+    options.SubstituteApiVersionInUrl = true;
+});
+
 builder.Services.AddHttpContextAccessor();
 
 // CORS - allows the React dev server (Vite, default port 5173) to call this API.

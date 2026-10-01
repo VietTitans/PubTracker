@@ -1,3 +1,4 @@
+using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RecordService.BusinessLogic.SearchQueriesService;
@@ -8,7 +9,8 @@ using System.Security.Claims;
 
 namespace RecordService.Controllers;
 
-[Route("api/[controller]")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/[controller]")]
 [ApiController]
 public class SearchQueriesController : ControllerBase
 {

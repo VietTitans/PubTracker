@@ -58,7 +58,7 @@ public class SlowPollBlocksCallerTests : IClassFixture<PubTrackerWebApplicationF
 
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Debug-User-Id", user.Id.ToString());
-        var createResponse = await client.PostAsJsonAsync("/api/SearchQueries",
+        var createResponse = await client.PostAsJsonAsync("/api/v1/SearchQueries",
             new CreateSearchQueryDto { TargetUrl = $"{FakeLiteratureSourceProvider.TestUrl}?case=slow-poll" });
         createResponse.EnsureSuccessStatusCode();
         var created = await createResponse.Content.ReadFromJsonAsync<SearchQueryResponseDto>();

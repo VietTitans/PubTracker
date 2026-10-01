@@ -44,7 +44,7 @@ public class SearchQueryPollingEndToEndTests : IClassFixture<PubTrackerWebApplic
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Debug-User-Id", user.Id.ToString());
 
-        var createResponse = await client.PostAsJsonAsync("/api/SearchQueries", new CreateSearchQueryDto
+        var createResponse = await client.PostAsJsonAsync("/api/v1/SearchQueries", new CreateSearchQueryDto
         {
             TargetUrl = FakeLiteratureSourceProvider.TestUrl
         });

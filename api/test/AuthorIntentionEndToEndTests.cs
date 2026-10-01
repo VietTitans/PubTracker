@@ -57,7 +57,7 @@ public class AuthorIntentionEndToEndTests : IClassFixture<PubTrackerWebApplicati
 
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Debug-User-Id", user.Id.ToString());
-        var createResponse = await client.PostAsJsonAsync("/api/SearchQueries",
+        var createResponse = await client.PostAsJsonAsync("/api/v1/SearchQueries",
             new CreateSearchQueryDto { TargetUrl = $"{FakeUniqueLiteratureSourceProvider.BaseUrl}?recordSet=success" });
         createResponse.EnsureSuccessStatusCode();
 
@@ -94,7 +94,7 @@ public class AuthorIntentionEndToEndTests : IClassFixture<PubTrackerWebApplicati
 
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Debug-User-Id", user.Id.ToString());
-        var createResponse = await client.PostAsJsonAsync("/api/SearchQueries",
+        var createResponse = await client.PostAsJsonAsync("/api/v1/SearchQueries",
             new CreateSearchQueryDto { TargetUrl = $"{FakeUniqueLiteratureSourceProvider.BaseUrl}?recordSet=failure" });
         createResponse.EnsureSuccessStatusCode();
 
@@ -135,13 +135,13 @@ public class AuthorIntentionEndToEndTests : IClassFixture<PubTrackerWebApplicati
         // should re-link the already-persisted records rather than inserting new ones.
         var clientA = _factory.CreateClient();
         clientA.DefaultRequestHeaders.Add("X-Debug-User-Id", userA.Id.ToString());
-        var createResponseA = await clientA.PostAsJsonAsync("/api/SearchQueries",
+        var createResponseA = await clientA.PostAsJsonAsync("/api/v1/SearchQueries",
             new CreateSearchQueryDto { TargetUrl = $"{FakeUniqueLiteratureSourceProvider.BaseUrl}?recordSet=dedup-shared&query=a" });
         createResponseA.EnsureSuccessStatusCode();
 
         var clientB = _factory.CreateClient();
         clientB.DefaultRequestHeaders.Add("X-Debug-User-Id", userB.Id.ToString());
-        var createResponseB = await clientB.PostAsJsonAsync("/api/SearchQueries",
+        var createResponseB = await clientB.PostAsJsonAsync("/api/v1/SearchQueries",
             new CreateSearchQueryDto { TargetUrl = $"{FakeUniqueLiteratureSourceProvider.BaseUrl}?recordSet=dedup-shared&query=b" });
         createResponseB.EnsureSuccessStatusCode();
 

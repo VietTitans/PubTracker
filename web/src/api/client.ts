@@ -63,40 +63,42 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+const API_PREFIX = "/api/v1";
+
 export function getCurrentUser(): Promise<User> {
-  return request<User>("/api/Users/me");
+  return request<User>(`${API_PREFIX}/Users/me`);
 }
 
 export function updateCurrentUser(dto: { name: string; username: string; email: string }): Promise<User> {
-  return request<User>("/api/Users/me", {
+  return request<User>(`${API_PREFIX}/Users/me`, {
     method: "PUT",
     body: JSON.stringify(dto),
   });
 }
 
 export function deleteCurrentUser(): Promise<void> {
-  return request<void>("/api/Users/me", {
+  return request<void>(`${API_PREFIX}/Users/me`, {
     method: "DELETE",
   });
 }
 
 export function getSearchQueriesForUser(userId: number): Promise<SearchQuery[]> {
-  return request<SearchQuery[]>(`/api/Users/${userId}/search-queries`);
+  return request<SearchQuery[]>(`${API_PREFIX}/Users/${userId}/search-queries`);
 }
 
 export function getSearchQueryById(searchQueryId: number): Promise<SearchQuery> {
-  return request<SearchQuery>(`/api/SearchQueries/${searchQueryId}`);
+  return request<SearchQuery>(`${API_PREFIX}/SearchQueries/${searchQueryId}`);
 }
 
 export function subscribeToSearchQuery(targetUrl: string): Promise<SearchQuery> {
-  return request<SearchQuery>("/api/SearchQueries", {
+  return request<SearchQuery>(`${API_PREFIX}/SearchQueries`, {
     method: "POST",
     body: JSON.stringify({ targetUrl }),
   });
 }
 
 export function unsubscribeFromSearchQuery(searchQueryId: number): Promise<void> {
-  return request<void>(`/api/SearchQueries/${searchQueryId}`, {
+  return request<void>(`${API_PREFIX}/SearchQueries/${searchQueryId}`, {
     method: "DELETE",
   });
 }
