@@ -105,3 +105,17 @@ Two-project .NET solution:
 ## Database
 
 Single source of truth for schema is the EF Core migrations in `api/RecordService/Migrations/` (generated `.cs` files via `dotnet ef migrations add`), applied via `Database.Migrate()` at API startup (see `Program.cs`) — runs on every start, against any environment, not just first boot. Adding a schema change means changing the entities in `DataAccess/Entities/` and/or the Fluent API config in `PubTrackerDbContext.OnModelCreating`, then generating a new migration — never editing an already-shipped one. (Schema was previously managed via hand-written DbUp SQL scripts; that's been fully replaced by EF Core migrations generated fresh from the current entity model, with no historical migration carried over.) `ai/system-architecture-net10.md` §5 documents further schema evolution (e.g. dropping raw record-count counters) not yet reflected in the migrations — when doing schema-dependent work, check the actual migration files rather than trusting the architecture doc.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for VietTitans/PubTracker (`gh` CLI). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` + `docs/adr/` at repo root. See `docs/agents/domain.md`.
