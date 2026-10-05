@@ -7,12 +7,12 @@ namespace RecordService.BusinessLogic.DigestService;
 /// <summary>
 /// Shared HTML formatting for the per-category digest message body, used by every
 /// source's message builder (e.g. PedroDigestMessageBuilder, PubMedDigestMessageBuilder)
-/// so the layout stays identical across sources - only the category resolution differs.
+/// so the layout stays identical across sources; only the category resolution differs.
 /// Records are grouped by RecordTopicClassifier instead of listed flat. At most
 /// MaxRecordsPerQuery are listed (in cluster order); the rest collapse into a
 /// "+ N more, see the app" line so a huge first-poll batch can't blow up the email.
 /// Styling is inline on every element rather than a &lt;style&gt; block or classes, since
-/// most email clients (Gmail included) strip both - inline is the only styling that
+/// most email clients (Gmail included) strip both; inline is the only styling that
 /// reliably survives into an inbox.
 /// </summary>
 internal static class DigestMessageFormatter
@@ -113,7 +113,7 @@ internal static class DigestMessageFormatter
                 sb.Append("border-bottom:1px solid ").Append(DividerColor).Append(';');
             }
             sb.Append("\">");
-            // Manually numbered rather than an <ol> - Outlook's HTML rendering engine is
+            // Manually numbered rather than an <ol>; Outlook's HTML rendering engine is
             // notorious for dropping or mis-numbering <ol>/<li> counters, so plain text is the
             // only numbering that reliably survives across email clients (same reasoning as
             // inlining every style rather than relying on a <style> block).

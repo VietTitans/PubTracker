@@ -8,16 +8,16 @@ namespace RecordService.BusinessLogic.RecordPollingService;
 
 public class RecordPollingService : IRecordPollingService
 {
-    // Caps how many GenerateAuthorIntentionAsync calls run concurrently - bounded so a
+    // Caps how many GenerateAuthorIntentionAsync calls run concurrently; bounded so a
     // large batch of newly-inserted records doesn't blow through the LLM provider's rate limit.
     private const int MaxConcurrentAuthorIntentionCalls = 5;
 
-    // Serializes every poll cycle (scheduled or targeted) so two overlapping calls - e.g. the
-    // scheduled background service firing at the same moment as a manual re-check - can't both
+    // Serializes every poll cycle (scheduled or targeted) so two overlapping calls, e.g. the
+    // scheduled background service firing at the same moment as a manual re-check, can't both
     // read the same stale digest watermark and both send a duplicate digest. Static (not an
     // instance field) because this service is registered scoped, but the lock must be shared
     // across every scope/request in the process.
-    // The Postgres advisory lock (_advisoryLock) extends that across processes - a second `api`
+    // The Postgres advisory lock (_advisoryLock) extends that across processes; a second `api`
     // instance or an overlapping rolling deploy. The semaphore stays as the in-process queue.
     private static readonly SemaphoreSlim PollCycleLock = new(1, 1);
 
@@ -110,7 +110,7 @@ public class RecordPollingService : IRecordPollingService
         return results.Count > 0 ? results[0] : null;
     }
 
-    // Everything through computing pending records, for one search query - no email is sent
+    // Everything through computing pending records, for one search query; no email is sent
     // here. Dispatch is deferred until every requested query has been fetched, so digests can
     // be combined per user instead of sent one-per-query.
     private sealed class FetchOutcome
@@ -123,12 +123,12 @@ public class RecordPollingService : IRecordPollingService
         public List<(int UserId, DateTime? LastDigestSentAt)> SubscriberWatermarks { get; init; } = new();
 
         // AI summary of this cycle's fresh batch (searchResult.NewRecords), generated once per
-        // query rather than once per subscriber - every subscriber of this query sees the same
+        // query rather than once per subscriber; every subscriber of this query sees the same
         // text. Null if there was nothing new, no one subscribed, or generation failed.
         public string? Summary { get; init; }
 
         // Captured right before the read, not "now" at dispatch time (which can be much later
-        // once combining across many users) - stamping this as the new watermark on success
+        // once combining across many users); stamping this as the new watermark on success
         // guarantees it never exceeds what this read actually saw.
         public DateTime FetchReadAt { get; init; }
     }
@@ -155,7 +155,7 @@ public class RecordPollingService : IRecordPollingService
             }
 
             // Advance the fetch watermark as soon as the source search itself succeeds,
-            // independent of whether a digest email later succeeds or fails - otherwise a
+            // independent of whether a digest email later succeeds or fails; otherwise a
             // provider like PEDro (whose "since" filter relies on this watermark) would
             // re-fetch the same window, or worse, never advance past its first baseline poll.
             await _searchQueriesDataAccess.RecordPollCompletedAsync(searchQuery.Id, DateTime.UtcNow, searchResult.TotalRecordCount);
@@ -205,7 +205,7 @@ public class RecordPollingService : IRecordPollingService
         }
         catch (Exception ex)
         {
-            // Deliberately does NOT call RecordPollFailedAsync - everything in this try block
+            // Deliberately does NOT call RecordPollFailedAsync; everything in this try block
             // past ExecuteSourceSearchAsync is our own DB access, so an exception here (e.g. a
             // transient Postgres error) is not "the source is unreachable", and that write would
             // likely fail the same way anyway, which would abort this foreach and skip every
@@ -217,7 +217,7 @@ public class RecordPollingService : IRecordPollingService
 
     // Runs once per query per poll cycle (not once per subscriber), so every subscriber of this
     // query gets the same summary text instead of paying for the same content N times. A
-    // generation failure is logged and skipped - the digest still sends without one.
+    // generation failure is logged and skipped; the digest still sends without one.
     private async Task<string?> GenerateQuerySummaryAsync(int searchQueryId, IReadOnlyList<LiteratureRecord> newRecords)
     {
         try
@@ -232,7 +232,7 @@ public class RecordPollingService : IRecordPollingService
         }
     }
 
-    // Runs once per genuinely new record (not per subscriber, not per digest send - see
+    // Runs once per genuinely new record (not per subscriber, not per digest send; see
     // RecordsDataAccess.PersistSearchResultsAsync's xmax = 0 check for how "genuinely new" is
     // determined), so the same record is never re-summarized just because a second search query
     // later links to it too. A generation failure is logged and skipped, never blocks the poll.
@@ -240,7 +240,7 @@ public class RecordPollingService : IRecordPollingService
     // The LLM calls run concurrently (bounded by MaxConcurrentAuthorIntentionCalls) since they
     // only hit HttpClient, which is safe for concurrent use. The resulting DB writes then run
     // sequentially afterward, since _recordsDataAccess shares one scoped PubTrackerDbContext
-    // (EF Core's DbContext is not safe for concurrent use) - this still gets nearly the whole
+    // (EF Core's DbContext is not safe for concurrent use); this still gets nearly the whole
     // latency win, since the LLM round-trips are what dominate (~1s each vs. a single-row update).
     private async Task GenerateAuthorIntentionsAsync(IReadOnlyList<LiteratureRecord> newlyInsertedRecords)
     {
@@ -331,9 +331,9 @@ public class RecordPollingService : IRecordPollingService
         }
 
         // 3. Claim each watermark atomically BEFORE sending, so only the poll that wins the
-        //    claim sends. A lost claim (another poll already advanced it) is dropped - its
+        //    claim sends. A lost claim (another poll already advanced it) is dropped; its
         //    digest is that other poll's job.
-        //    ponytail: at-most-once on crash - if the process dies between claim and send, that
+        //    ponytail: at-most-once on crash; if the process dies between claim and send, that
         //    digest is lost (watermark already advanced). Add a claim lease column if that matters.
         var claimed = new Dictionary<(int UserId, int SearchQueryId), (PendingUserDigest Digest, DateTime WatermarkToStamp, DateTime? ExpectedOld)>();
         foreach (var (key, value) in pendingByUserAndQuery)

@@ -16,16 +16,16 @@ namespace test;
 /// Manual, opt-in verification of the full production digest path against your real dev
 /// database and real subscriptions: polls the search queries listed in SearchQueryIds below,
 /// fetches live results from each source, persists them, and sends one combined digest email
-/// per real subscriber - not one email per query. A subscriber who also has other queries
+/// per real subscriber; not one email per query. A subscriber who also has other queries
 /// pending outside this list gets those swept into the same email too (see
 /// RecordPollingService.PollSearchQueriesAsync's sweep behavior), so a real subscriber may
 /// receive mail covering queries beyond just the ones listed here.
 ///
 /// Before polling, it resets each listed query's per-subscriber digest watermarks (and pushes
 /// last_polled_at back to 2010) so every run re-sends a fresh digest of whatever is already
-/// linked, instead of only picking up records newly discovered since the last run - that's
+/// linked, instead of only picking up records newly discovered since the last run; that's
 /// what makes it repeatable without manual SQL between runs. Skipped by default (real network,
-/// real DB, real email - not for CI). To run it: fill in SearchQueryIds with real
+/// real DB, real email; not for CI). To run it: fill in SearchQueryIds with real
 /// search_queries.id values, remove the Skip attribute, run this test alone, then restore
 /// Skip and clear the list before committing.
 /// </summary>
@@ -91,7 +91,7 @@ public class DigestPollEndToEndManualTest
     // Deletes each listed query's per-subscriber digest watermark rows (so every subscriber is
     // treated as "never sent" and this run re-sends everything already linked) and pushes
     // last_polled_at back to 2010 (so PedroProvider takes its incremental, record-fetching
-    // path instead of another baseline-only call) - lets this test be re-run repeatedly
+    // path instead of another baseline-only call); lets this test be re-run repeatedly
     // without manual SQL between runs (see class doc comment).
     private static async Task ResetDigestWatermarksAsync(string connectionString, int[] searchQueryIds)
     {

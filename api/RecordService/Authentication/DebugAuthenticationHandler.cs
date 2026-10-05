@@ -13,10 +13,10 @@ namespace RecordService.Authentication;
 /// exercised via Swagger/Postman before real auth is wired up. The "roles" claim name matches
 /// RoleClaimType in Program.cs's ConfigureKeycloakBearer, so RequireRole checks behave the same
 /// way here as against a real Keycloak token. Sending X-Debug-Anonymous: true skips
-/// authentication entirely, simulating a real anonymous (no-token) request - needed to exercise
+/// authentication entirely, simulating a real anonymous (no-token) request; needed to exercise
 /// [AllowAnonymous] endpoints that behave differently for logged-in vs. anonymous callers (e.g.
 /// UsersController.CreateUser), since otherwise this handler always authenticates the request.
-/// Never registered outside the Development environment - see Program.cs.
+/// Never registered outside the Development environment, see Program.cs.
 /// </summary>
 public class DebugAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>
 {
@@ -51,7 +51,7 @@ public class DebugAuthenticationHandler : AuthenticationHandler<AuthenticationSc
             ? roleValue.ToString()
             : DefaultUserRole;
 
-        // The 4-arg overload is required here - it's the only one that lets RoleClaimType be set
+        // The 4-arg overload is required here; it's the only one that lets RoleClaimType be set
         // to "roles" instead of the default ClaimTypes.Role, matching the "roles" claim added
         // below and the Keycloak-side RoleClaimType configured in Program.cs's
         // ConfigureKeycloakBearer, so RequireRole checks behave identically under both schemes.

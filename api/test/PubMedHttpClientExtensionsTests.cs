@@ -27,7 +27,7 @@ public class PubMedHttpClientExtensionsTests
         await Assert.ThrowsAsync<TimeoutRejectedException>(() => client.GetAsync("esearch.fcgi?term=x"));
         stopwatch.Stop();
 
-        // Nowhere near the handler's 5s delay or HttpClient's 100s default - proves the
+        // Nowhere near the handler's 5s delay or HttpClient's 100s default; proves the
         // resilience handler's own timeout strategy is what's actually cutting this off.
         Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(2),
             $"Expected the request to fail near the configured 200ms timeout, but it took {stopwatch.ElapsedMilliseconds}ms.");
@@ -47,7 +47,7 @@ public class PubMedHttpClientExtensionsTests
             }
             catch
             {
-                // Expected - every attempt fails, either by actually hitting the handler's 500
+                // Expected: every attempt fails, either by actually hitting the handler's 500
                 // or, once the circuit is open, by short-circuiting instead.
             }
         }
@@ -59,7 +59,7 @@ public class PubMedHttpClientExtensionsTests
 
     // The actual motivating scenario: a hanging (not merely erroring) NCBI. This only passes if
     // the circuit breaker is the OUTER strategy and the timeout is INNER (see
-    // PubMedHttpClientExtensions.AddPubMedHttpClient's doc comment) - the breaker must see each
+    // PubMedHttpClientExtensions.AddPubMedHttpClient's doc comment); the breaker must see each
     // attempt's TimeoutRejectedException to count it as a failure. If someone swaps that order,
     // HttpClient.Timeout's TaskCanceledException wouldn't be counted and this test would fail
     // with CallCount == 6.
@@ -77,7 +77,7 @@ public class PubMedHttpClientExtensionsTests
             }
             catch
             {
-                // Expected - every attempt times out, either by actually waiting out the 200ms
+                // Expected: every attempt times out, either by actually waiting out the 200ms
                 // timeout or, once the circuit is open, by short-circuiting instead.
             }
         }

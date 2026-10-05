@@ -11,14 +11,14 @@ namespace test;
 
 /// <summary>
 /// Boots the real RecordService app against an ephemeral Testcontainers Postgres instance
-/// (schema applied by the app's own EF Core migrations, same as any other environment - see
+/// (schema applied by the app's own EF Core migrations, same as any other environment; see
 /// Program.cs) and swaps the real PubMed/PEDro providers for FakeLiteratureSourceProvider, so
 /// tests exercise the real HTTP -> Service -> DataAccess -> Postgres path without depending on
 /// live external sources.
 ///
 /// The connection string and ASPNETCORE_ENVIRONMENT are set via environment variables (not
 /// ConfigureWebHost's ConfigureAppConfiguration) because Program.cs reads
-/// builder.Configuration.GetConnectionString(...) before builder.Build() runs - environment
+/// builder.Configuration.GetConnectionString(...) before builder.Build() runs; environment
 /// variables are picked up synchronously at WebApplication.CreateBuilder(args) time, so they're
 /// guaranteed to be visible by then, matching how docker-compose already configures this app
 /// (ConnectionStrings__DefaultConnection).

@@ -33,11 +33,11 @@ public class SearchQueriesService : ISearchQueriesService
     {
         var searchQuery = await _dataAccess.SubscribeAsync(userId, targetUrl);
 
-        // New subscriptions start with zero records - a brand new search query's source has
+        // New subscriptions start with zero records; a brand new search query's source has
         // never been fetched. Kick off an initial poll shortly after so the UI fills in with
         // real results instead of staying at 0 until the next scheduled poll cycle (which can
         // be up to Scheduler:PollIntervalHours away). The delay isn't about the subscribe
-        // transaction (already committed by this point) - it debounces against another poll
+        // transaction (already committed by this point); it debounces against another poll
         // of the same search query landing at nearly the same moment (e.g. a caller polling
         // right after subscribing, as the end-to-end tests do), which would otherwise race
         // this one for which poll gets credit for the newly-found records.

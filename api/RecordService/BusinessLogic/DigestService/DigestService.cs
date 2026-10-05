@@ -39,7 +39,7 @@ public class DigestService : IDigestService
             var user = await _usersDataAccess.GetUserByIdAsync(userId);
             if (user == null || user.IsMarkedForDeletion)
             {
-                continue; // not a failure - no one to send to
+                continue; // not a failure; no one to send to
             }
 
             var totalRecords = userQueries.Sum(q => q.Records.Count);

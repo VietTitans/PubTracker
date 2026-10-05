@@ -57,7 +57,7 @@ public class AuthorizationEndToEndTests : IClassFixture<PubTrackerWebApplication
         var clientA = _factory.CreateClient();
         clientA.DefaultRequestHeaders.Add("X-Debug-User-Id", userA.Id.ToString());
 
-        // A is neither B nor an Admin - both of B's endpoints must reject A.
+        // A is neither B nor an Admin; both of B's endpoints must reject A.
         var otherUsersQueries = await clientA.GetAsync($"/api/v1/Users/{userB.Id}/search-queries");
         Assert.Equal(HttpStatusCode.Forbidden, otherUsersQueries.StatusCode);
 

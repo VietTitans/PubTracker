@@ -12,7 +12,7 @@ cd docker
 docker compose up --build
 ```
 
-Open `http://localhost` — a Caddy reverse proxy (`docker/caddy/Caddyfile`) is the single
+Open `http://localhost`. A Caddy reverse proxy (`docker/caddy/Caddyfile`) is the single
 entrypoint in front of the web app, API, and Keycloak, routing by path:
 
 | Path | Routed to |
@@ -23,13 +23,13 @@ entrypoint in front of the web app, API, and Keycloak, routing by path:
 
 ## Architecture
 
-- `api/` — .NET 10 / ASP.NET Core Web API (`RecordService`), backed by Postgres via EF Core
+- `api/`: .NET 10 / ASP.NET Core Web API (`RecordService`), backed by Postgres via EF Core
   (`Npgsql.EntityFrameworkCore.PostgreSQL`). See `CLAUDE.md` for the layered Controller → BusinessLogic → DataAccess
   convention and how to add a new resource.
-- `web/` — React/Vite SPA, served by its own Caddy instance in production images.
-- `api/RecordService/Migrations/` — EF Core migrations, source of truth for the Postgres
+- `web/`: React/Vite SPA, served by its own Caddy instance in production images.
+- `api/RecordService/Migrations/`: EF Core migrations, source of truth for the Postgres
   schema. Applied automatically via `Database.Migrate()` on every API startup (see `Program.cs`).
-- `ai/system-architecture-net10.md` — target end-state architecture (scheduler, email
+- `ai/system-architecture-net10.md`: target end-state architecture (scheduler, email
   digest pipeline, full Keycloak realm setup); check it before assuming a described piece
   is already implemented.
 

@@ -107,7 +107,7 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
 
     public async Task<SearchQuery> SubscribeAsync(int userId, string targetUrl)
     {
-        // Throws InvalidOperationException if no provider recognizes the URL - this is
+        // Throws InvalidOperationException if no provider recognizes the URL; this is
         // the "unsupported source" signal the controller maps to a 400 response.
         var provider = _sourceFactory.CreateProvider(targetUrl);
         var baseUrl = new Uri(targetUrl).GetLeftPart(UriPartial.Authority);

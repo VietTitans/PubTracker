@@ -12,17 +12,17 @@ namespace test;
 /// digest watermark (GetUserDigestWatermarksForQueryAsync) and writing it back after a
 /// successful send (UpdateUserDigestWatermarkAsync). In production this can happen when the
 /// scheduled RecordPollingBackgroundService fires at the same moment as a manual re-check of the
-/// same search query - both read the same stale watermark, both compute the same "new since
+/// same search query; both read the same stale watermark, both compute the same "new since
 /// watermark" records, and both send a digest, so the subscriber gets the same digest twice.
 ///
 /// This test asserts the CORRECT behavior (exactly one digest) and is expected to fail against
 /// the current code, which has no lock/idempotency check preventing the duplicate send. No fix
-/// is applied here - this is deliberately a red test, per the user's request to see the gap
+/// is applied here; this is deliberately a red test, per the user's request to see the gap
 /// fail first before deciding how to fix it (Postgres advisory lock, SELECT ... FOR UPDATE, an
 /// idempotency key, etc. are all options to weigh afterward).
 ///
 /// Uses its own PubTrackerWebApplicationFactory instance for the same reason the other
-/// e2e test classes do - a fresh Postgres container and fresh fakes.
+/// e2e test classes do; a fresh Postgres container and fresh fakes.
 /// </summary>
 [Collection("PubTrackerWebApplicationFactory")]
 public class ConcurrentPollRaceTests : IClassFixture<PubTrackerWebApplicationFactory>
@@ -54,7 +54,7 @@ public class ConcurrentPollRaceTests : IClassFixture<PubTrackerWebApplicationFac
         var created = await createResponse.Content.ReadFromJsonAsync<SearchQueryResponseDto>();
         var searchQueryId = created!.Id;
 
-        // Two independent scopes, each with its own scoped PubTrackerDbContext - genuinely
+        // Two independent scopes, each with its own scoped PubTrackerDbContext; genuinely
         // simulates two overlapping requests (e.g. the scheduled poll and a manual re-check)
         // racing to poll and dispatch a digest for the same search query, rather than one
         // serialized call sharing state.

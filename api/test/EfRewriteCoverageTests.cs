@@ -13,7 +13,7 @@ namespace test;
 /// caller of GetOtherPendingDigestsForUserAsync). These exist to catch raw-SQL/EF translation
 /// bugs (e.g. RETURNING-clause composition, column casing) that a compile-time check can't.
 ///
-/// Own PubTrackerWebApplicationFactory instance/Postgres container - see
+/// Own PubTrackerWebApplicationFactory instance/Postgres container; see
 /// CombinedDigestEndToEndTests's doc comment for why each class needs its own.
 /// </summary>
 [Collection("PubTrackerWebApplicationFactory")]
@@ -145,7 +145,7 @@ public class EfRewriteCoverageTests : IClassFixture<PubTrackerWebApplicationFact
         // "not yet included in a digest" without a second fetch from B's source.
         await searchQueriesDataAccess.UpdateUserDigestWatermarkAsync(user.Id, queryB.Id, DateTime.UtcNow.AddDays(-10));
 
-        // Targeted poll of A only - B must still be swept in via GetOtherPendingDigestsForUserAsync,
+        // Targeted poll of A only; B must still be swept in via GetOtherPendingDigestsForUserAsync,
         // with no re-fetch of B from its source.
         var results = await pollingService.PollSearchQueriesAsync(new[] { queryA.Id });
         Assert.Single(results);

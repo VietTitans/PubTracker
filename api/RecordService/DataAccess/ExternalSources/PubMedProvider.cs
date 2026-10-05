@@ -124,7 +124,7 @@ public class PubMedProvider : ILiteratureSourceProvider
             var xml = XDocument.Parse(await response.Content.ReadAsStringAsync());
             // NCBI's non-history ESearch mode caps out at 9,999 records: a page requested past
             // that ceiling returns an <ERROR> element instead of <Count>, so only overwrite the
-            // total when this page actually reports one - otherwise the real total from an
+            // total when this page actually reports one; otherwise the real total from an
             // earlier page would get clobbered back to 0.
             if (int.TryParse(xml.Root?.Element("Count")?.Value, out var count))
             {
@@ -196,7 +196,7 @@ public class PubMedProvider : ILiteratureSourceProvider
     }
 
     // PubmedBookArticle (book chapters, e.g. StatPearls) has a differently-shaped XML tree
-    // than PubmedArticle - title/authors/abstract live directly under BookDocument rather
+    // than PubmedArticle; title/authors/abstract live directly under BookDocument rather
     // than under Article, and the pub date is under Book instead of Journal/JournalIssue.
     private LiteratureRecord ParseBookArticle(XElement bookArticle)
     {

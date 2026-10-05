@@ -11,7 +11,7 @@ namespace test;
 /// End-to-end coverage of the soft-delete grace period (see
 /// UsersDataAccess.DeletionGracePeriodDays): signing back in within the window undoes the
 /// soft delete, signing back in after the window does not, and the purge worker only
-/// hard-deletes accounts once the window has passed - cleanly, without violating the
+/// hard-deletes accounts once the window has passed; cleanly, without violating the
 /// user_search_queries/user_search_query_digests foreign keys.
 /// </summary>
 [Collection("PubTrackerWebApplicationFactory")]
@@ -84,7 +84,7 @@ public class UserDeletionGracePeriodTests : IClassFixture<PubTrackerWebApplicati
     public async Task SigningBackInWithinGracePeriod_Reactivates_WhenAccountWasNeverLinkedToKeycloakYet()
     {
         // Regression for a row that was soft-deleted before ever completing a first Keycloak
-        // login (keycloak_sub still NULL) - GetOrProvisionByKeycloakSubAsync's email-fallback
+        // login (keycloak_sub still NULL); GetOrProvisionByKeycloakSubAsync's email-fallback
         // linking branch must reactivate it too, not just the already-linked branch.
         using var scope = _factory.Services.CreateScope();
         var usersDataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();

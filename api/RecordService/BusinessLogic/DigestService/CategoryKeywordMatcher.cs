@@ -3,7 +3,7 @@ namespace RecordService.BusinessLogic.DigestService;
 /// <summary>
 /// Best-effort anatomical-category match against free text, using PEDro's own body-part
 /// vocabulary (DigestCategories) as the shared taxonomy. PubMedDigestMessageBuilder relies on
-/// this entirely, since PubMed has no structured body-part field of its own - the whole search
+/// this entirely, since PubMed has no structured body-part field of its own; the whole search
 /// lives in free text. PedroDigestMessageBuilder falls back to it too, for a PEDro search that
 /// leaves body_part unset ("Any/all") but still has a free-text term to match against, so a
 /// PEDro digest doesn't fall back to "your search" just because the structured field was

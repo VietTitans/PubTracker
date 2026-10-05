@@ -22,7 +22,7 @@ namespace test;
 ///
 /// [Collection] groups this with every other test class that uses PubTrackerWebApplicationFactory
 /// (see SearchQueryPollingEndToEndTests's doc comment) so xunit never initializes two factory
-/// instances concurrently - they'd race on the process-wide environment variables
+/// instances concurrently; they'd race on the process-wide environment variables
 /// PubTrackerWebApplicationFactory configures itself through.
 /// </summary>
 [Collection("PubTrackerWebApplicationFactory")]
@@ -63,7 +63,7 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
 
         // PollAllSearchQueriesAsync polls every query in this class's shared database, which by
         // now may include the isolation test's own query too (test methods within a class share
-        // one Postgres container/class fixture) - filter to just the two this test created.
+        // one Postgres container/class fixture); filter to just the two this test created.
         var allResults = await pollingService.PollAllSearchQueriesAsync();
         var results = allResults.Where(r => createdSearchQueryIds.Contains(r.SearchQueryId)).ToList();
 
@@ -103,7 +103,7 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
         {
             client.DefaultRequestHeaders.Add("X-Debug-User-Id", userId.ToString());
             // Distinct URL variant, not FakeLiteratureSourceProvider.TestUrl or
-            // FakePedroLiteratureSourceProvider.TestUrl directly - OneUser_SubscribedToTwoQueries
+            // FakePedroLiteratureSourceProvider.TestUrl directly; OneUser_SubscribedToTwoQueries
             // already subscribes a user to both of those in this same class (same shared
             // Postgres container/class fixture), and reusing either would mean this test's poll
             // finds zero "new" records (the fake's records are fixed at "2 days ago"/"1 day
@@ -119,7 +119,7 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
 
         // PollAllSearchQueriesAsync polls every query in this class's shared database, which by
         // now may include OneUser_SubscribedToTwoQueries's own queries too (test methods within
-        // a class share one Postgres container/class fixture) - filter to just this test's query.
+        // a class share one Postgres container/class fixture); filter to just this test's query.
         _factory.EmailSender.FailForAddresses.Add(userB.Email);
         var firstResult = (await pollingService.PollAllSearchQueriesAsync()).Single(r => r.SearchQueryId == searchQueryId);
         Assert.False(firstResult.IsSuccessful); // one of the two subscribers' sends failed

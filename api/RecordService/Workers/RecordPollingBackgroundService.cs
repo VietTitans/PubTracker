@@ -27,7 +27,7 @@ public class RecordPollingBackgroundService : BackgroundService
     {
         // Restart-safe: don't re-poll everything on every restart. Wait until the oldest query
         // is a full interval old (a never-polled query, or no queries, means due now). Applies
-        // to the first cycle only - later cycles follow the timer.
+        // to the first cycle only; later cycles follow the timer.
         try
         {
             using var gateScope = _scopeFactory.CreateScope();

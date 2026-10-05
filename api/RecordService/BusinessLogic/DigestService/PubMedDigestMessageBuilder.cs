@@ -6,7 +6,7 @@ namespace RecordService.BusinessLogic.DigestService;
 
 /// <summary>
 /// Builds the PubMed digest message body. PubMed has no fixed body-part taxonomy like
-/// PEDro's - this does a best-effort keyword match against anatomical MeSH terms found
+/// PEDro's; this does a best-effort keyword match against anatomical MeSH terms found
 /// in the search URL's "term" query param, mapped onto the shared DigestCategories so
 /// the same categories are used across sources. The first matching keyword wins; a
 /// search with no recognizable anatomical term falls back to "your search".
@@ -27,7 +27,7 @@ public static class PubMedDigestMessageBuilder
     private static readonly Regex RelativeYearsFilter = new(@"^datesearch\.y_(\d+)$", RegexOptions.Compiled);
 
     /// <summary>
-    /// PubMed has no structured fields like PEDro's advanced search - the whole query lives in
+    /// PubMed has no structured fields like PEDro's advanced search; the whole query lives in
     /// the "term" param, which can be an arbitrary boolean expression. So unlike PEDro's
     /// multi-tag breakdown, this returns at most a "Search: ..." tag with the raw term, plus a
     /// year-filter tag if the URL's publication-date filter is present.

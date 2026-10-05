@@ -15,12 +15,12 @@ public class FakeLiteratureSourceProvider : ILiteratureSourceProvider
     public string ProviderName => "Fake";
 
     // Prefix match (not exact) so tests needing their own distinct, non-colliding query URL -
-    // e.g. two tests in the same class sharing one Postgres container/class fixture - can mint
+    // e.g. two tests in the same class sharing one Postgres container/class fixture; can mint
     // variants like $"{TestUrl}?case=isolation" that still resolve to this same fake provider.
     public bool CanHandle(string url) => url.StartsWith(TestUrl, StringComparison.Ordinal);
 
     /// <summary>Exact URLs (including query string) to simulate an unreachable source for, so
-    /// tests can prove the "source is down" path without a real outage - mirrors
+    /// tests can prove the "source is down" path without a real outage; mirrors
     /// FakeEmailSender.FailForAddresses.</summary>
     public HashSet<string> FailForUrls { get; } = new();
 

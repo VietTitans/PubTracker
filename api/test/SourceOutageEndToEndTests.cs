@@ -17,7 +17,7 @@ namespace test;
 /// explicit poll calls.
 ///
 /// Uses its own PubTrackerWebApplicationFactory instance for the same reason the other e2e test
-/// classes do - a fresh Postgres container and fresh fakes.
+/// classes do; a fresh Postgres container and fresh fakes.
 /// </summary>
 [Collection("PubTrackerWebApplicationFactory")]
 public class SourceOutageEndToEndTests : IClassFixture<PubTrackerWebApplicationFactory>

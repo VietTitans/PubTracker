@@ -21,7 +21,7 @@ public class PedroProviderManualTest
     {
         await using var provider = new PedroProvider();
 
-        // With no lastRunDate this is a baseline call - it should report the search's total
+        // With no lastRunDate this is a baseline call; it should report the search's total
         // record count but not fetch any record details (see PedroProvider.SearchAsync).
         var baseline = await provider.SearchAsync(TestUrl);
         Assert.True(baseline.IsSuccessful, baseline.ErrorMessage);

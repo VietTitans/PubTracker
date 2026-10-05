@@ -1,34 +1,30 @@
-# Scientific Search Alert SaaS: Architecture & Specification
+# Scientific Search Alert SaaS: Architecture and specification
 
-## 1. Executive Summary
-This document defines the complete technical architecture and system specification for a multi-tenant, public SaaS platform designed to automate literature monitoring across major scientific databases (PubMed, IEEE Xplore, Scopus, and Pedro.org.au).
+## 1. Executive summary
+This document specifies the architecture of a multi-tenant, public SaaS platform that automates literature monitoring across PubMed, IEEE Xplore, Scopus, and Pedro.org.au.
 
-Users interact with the platform by performing their desired search query natively on a scientific website, copying the final browser search URL, and pasting it into this platform. On a weekly schedule, the system processes these URLs, extracts new matching records via API extraction or headless scraping, deduplicates findings against historical runs, and dispatches a consolidated email digest featuring new article counts, titles, and descriptions.
+Users interact with the platform by performing their desired search query natively on a scientific website, copying the final browser search URL, and pasting it into this platform. On a weekly schedule, the system processes these URLs, extracts new matching records via API extraction or headless scraping, deduplicates findings against historical runs, and sends a consolidated email digest with new article counts, titles, and descriptions.
 
-The implementation stack is built natively on **Modern C# 14 and .NET 10 (Long-Term Support)**, leveraging **Keycloak** for full identity federation and OIDC-compliant access control.
+The stack is C# 14 on .NET 10 (LTS), with Keycloak for identity federation and OIDC access control.
 
----
+## 2. Platform strategy and extraction mechanics
 
-## 2. Platform Strategy & Extraction Mechanics
-
-The backend features a **Parser Factory Engine** designed to deconstruct pasted browser URLs into structured, queryable data payloads mapped to respective service providers:
+The backend has a parser factory that breaks pasted browser URLs into structured query data and maps each one to its provider:
 
 | Target Platform | Strategy | Integration Protocol |
 | :--- | :--- | :--- |
-| **PubMed** | Native API | Extract `term` query parameter $\rightarrow$ Bind to public NCBI Entrez API (`esearch.fcgi` / `esummary.fcgi`). |
-| **IEEE Xplore** | Native API | Extract `queryText` parameter $\rightarrow$ Query IEEE Xplore Metadata API via premium developer keys. |
-| **Scopus** | Native API + Proxy | Extract `searchString` key $\rightarrow$ Query Elsevier Scopus API (Requires developer keys combined with institutional network proxy routing). |
-| **Pedro.org.au** | Headless Scraper | Extract form field arrays from URL $\rightarrow$ Instantiate isolated **Playwright for .NET** or external micro-scrapers to read raw DOM segments. |
+| PubMed | Native API | Extract `term` query parameter $\rightarrow$ Bind to public NCBI Entrez API (`esearch.fcgi` / `esummary.fcgi`). |
+| IEEE Xplore | Native API | Extract `queryText` parameter $\rightarrow$ Query IEEE Xplore Metadata API via premium developer keys. |
+| Scopus | Native API + Proxy | Extract `searchString` key $\rightarrow$ Query Elsevier Scopus API (Requires developer keys combined with institutional network proxy routing). |
+| Pedro.org.au | Headless Scraper | Extract form field arrays from URL $\rightarrow$ Instantiate isolated Playwright for .NET or external micro-scrapers to read raw DOM segments. |
 
-> **Note — ToS/legal review required:** replaying user-authenticated or session-scoped search URLs against Scopus/IEEE Xplore on a recurring schedule, and routing traffic through institutional proxies, may conflict with those providers' terms of service and the institution's network-use policy. This needs explicit legal sign-off before implementation, and pasted URLs from these platforms may carry session tokens that expire, breaking the "paste once, monitor forever" assumption.
+> **Note (ToS/legal review required):** replaying user-authenticated or session-scoped search URLs against Scopus/IEEE Xplore on a recurring schedule, and routing traffic through institutional proxies, may conflict with those providers' terms of service and the institution's network-use policy. This needs explicit legal sign-off before implementation, and pasted URLs from these platforms may carry session tokens that expire, breaking the "paste once, monitor forever" assumption.
 
-> **Note — PEDro Fair Use conflict (confirmed):** PEDro's published Fair Use policy (`pedro.org.au/fair-use/`) explicitly states "Any form of systematic, bulk, or automated downloading or the use of spiders or robots is not permitted," and that commercial use requires written approval from the PEDro Partnership. The current `PedroProvider` headless-scraping implementation directly conflicts with this — it is not a hypothetical risk. `robots.txt` being permissive does not override these terms. No self-serve API or bulk-licensing option is advertised on their site; the stated path is to contact the PEDro Partnership directly for written approval. **Decision (as of this investigation): accepted as a dev-time risk given current low request volume — must be resolved (obtain written approval, or drop PEDro as a source) before any production launch or scale-up.**
+> **Note (PEDro Fair Use conflict, confirmed):** PEDro's published Fair Use policy (`pedro.org.au/fair-use/`) explicitly states "Any form of systematic, bulk, or automated downloading or the use of spiders or robots is not permitted," and that commercial use requires written approval from the PEDro Partnership. The current `PedroProvider` headless-scraping implementation directly conflicts with this. It is not a hypothetical risk. `robots.txt` being permissive does not override these terms. No self-serve API or bulk-licensing option is advertised on their site; the stated path is to contact the PEDro Partnership directly for written approval. Decision (as of this investigation): accepted as a dev-time risk given current low request volume. It must be resolved (obtain written approval, or drop PEDro as a source) before any production launch or scale-up.
 
----
+## 3. High-level architecture and technical stack
 
-## 3. High-Level Architecture & Technical Stack
-
-The architecture is explicitly designed to handle intensive, asynchronous back-end polling patterns without blocking front-end operations or user request lifecycles.
+Back-end polling runs asynchronously, so it never blocks the front end or user requests.
 
 ```
                   ┌──────────────────────────────────────────────┐
@@ -59,24 +55,22 @@ The architecture is explicitly designed to handle intensive, asynchronous back-e
                                                [ User ]
 ```
 
----
+## 4. Identity and access management (Keycloak integration)
 
-## 4. Identity & Access Management (Keycloak Integration)
+A Keycloak instance handles authentication, registration, and credentials, separate from the transactional database.
 
-Authentication, registration, and credential security are fully decoupled from the transactional database and offloaded to an enterprise **Keycloak** identity provider instance.
+### Realm profile configuration
+* Realm identifier: `science-alerts-saas`, isolated from the default master realm.
+* Self-service settings:
+  * User registration: enabled.
+  * Email as username: enabled (simplifies sign-in).
+  * Verify email: enabled. The system depends on this: email reachability must be confirmed before costly background tasks run.
 
-### Realm Profile Configuration
-* **Realm Identifier:** `science-alerts-saas` (Completely isolated from administrative default master domains).
-* **Self-Service Configuration Attributes:**
-  * **User Registration:** Enabled.
-  * **Email as Username:** Enabled (Streamlines client sign-in patterns).
-  * **Verify Email:** Enabled. This is an explicit architectural dependency—ensuring email reachability is required before executing costly background tasks.
-
-### Token Verification Flow (.NET 10 Pipeline)
+### Token verification flow (.NET 10 pipeline)
 1. The frontend client initializes OIDC Authorization Code Flow with PKCE via Keycloak's login interface.
-2. Upon verification, Keycloak passes cryptographically signed **JSON Web Tokens (JWTs)** back to the browser context.
+2. Upon verification, Keycloak passes cryptographically signed JSON Web Tokens (JWTs) back to the browser context.
 3. Every protected API request transmits this token via the standard HTTP pipeline header: `Authorization: Bearer <JWT>`.
-4. The ASP.NET Core 10 backend processes and authorizes requests middleware-style using standard metadata validators mapping directly back to Keycloak's `.well-known/openid-configuration` endpoints.
+4. The ASP.NET Core 10 backend validates and authorizes requests in middleware, using metadata from Keycloak's `.well-known/openid-configuration` endpoint.
 
 ```csharp
 // Program.cs Token Validation Pattern (Modern ASP.NET Core 10 Minimal APIs)
@@ -94,17 +88,15 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 ```
 
----
+## 5. Database schema and ER model
 
-## 5. Database Schema & ER Model
+The database tracks sources, unique queries, records, and which users follow which queries.
 
-The relational persistence tier tracks sources, individual unique queries, historical record indexing, and multi-tenant user tracking relationships.
+**Revision note:** the previous version of this schema linked `SearchQuery` to `Record` only indirectly, through `Source`. Since `Source` is coarse-grained (one row per platform), that path could not express "which records belong to which specific saved search," and the weekly digest job had no way to compute a per-search delta. This revision introduces an explicit `SearchQueryRecord` junction table between `SearchQuery` and `Record`, and replaces the `currentRecordCount` / `previousRecordCount` counters with a timestamp-based delta mechanism (`firstSeenAt`), which is simpler and less prone to drift. The undefined `subscriptioners` field has been removed and replaced with an explicit `lastDigestSentAt` tracking column.
 
-**Revision note:** the previous version of this schema linked `SearchQuery` to `Record` only indirectly, through `Source`. Since `Source` is coarse-grained (one row per platform), that path could not express "which records belong to which specific saved search," and the weekly digest job had no way to compute a per-search delta. This revision introduces an explicit `SearchQueryRecord` junction table between `SearchQuery` and `Record`, and replaces the `currentRecordCount` / `previousRecordCount` counters with a timestamp-based delta mechanism (`firstSeenAt`), which is both simpler and less prone to drifting out of sync with reality. The undefined `subscriptioners` field has been removed and replaced with an explicit `lastDigestSentAt` tracking column.
+**Revision note (per-user digest tracking):** `SearchQuery.lastDigestSentAt` above was a single watermark shared by every subscriber of a query: a failed send to any one subscriber blocked retry for all of them, and there was no way to combine a user's multiple subscribed searches (potentially across different sources) into one email, since "has this query's digest gone out" wasn't a question that could be asked per-user. This revision adds `UserSearchQueryDigest`, moving the watermark onto the `(userId, searchQueryId)` pair it actually describes. `SearchQuery.lastDigestSentAt` is kept only for backward read compatibility (existing API/frontend consumers); it is no longer written to, and should eventually be removed once those consumers are migrated to the per-user data.
 
-**Revision note (per-user digest tracking):** `SearchQuery.lastDigestSentAt` above was a single watermark shared by every subscriber of a query - a failed send to any one subscriber blocked retry for all of them, and there was no way to combine a user's multiple subscribed searches (potentially across different sources) into one email, since "has this query's digest gone out" wasn't a question that could be asked per-user. This revision adds `UserSearchQueryDigest`, moving the watermark onto the `(userId, searchQueryId)` pair it actually describes. `SearchQuery.lastDigestSentAt` is kept only for backward read compatibility (existing API/frontend consumers) - it is no longer written to, and should eventually be removed once those consumers are migrated to the per-user data.
-
-### Entity Relationship Layout
+### Entity relationship layout
 
 ```
 ┌───────────────┐          ┌───────────────┐
@@ -153,9 +145,9 @@ The relational persistence tier tracks sources, individual unique queries, histo
                           │ PK (userId, searchQueryId)             │
                           └────────────────────────────────────────┘
 ```
-`UserSearchQueryDigest` is the digest-delta watermark, keyed per (user, search query) rather than per search query alone - see the revision note above. It has an implicit FK to `SearchQuery(id)` too, alongside `User(id)`; omitted from the diagram above only for layout space.
+`UserSearchQueryDigest` is the digest-delta watermark, keyed per (user, search query) rather than per search query alone (see the revision note above). It has an implicit FK to `SearchQuery(id)` too, alongside `User(id)`; omitted from the diagram above only for layout space.
 
-### Relational Table Implementations (SQL Specification)
+### Relational tables (SQL specification)
 
 ```sql
 -- Represents monitored platforms (e.g., PubMed, IEEE, Scopus)
@@ -217,11 +209,11 @@ CREATE TABLE UserSearchQuery (
     PRIMARY KEY (userId, searchQueryId)
 );
 
--- Per-(user, searchQuery) digest watermark - supersedes SearchQuery.lastDigestSentAt as the
+-- Per-(user, searchQuery) digest watermark; supersedes SearchQuery.lastDigestSentAt as the
 -- source of truth for "what has this specific user already been sent for this query". Seeded
 -- to now() when a user subscribes (so they only get records seen after subscribing, not the
 -- query's entire historical backlog), and advanced only when that user's combined digest email
--- actually sends successfully - a failed send blocks retry for this (user, query) pair alone,
+-- actually sends successfully; a failed send blocks retry for this (user, query) pair alone,
 -- never for any other subscriber of the same query or any other query.
 CREATE TABLE UserSearchQueryDigest (
     userId INTEGER NOT NULL REFERENCES "User"(id) ON DELETE CASCADE,
@@ -233,24 +225,22 @@ CREATE TABLE UserSearchQueryDigest (
 
 All timestamp columns use `TIMESTAMPTZ` (`TIMESTAMP WITH TIME ZONE`) rather than plain `TIMESTAMP`, following a "universal UTC" storage strategy: values are normalized to UTC internally on write regardless of the writing session's time zone, and converted for display only at read time. This keeps cross-timezone comparisons (e.g. the digest cutoff filter below) unambiguous regardless of where the application server, database, or a future admin client happens to be running.
 
----
+## 6. Asynchronous background engine and lifecycle workflows
 
-## 6. Asynchronous Background Engine & Lifecycle Workflows
+The monitoring loop runs outside the Web API, scheduled by Quartz.NET or Hangfire on a 7-day cycle.
 
-The automated monitoring loop functions outside the Web API execution layer using distributed scheduling models (Quartz.NET or Hangfire) operating on a 7-day chronometer loop.
-
-### Complete Lifecycle Protocol
-1. **Trigger Phase:** The central cron event kicks off the processing queue.
-2. **Batch Query Processing:** The worker selects all unique records from the `SearchQuery` table.
-3. **Execution Routing (The Parser Factory):** For every target query:
-   * **API Handlers (PubMed/IEEE):** The engine reads the `targetUrl`. Using **C# 14 extension blocks**, it separates raw parameter blocks instantly without garbage heap allocations. It routes structured REST data payloads safely via `HttpClientFactory`.
-   * **Scraper Handlers (Pedro):** The engine boots a headless configuration context utilizing **Playwright for .NET**, loads the specific query page, executes virtual scrolling or form processing, and pulls back raw DOM nodes to process.
-4. **Analysis & Update Mechanics:**
-   * For each record returned by a query, upsert into `Record` keyed on `doi` (`INSERT ... ON CONFLICT (doi) DO NOTHING`), ensuring global deduplication across all searches and users.
-   * Insert the `(searchQueryId, recordId)` pair into `SearchQueryRecord` (`ON CONFLICT (searchQueryId, recordId) DO NOTHING`). This is the moment `firstSeenAt` is stamped for that query — regardless of whether the underlying `Record` was brand new to the system or already existed from a different search.
+### Lifecycle
+1. Trigger: the cron event starts the processing queue.
+2. Batch: the worker selects all unique records from the `SearchQuery` table.
+3. Routing (parser factory): for every target query:
+   * API handlers (PubMed/IEEE): the engine reads the `targetUrl` and uses C# 14 extension blocks to split out the parameters without heap allocations. It sends the REST requests through `HttpClientFactory`.
+   * Scraper handlers (Pedro): the engine starts headless Playwright for .NET, loads the query page, scrolls or processes forms as needed, and reads the raw DOM nodes.
+4. Analysis and updates:
+   * For each record returned by a query, upsert into `Record` keyed on `doi` (`INSERT ... ON CONFLICT (doi) DO NOTHING`), which deduplicates globally across all searches and users.
+   * Insert the `(searchQueryId, recordId)` pair into `SearchQueryRecord` (`ON CONFLICT (searchQueryId, recordId) DO NOTHING`). This is the moment `firstSeenAt` is stamped for that query, regardless of whether the underlying `Record` was brand new to the system or already existed from a different search.
    * Bridge new source associations through `SourceRecord` as before.
-5. **Digest Assembly & Email Dispatch:** dispatch is per-*user*, not per-`SearchQuery` - a user subscribed to several queries (across one or many sources) gets exactly one email per run, with one section per query that has pending content for them, rather than one email per query.
-   * For each `SearchQuery` just polled, compute the delta against `UserSearchQueryDigest` rather than a single query-wide watermark: read every subscriber's own `lastDigestSentAt` for that query (`null` counts as "never sent" - the delta then includes that query's full history for that subscriber, since a `null` watermark only occurs for a subscriber the seed-on-subscribe step hasn't reached, not for a deliberately-unbounded backlog request), then filter `SearchQueryRecord` rows per subscriber:
+5. Digest assembly and email dispatch: dispatch is per user, not per `SearchQuery`. A user subscribed to several queries (across one or many sources) gets exactly one email per run, with one section per query that has pending content for them, rather than one email per query.
+   * For each `SearchQuery` just polled, compute the delta against `UserSearchQueryDigest` rather than a single query-wide watermark: read every subscriber's own `lastDigestSentAt` for that query (`null` counts as "never sent"; the delta then includes that query's full history for that subscriber, since a `null` watermark only occurs for a subscriber the seed-on-subscribe step hasn't reached, not for a deliberately-unbounded backlog request), then filter `SearchQueryRecord` rows per subscriber:
      ```sql
      SELECT usq.userId, r.id, r.doi, r.title, r.description, sqr.firstSeenAt
      FROM UserSearchQuery usq
@@ -264,22 +254,18 @@ The automated monitoring loop functions outside the Web API execution layer usin
      ```
    * The worker groups every pending `(user, searchQuery)` delta computed this run by `userId`, so a user with pending content in three of their subscribed queries gets one email containing three sections, not three emails.
    * Each combined delta set is transformed via an automated HTML styling script into one email digest template (one section per query, still per-source-formatted) and dispatched asynchronously through the transmission vendor (e.g., Postmark or Resend API).
-   * On confirmed successful dispatch, only the `UserSearchQueryDigest` rows for the `(user, searchQuery)` pairs actually included in that one email are advanced to the current run's cutoff timestamp - never the whole `SearchQuery`. A failed send therefore blocks retry only for that one user's pending queries, not for any other subscriber of the same query. Using an explicit per-pair column here (rather than deriving the cutoff purely from the cron interval) makes the system robust to missed or delayed runs, retries, and manual backfills, without one subscriber's delivery trouble affecting anyone else's.
-   * A subscriber's brand new subscription seeds its `UserSearchQueryDigest` row to `now()` at subscribe time, so they receive only records seen from that point forward - not the query's entire historical backlog, which may already have been sent to that query's other subscribers long ago.
+   * On confirmed successful dispatch, only the `UserSearchQueryDigest` rows for the `(user, searchQuery)` pairs actually included in that one email are advanced to the current run's cutoff timestamp, never the whole `SearchQuery`. A failed send therefore blocks retry only for that one user's pending queries, not for any other subscriber of the same query. Using an explicit per-pair column here (rather than deriving the cutoff purely from the cron interval) makes the system tolerate missed or delayed runs, retries, and manual backfills, without one subscriber's delivery trouble affecting anyone else's.
+   * A subscriber's brand new subscription seeds its `UserSearchQueryDigest` row to `now()` at subscribe time, so they receive only records seen from that point forward, not the query's entire historical backlog, which may already have been sent to that query's other subscribers long ago.
 
----
+## 7. Scaling and optimization
 
-## 7. Scaling & Optimization Blueprint
+* Allocation-free tokenization: pasted URL strings are tokenized with C# 14 implicit span conversions and .NET 10 string normalization helpers.
+* JSON serialization: responses use .NET 10 `JsonSourceGenerationOptionsAttribute` settings to drop circular references, keeping overhead low when tracking thousands of references.
+* Rate-limit handling: scientific databases impose strict IP and API-key quotas. The worker should use `HttpClientFactory` with a resilience library such as Polly to enforce rate limits and back off on 429/503 responses.
+* Polyglot scraper option: Playwright for .NET works, but if platforms change their anti-bot checks (e.g., Cloudflare, CAPTCHAs), individual scrapers can move into small, isolated Python Docker microservices. The .NET worker calls them over internal gRPC/HTTP, so scrapers can be updated without changing the main architecture.
 
-* **Allocation-Free Text Tokenization:** The background parsing architecture takes deliberate advantage of **C# 14 implicit span conversions** and specialized .NET 10 string normalization helper functions for tokenizing incoming pasted URL strings.
-* **JSON Serialization Handling:** Domain responses utilize .NET 10 `JsonSourceGenerationOptionsAttribute` parameters to catch and cleanly drop circular metadata linkages natively, maintaining low overhead loops when tracking thousands of references concurrently.
-* **Rate Limit Resiliency (Throttling HTTP Clients):** Scientific databases impose aggressive IP and application key quotas. The background processing architecture must leverage .NET's native `HttpClientFactory` combined with resilient scheduling algorithms (e.g., **Polly**) to enforce rate-limiting parameters and backoff on 429/503 responses.
-* **Polyglot Scraper Architecture Option:** While Playwright for .NET is robust, if platforms change their client-side anti-bot validation structures (e.g., Cloudflare, CAPTCHAs), individual scrapers can be abstracted away into tiny, isolated Python Docker microservices. The .NET Worker calls these microservices via internal gRPC/HTTP parameters, allowing targeted updates to scrapers without modifying the master architecture.
+## 8. Open items and follow-ups
 
----
-
-## 8. Open Items / Follow-Ups
-
-* **Legal/ToS review** of automated replay of Scopus/IEEE Xplore search URLs, including institutional proxy routing (see Section 2 note).
-* **Session-URL expiry handling:** define behavior when a pasted search URL's embedded session token expires and the query can no longer be replayed server-side.
-* **Anti-bot resilience plan** for the Pedro.org.au Playwright scraper beyond the Section 7 fallback idea (detection, alerting, and graceful degradation when scraping breaks mid-run).
+* Legal/ToS review of automated replay of Scopus/IEEE Xplore search URLs, including institutional proxy routing (see Section 2 note).
+* Session-URL expiry handling: define behavior when a pasted search URL's embedded session token expires and the query can no longer be replayed server-side.
+* Anti-bot resilience plan for the Pedro.org.au Playwright scraper beyond the Section 7 fallback idea (detection, alerting, and graceful degradation when scraping breaks mid-run).

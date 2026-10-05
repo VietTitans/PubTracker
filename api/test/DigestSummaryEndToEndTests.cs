@@ -17,7 +17,7 @@ namespace test;
 /// by CombinedDigestEndToEndTests).
 ///
 /// Uses its own PubTrackerWebApplicationFactory instance for the same reason
-/// CombinedDigestEndToEndTests does - a fresh Postgres container and fresh fakes so this
+/// CombinedDigestEndToEndTests does; a fresh Postgres container and fresh fakes so this
 /// class's assertions can't be polluted by other test classes' polls.
 /// </summary>
 [Collection("PubTrackerWebApplicationFactory")]
@@ -64,7 +64,7 @@ public class DigestSummaryEndToEndTests : IClassFixture<PubTrackerWebApplication
     [Fact]
     public async Task PollAll_SummaryGeneratorThrows_DigestStillSendsWithoutSummary()
     {
-        // Same shared-instance caveat as the other test in this class - reset explicitly.
+        // Same shared-instance caveat as the other test in this class; reset explicitly.
         _factory.SummaryGenerator.FixedSummary = string.Empty;
         _factory.SummaryGenerator.ShouldThrow = true;
 

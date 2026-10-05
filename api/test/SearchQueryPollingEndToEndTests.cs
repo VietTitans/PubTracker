@@ -9,7 +9,7 @@ namespace test;
 
 /// <summary>
 /// End-to-end coverage of the full journey: create a search query over HTTP, persist it,
-/// then poll it and persist discovered records - and specifically that the digest watermark
+/// then poll it and persist discovered records; and specifically that the digest watermark
 /// (see RecordPollingService.PollAllSearchQueriesAsync) prevents a second poll from
 /// re-counting already-seen records as new.
 ///

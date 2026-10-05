@@ -23,7 +23,7 @@ public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
 
     // The only host this provider is allowed to drive its headless browser to. Without this,
     // any URL merely containing "pedro" (a user-controlled subscription target) would be
-    // navigated to directly - an SSRF vector letting a subscriber point the server's browser
+    // navigated to directly; an SSRF vector letting a subscriber point the server's browser
     // at internal services/cloud metadata endpoints.
     private const string AllowedHost = "search.pedro.org.au";
 
@@ -65,7 +65,7 @@ public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
         try
         {
             // The search's current total (what the UI displays as "records registered") is
-            // refreshed on every poll - it's just a page-1 fetch of the URL as pasted, and is
+            // refreshed on every poll; it's just a page-1 fetch of the URL as pasted, and is
             // meaningful even when there's nothing new to fetch in detail below.
             var (totalCount, _) = await ScrapeAsync(url);
 
@@ -115,7 +115,7 @@ public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
     // Fetches full details for every record PEDro reports as added since `since`, paginating
     // at the server's max page size (records aren't guaranteed to appear on the unfiltered
     // search's first page just because they're new, so this can't be inferred from ScrapeAsync
-    // alone - see PedroProvider's SearchAsync).
+    // alone, see PedroProvider's SearchAsync).
     private async Task<List<LiteratureRecord>> ScrapeRecordsAddedSinceAsync(string url, DateTime since)
     {
         var dateFilter = since.ToString("dd/MM/yyyy");
@@ -159,7 +159,7 @@ public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
     {
         // Defense-in-depth: CanHandle already gates every entry point via LiteratureSourceFactory,
         // but re-check here too since this drives a real headless browser navigation (SSRF risk).
-        // Kept outside CircuitBreakerPipeline below - a rejected URL is a permanent, not a
+        // Kept outside CircuitBreakerPipeline below; a rejected URL is a permanent, not a
         // transient, failure and must not count against PEDro's own outage tracking.
         if (!IsAllowedPedroUrl(url))
         {
@@ -176,7 +176,7 @@ public class PedroProvider : ILiteratureSourceProvider, IAsyncDisposable
         await using var context = await browser.NewContextAsync();
         var page = await context.NewPageAsync();
         // Applies to every wait/action below (GotoAsync, WaitForSelectorAsync, and the
-        // InnerTextAsync/GetAttributeAsync/CountAsync calls further down) - a single default
+        // InnerTextAsync/GetAttributeAsync/CountAsync calls further down); a single default
         // rather than a per-call Timeout option on each, since Playwright's own default (30s)
         // is unbounded per call and this method makes several such calls per scrape.
         page.SetDefaultTimeout(PageTimeoutMs);

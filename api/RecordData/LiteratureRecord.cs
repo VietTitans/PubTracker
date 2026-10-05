@@ -14,7 +14,7 @@ public class LiteratureRecord
     public required string ExternalId { get; set; }
 
     /// <summary>
-    /// The record's real DOI, when one exists. Display-only - not used for deduplication.
+    /// The record's real DOI, when one exists. Display-only; not used for deduplication.
     /// </summary>
     public string? Doi { get; set; }
 

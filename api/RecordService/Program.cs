@@ -7,6 +7,7 @@ using RecordService.Authentication;
 using RecordService.DataAccess;
 using RecordService.DataAccess.Email;
 using RecordService.DataAccess.ExternalSources;
+using RecordService.DataAccess.Keycloak;
 using RecordService.DataAccess.Summarization;
 using RecordService.ErrorHandling;
 using RecordService.Workers;
@@ -30,7 +31,6 @@ builder.Services.AddDbContext<RecordService.DataAccess.PubTrackerDbContext>(opti
 
 builder.Services.AddControllers();
 
-// URL-segment versioning: /api/v1/... . Group name "v1" matches Swagger's default doc.
 builder.Services.AddApiVersioning(options =>
 {
     options.DefaultApiVersion = new Asp.Versioning.ApiVersion(1, 0);
@@ -43,7 +43,7 @@ builder.Services.AddApiVersioning(options =>
 
 builder.Services.AddHttpContextAccessor();
 
-// CORS - allows the React dev server (Vite, default port 5173) to call this API.
+// CORS: allows the React dev server (Vite, default port 5173) to call this API.
 var webAppOrigin = builder.Configuration["Cors:WebAppOrigin"] ?? "http://localhost:5173";
 builder.Services.AddCors(options =>
 {
@@ -51,7 +51,7 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(webAppOrigin).AllowAnyHeader().AllowAnyMethod());
 });
 
-// External Literature Sources - Register providers for factory pattern
+// External Literature Sources: Register providers for factory pattern
 var ncbiApiKey = builder.Configuration["Ncbi:ApiKey"];
 var ncbiContactEmail = builder.Configuration["Ncbi:ContactEmail"];
 builder.Services.AddPubMedHttpClient(attemptTimeout: TimeSpan.FromSeconds(15));
@@ -70,7 +70,7 @@ builder.Services.AddSingleton<LiteratureSourceFactory>(serviceProvider =>
     return new LiteratureSourceFactory(providers);
 });
 
-// Data Access Layer - Register interfaces to implementations
+// Data Access Layer: Register interfaces to implementations
 builder.Services.AddScoped<IUsersDataAccess, UsersDataAccess>();
 builder.Services.AddScoped<ISourcesDataAccess, SourcesDataAccess>();
 builder.Services.AddScoped<ISearchQueriesDataAccess, SearchQueriesDataAccess>();
@@ -92,9 +92,9 @@ builder.Services.AddScoped<IEmailSender>(serviceProvider =>
         serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(),
         emailApiKey, emailFromAddress, emailFromName));
 
-// AI digest summary - swappable behind ISummaryGenerator via the OpenAI-compatible
+// AI digest summary: swappable behind ISummaryGenerator via the OpenAI-compatible
 // chat-completions wire format (OpenAI, Azure OpenAI, Groq, local Ollama, OpenRouter all speak
-// it), so swapping vendors is a config change, not a code change. Additive feature - missing
+// it), so swapping vendors is a config change, not a code change. Additive feature; missing
 // config falls back to NullSummaryGenerator instead of failing startup like email does.
 var llmBaseUrl = builder.Configuration["Llm:BaseUrl"];
 var llmApiKey = builder.Configuration["Llm:ApiKey"];
@@ -106,7 +106,7 @@ builder.Services.AddScoped<ISummaryGenerator>(serviceProvider =>
             serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(),
             llmBaseUrl!, llmApiKey, llmModel!));
 
-// Business Logic Layer - Register interfaces to implementations
+// Business Logic Layer: Register interfaces to implementations
 builder.Services.AddScoped<IUsersService, UsersService>();
 builder.Services.AddScoped<ISearchQueriesService, SearchQueriesService>();
 builder.Services.AddScoped<ISourcesService, SourcesService>();
@@ -114,14 +114,14 @@ builder.Services.AddScoped<IDigestService, DigestService>();
 builder.Services.AddSingleton(new PollCycleAdvisoryLock(connectionString));
 builder.Services.AddScoped<IRecordPollingService, RecordPollingService>();
 
-// Background scheduler - polls every search query for new records on an interval
+// Background scheduler: polls every search query for new records on an interval
 var pollIntervalHours = builder.Configuration.GetValue<double?>("Scheduler:PollIntervalHours") ?? 168;
 builder.Services.AddHostedService(serviceProvider => new RecordPollingBackgroundService(
     serviceProvider.GetRequiredService<IServiceScopeFactory>(),
     serviceProvider.GetRequiredService<ILogger<RecordPollingBackgroundService>>(),
     TimeSpan.FromHours(pollIntervalHours)));
 
-// Background scheduler - purges users past their soft-delete grace period (see
+// Background scheduler: purges users past their soft-delete grace period (see
 // UsersDataAccess.DeletionGracePeriodDays)
 var userPurgeIntervalHours = builder.Configuration.GetValue<double?>("Scheduler:UserPurgeIntervalHours") ?? 24;
 builder.Services.AddHostedService(serviceProvider => new UserPurgeBackgroundService(
@@ -133,7 +133,7 @@ builder.Services.AddHostedService(serviceProvider => new UserPurgeBackgroundServ
 builder.Services.AddScoped<IErrorHandler, DefaultErrorHandler>();
 
 // Keycloak (real login). JWT `sub` is a Keycloak-generated UUID, not our internal
-// users.id - GetOrProvisionByKeycloakSubAsync resolves/creates the matching users row on
+// users.id; GetOrProvisionByKeycloakSubAsync resolves/creates the matching users row on
 // first successful validation, and the resulting internal id is what's written back onto
 // the principal as ClaimTypes.NameIdentifier, so existing claims-reading controller code
 // (int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier))) keeps working unchanged.
@@ -142,13 +142,28 @@ builder.Services.AddScoped<IErrorHandler, DefaultErrorHandler>();
 // actually stamped with as `iss` (since Keycloak derives issuer from however the browser
 // reached it), so it's what we validate the token's issuer against. Inside Docker, this API
 // container can't reach Keycloak at that same browser-facing "localhost:8081" address
-// (there's nothing listening on that port inside this container) - it needs the Docker
+// (there's nothing listening on that port inside this container); it needs the Docker
 // network's service name instead. MetadataAddress lets the two diverge: when set (only in
 // docker-compose), it's used purely for this container's own outbound signing-key fetch,
 // while ValidIssuer stays pinned to the browser-facing Authority regardless.
 var keycloakAuthority = builder.Configuration["Keycloak:Authority"] ?? "http://localhost:8081/realms/science-alerts-saas";
 var keycloakMetadataAddress = builder.Configuration["Keycloak:MetadataAddress"];
 var keycloakAudience = builder.Configuration["Keycloak:Audience"] ?? "science-alerts-api";
+
+// Profile email changes are pushed to Keycloak through its Admin API (service account). Additive,
+// like the LLM summaries: without a client secret the change stays in our database only.
+// The realm URL is taken from MetadataAddress (this process's own route to Keycloak) when set.
+var keycloakAdminClientId = builder.Configuration["Keycloak:AdminClientId"] ?? "pubtracker-api-admin";
+var keycloakAdminClientSecret = builder.Configuration["Keycloak:AdminClientSecret"];
+var keycloakRealmUrl = keycloakMetadataAddress is { Length: > 0 } && keycloakMetadataAddress.Contains("/.well-known/")
+    ? keycloakMetadataAddress[..keycloakMetadataAddress.IndexOf("/.well-known/", StringComparison.Ordinal)]
+    : keycloakAuthority;
+builder.Services.AddScoped<IKeycloakUserSync>(serviceProvider =>
+    string.IsNullOrEmpty(keycloakAdminClientSecret)
+        ? new NullKeycloakUserSync()
+        : new KeycloakAdminUserSync(
+            serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(),
+            keycloakRealmUrl, keycloakAdminClientId, keycloakAdminClientSecret));
 
 void ConfigureKeycloakBearer(JwtBearerOptions options)
 {
@@ -169,7 +184,7 @@ void ConfigureKeycloakBearer(JwtBearerOptions options)
         // Keycloak's realm roles normally live nested under "realm_access.roles"; the
         // "realm-roles" protocol mapper (realm-export.json) flattens them onto a top-level
         // "roles" claim instead, which is what RequireRole("Admin")/("User", "Admin") below
-        // actually reads from - without this, those policies would never match any real token.
+        // actually reads from; without this, those policies would never match any real token.
         RoleClaimType = "roles"
     };
     options.Events = new JwtBearerEvents
@@ -197,7 +212,7 @@ void ConfigureKeycloakBearer(JwtBearerOptions options)
                 lockoutLogger.LogWarning("Rejected request from user {UserId}: account is marked for deletion", user.Id);
                 // A JwtBearerEvents.OnTokenValidated context.Fail(message) does NOT surface that
                 // message in the 401's WWW-Authenticate error_description (unlike a standard
-                // TokenValidationParameters failure, e.g. audience mismatch, which does) - so the
+                // TokenValidationParameters failure, e.g. audience mismatch, which does); so the
                 // reason is stashed here for OnChallenge below to turn into a real response body
                 // the frontend can read.
                 context.HttpContext.Items["AuthFailureReason"] = "account_deleted";
@@ -224,7 +239,7 @@ void ConfigureKeycloakBearer(JwtBearerOptions options)
 // can be exercised via Swagger/Postman without a real Keycloak login. Never registered
 // outside Development. Requests carrying a real "Authorization: Bearer <jwt>" header are
 // still routed to the real Keycloak validation above; only requests without one fall back
-// to the debug identity - see the "Smart" policy scheme below.
+// to the debug identity, see the "Smart" policy scheme below.
 if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddAuthentication(options =>

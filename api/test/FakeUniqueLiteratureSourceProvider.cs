@@ -9,7 +9,7 @@ namespace test;
 /// FakePedroLiteratureSourceProvider. Those two always return the same fixed external ids
 /// ("fake:1"/"fake:2", "fakepedro:1"/"fakepedro:2") regardless of URL, which is fine for tests
 /// with their own factory/Postgres container, but breaks when several test methods share one
-/// container (one test class's IClassFixture) - whichever test runs first "claims" those
+/// container (one test class's IClassFixture); whichever test runs first "claims" those
 /// records, and later tests find them already persisted instead of newly-inserted.
 ///
 /// This provider instead derives its two records' external ids from an explicit "recordSet"

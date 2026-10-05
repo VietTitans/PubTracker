@@ -601,10 +601,10 @@ function App() {
           .then((queries) => {
             setSearchQueries(queries);
             // Matches the condition the list actually renders a spinner for (App.tsx's
-            // sourceRecordCount === null check) - not lastFetchedAt, which PEDro's baseline
+            // sourceRecordCount === null check); not lastFetchedAt, which PEDro's baseline
             // poll (no individual records linked yet) can leave null indefinitely even once
             // sourceRecordCount is populated. Also stops once a poll has actually failed
-            // (lastPollFailedAt set) - otherwise a down source (e.g. PubMed) leaves
+            // (lastPollFailedAt set); otherwise a down source (e.g. PubMed) leaves
             // sourceRecordCount null forever and this polls every 4s indefinitely.
             const stillFetching = queries.some(
               (q) => q.id === searchQueryId && q.sourceRecordCount === null && !q.lastPollFailedAt,
@@ -614,7 +614,7 @@ function App() {
             }
           })
           .catch(() => {
-            // Transient failure (e.g. a network blip) - keep trying rather than leaving the
+            // Transient failure (e.g. a network blip); keep trying rather than leaving the
             // spinner stuck forever.
             poll();
           });

@@ -5,7 +5,7 @@ namespace test;
 /// <summary>
 /// Regression coverage for PedroProvider.CanHandle's host allow-list (search.pedro.org.au
 /// only, https only), added after a security review found the previous "url contains 'pedro'"
-/// check let a subscribed URL drive the provider's headless browser to any host - an SSRF
+/// check let a subscribed URL drive the provider's headless browser to any host; an SSRF
 /// vector. No browser is launched here since CanHandle is a pure URL check.
 /// </summary>
 public class PedroProviderCanHandleTests

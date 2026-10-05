@@ -10,20 +10,20 @@ namespace test;
 /// <summary>
 /// Covers RecordPollingService.GenerateAuthorIntentionsAsync: the AI author-intention blurb is
 /// generated once per genuinely new record (not per subscriber, not per search query the record
-/// later gets linked to - see RecordsDataAccess.PersistSearchResultsAsync's xmax = 0 check), it
+/// later gets linked to, see RecordsDataAccess.PersistSearchResultsAsync's xmax = 0 check), it
 /// renders in the sent digest email once persisted, and a generation failure never blocks the
 /// poll or the digest send (same failure-isolation contract as the per-query AI summary, covered
 /// by DigestSummaryEndToEndTests).
 ///
 /// Uses its own PubTrackerWebApplicationFactory instance for the same reason
-/// CombinedDigestEndToEndTests/DigestSummaryEndToEndTests do - a fresh Postgres container and
+/// CombinedDigestEndToEndTests/DigestSummaryEndToEndTests do; a fresh Postgres container and
 /// fresh fakes so this class's assertions can't be polluted by other test classes' polls.
 ///
 /// Uses FakeUniqueLiteratureSourceProvider (not FakeLiteratureSourceProvider) with a distinct
 /// "recordSet" value per test: this class's three tests share one Postgres container (one
 /// IClassFixture instance), so FakeLiteratureSourceProvider's hardcoded fake:1/fake:2 would let
 /// whichever test runs first "claim" those records, leaving later tests to find them already
-/// persisted instead of newly-inserted (and so never re-triggering generation) - the exact bug
+/// persisted instead of newly-inserted (and so never re-triggering generation); the exact bug
 /// this file used to have. Each test also reads AuthorIntentionCalls from its own "calls so far"
 /// baseline rather than asserting the whole (class-fixture-shared, ever-accumulating) list, so
 /// assertions hold regardless of test execution order.
@@ -130,7 +130,7 @@ public class AuthorIntentionEndToEndTests : IClassFixture<PubTrackerWebApplicati
 
         // Both queries share the same recordSet (so FakeUniqueLiteratureSourceProvider resolves
         // them to the identical two external ids) but differ in the "query" param so they're two
-        // distinct search_queries rows (source_id+target_url is unique) - simulates two different
+        // distinct search_queries rows (source_id+target_url is unique); simulates two different
         // searches that happen to surface the same underlying paper. The second query's poll
         // should re-link the already-persisted records rather than inserting new ones.
         var clientA = _factory.CreateClient();
@@ -150,7 +150,7 @@ public class AuthorIntentionEndToEndTests : IClassFixture<PubTrackerWebApplicati
         var pollingService = scope.ServiceProvider.GetRequiredService<IRecordPollingService>();
 
         // Both queries are brand new (never polled), so PollAllSearchQueriesAsync fetches A
-        // first (inserting the shared records and generating their intentions), then B - whose
+        // first (inserting the shared records and generating their intentions), then B; whose
         // upsert finds both records already present and so must not trigger generation again.
         await pollingService.PollAllSearchQueriesAsync();
 

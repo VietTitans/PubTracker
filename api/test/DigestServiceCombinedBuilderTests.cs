@@ -4,7 +4,7 @@ using RecordService.Models;
 namespace test;
 
 /// <summary>
-/// Pure unit tests of DigestService.BuildCombinedHtmlBody - no DB, no DI, no email sending.
+/// Pure unit tests of DigestService.BuildCombinedHtmlBody; no DB, no DI, no email sending.
 /// Confirms multiple queries/sources combine into one body, a single-query input matches what
 /// the direct per-source builder would produce (no behavior change for the single-query
 /// case), and an empty input produces an empty body.

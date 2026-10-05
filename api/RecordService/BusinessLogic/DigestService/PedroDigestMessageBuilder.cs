@@ -6,7 +6,7 @@ namespace RecordService.BusinessLogic.DigestService;
 /// <summary>
 /// Decodes PEDro's advanced-search query params into human-readable labels/tags, and builds
 /// the PEDro digest message body. The coded-field maps below were scraped directly from
-/// search.pedro.org.au/advanced-search's own &lt;select&gt; options - PEDro exposes no API for
+/// search.pedro.org.au/advanced-search's own &lt;select&gt; options; PEDro exposes no API for
 /// these, so the option lists are copied here rather than re-fetched at runtime. Re-scrape
 /// and update by hand if PEDro's form options ever change.
 /// </summary>
@@ -102,7 +102,7 @@ public static class PedroDigestMessageBuilder
     /// PEDro's structured body_part field wins when the search actually set one; a search left
     /// at "Any/all" (body_part=0, or the param missing entirely) has no structured field to read,
     /// so this falls back to keyword-matching the free-text search fields against the same
-    /// taxonomy PubMed uses (CategoryKeywordMatcher) - otherwise those searches would always
+    /// taxonomy PubMed uses (CategoryKeywordMatcher); otherwise those searches would always
     /// show "your search" instead of a real category.
     /// </summary>
     public static string? GetCategory(string targetUrl) =>
@@ -123,13 +123,13 @@ public static class PedroDigestMessageBuilder
 
     public static string? GetMethodLabel(string targetUrl) => GetMappedValue(targetUrl, "method", MethodMap);
 
-    /// <summary>Raw passthrough, not a coded value - PEDro's year_of_publication field is free text.</summary>
+    /// <summary>Raw passthrough, not a coded value; PEDro's year_of_publication field is free text.</summary>
     public static string? GetPublicationYear(string targetUrl) => GetRawQueryValue(targetUrl, "year_of_publication");
 
     /// <summary>
     /// Every recognized advanced-search field present on the URL, as ready-to-display tags,
     /// in a fixed display order. This is the single source of truth for "what does this PEDro
-    /// search cover" - callers (API responses, digest emails) should use this rather than
+    /// search cover"; callers (API responses, digest emails) should use this rather than
     /// re-deriving their own subset of fields.
     /// </summary>
     public static List<string> GetKeywordTags(string targetUrl)
@@ -170,7 +170,7 @@ public static class PedroDigestMessageBuilder
         }
 
         // PEDro's simple search (search.pedro.org.au/search-results?calc_text=...) is a
-        // separate, simpler form from the advanced search fields above - only ever present
+        // separate, simpler form from the advanced search fields above; only ever present
         // on its own, never alongside them.
         var calcText = GetRawQueryValue(targetUrl, "calc_text");
         if (!string.IsNullOrWhiteSpace(calcText))
