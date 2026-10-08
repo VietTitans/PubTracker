@@ -10,8 +10,8 @@ export default function AuthCallback() {
       .then(() => {
         window.location.replace("/");
       })
-      .catch((err) => {
-        setError(err instanceof Error ? err.message : String(err));
+      .catch(() => {
+        setError("Could not complete the sign-in process. Please try again.");
       });
   }, []);
 

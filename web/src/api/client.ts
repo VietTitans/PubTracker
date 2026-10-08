@@ -25,14 +25,22 @@ export interface SearchQuery {
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const oidcUser = await userManager.getUser();
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...init,
-    headers: {
-      "Content-Type": "application/json",
-      ...(oidcUser?.access_token ? { Authorization: `Bearer ${oidcUser.access_token}` } : {}),
-      ...init?.headers,
-    },
-  });
+  const url = `${API_BASE_URL}${path}`;
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      ...init,
+      headers: {
+        "Content-Type": "application/json",
+        ...(oidcUser?.access_token ? { Authorization: `Bearer ${oidcUser.access_token}` } : {}),
+        ...init?.headers,
+      },
+    });
+  } catch {
+    throw new Error(
+      `Could not reach the API`
+    );
+  }
 
   if (response.status === 401) {
     const reason = await response.json().then((b) => b?.reason as string | undefined).catch(() => undefined);
