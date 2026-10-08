@@ -28,7 +28,7 @@ public class KeycloakEmailSyncTests : IClassFixture<PubTrackerWebApplicationFact
     }
 
     [Fact]
-    public async Task UpdateEmail_GetsAdminToken_ThenSendsFullUserWithNewEmailAndUsername()
+    public async Task UpdateEmail_GetsAdminToken_ThenSendsFullUserWithNewEmailAndSameUsername()
     {
         var handler = new StubKeycloakHandler(
             userJson: """{"id":"sub-1","username":"old@example.com","email":"old@example.com","firstName":"Ada","attributes":{"x":["y"]}}""");
@@ -47,7 +47,7 @@ public class KeycloakEmailSyncTests : IClassFixture<PubTrackerWebApplicationFact
 
         var sent = JsonNode.Parse(handler.Requests[2].Body)!;
         Assert.Equal("new@example.com", (string?)sent["email"]);
-        Assert.Equal("new@example.com", (string?)sent["username"]); // email-as-username realm
+        Assert.Equal("old@example.com", (string?)sent["username"]); // username is stable
         Assert.Equal("Ada", (string?)sent["firstName"]);            // rest of the account untouched
         Assert.Equal("y", (string?)sent["attributes"]!["x"]![0]);
     }

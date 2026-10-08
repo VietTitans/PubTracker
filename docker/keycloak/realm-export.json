@@ -4,7 +4,7 @@
   "displayNameHtml": "PubTracker",
   "enabled": true,
   "registrationAllowed": true,
-  "registrationEmailAsUsername": true,
+  "registrationEmailAsUsername": false,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "verifyEmail": false,
@@ -33,7 +33,7 @@
   "users": [
     {
       "username": "test@test.com",
-      "email": "test@test.com",
+      "email": "mattnhudinh@gmail.com",
       "firstName": "Test",
       "lastName": "User",
       "enabled": true,
@@ -67,8 +67,8 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
-      "redirectUris": ["http://localhost/*"],
-      "webOrigins": ["http://localhost"],
+      "redirectUris": ["http://localhost/*", "http://localhost:5173/*"],
+      "webOrigins": ["http://localhost", "http://localhost:5173"],
       "attributes": {
         "pkce.code.challenge.method": "S256"
       },
