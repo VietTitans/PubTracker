@@ -48,4 +48,10 @@ public interface ILiteratureSourceProvider
     /// <param name="url">The source URL to refresh</param>
     /// <returns>True if refresh was successful, false otherwise</returns>
     Task<bool> RefreshAsync(string url);
+
+    /// <summary>
+    /// Returns the canonical form of a URL before it is stored, so equivalent URLs (e.g. a
+    /// misspelled and a corrected search) dedupe to one search query. Defaults to unchanged.
+    /// </summary>
+    Task<string> NormalizeUrlAsync(string url) => Task.FromResult(url);
 }

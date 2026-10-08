@@ -226,6 +226,43 @@ public class PubMedProviderTests
         Assert.Equal(14089, result.TotalRecordCount);
     }
 
+    [Fact]
+    public async Task NormalizeUrlAsync_ZeroResultTypo_ReplacesTermWithSpellCorrection_KeepingOtherParams()
+    {
+        var provider = CreateProvider(new SpellingHandler(searchCount: 0, corrected: "covid vaccine"));
+
+        var result = await provider.NormalizeUrlAsync("https://pubmed.ncbi.nlm.nih.gov/?term=covid+vacine&filter=years.2020-2023");
+
+        Assert.Equal("https://pubmed.ncbi.nlm.nih.gov/?term=covid+vaccine&filter=years.2020-2023", result);
+    }
+
+    [Fact]
+    public async Task NormalizeUrlAsync_SearchHasResults_LeavesUrlUnchanged()
+    {
+        var provider = CreateProvider(new SpellingHandler(searchCount: 3, corrected: "something else"));
+
+        Assert.Equal(SearchUrl, await provider.NormalizeUrlAsync(SearchUrl));
+    }
+
+    [Fact]
+    public async Task NormalizeUrlAsync_SourceError_LeavesUrlUnchanged()
+    {
+        var provider = CreateProvider(new FaultingHandler());
+
+        Assert.Equal(SearchUrl, await provider.NormalizeUrlAsync(SearchUrl));
+    }
+
+    private class SpellingHandler(int searchCount, string corrected) : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            var xml = request.RequestUri!.AbsolutePath.EndsWith("espell.fcgi")
+                ? $"<eSpellResult><CorrectedQuery>{corrected}</CorrectedQuery></eSpellResult>"
+                : $"<eSearchResult><Count>{searchCount}</Count><IdList/></eSearchResult>";
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(xml) });
+        }
+    }
+
     private class FakeEutilsHandler(string esearchXml, string efetchXml) : HttpMessageHandler
     {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)

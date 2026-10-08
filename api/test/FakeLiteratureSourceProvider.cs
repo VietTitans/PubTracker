@@ -58,4 +58,7 @@ public class FakeLiteratureSourceProvider : ILiteratureSourceProvider
     }
 
     public Task<bool> RefreshAsync(string url) => Task.FromResult(true);
+
+    // Stands in for PubMed's spell correction: a URL containing "typo" canonicalizes to "fixed".
+    public Task<string> NormalizeUrlAsync(string url) => Task.FromResult(url.Replace("typo", "fixed"));
 }

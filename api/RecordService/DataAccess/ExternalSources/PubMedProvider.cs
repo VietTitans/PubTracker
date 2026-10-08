@@ -88,10 +88,63 @@ public class PubMedProvider : ILiteratureSourceProvider
             return (0, new());
 
         var (totalCount, pmids) = await SearchPmidsAsync(term);
+
+        // The PubMed website silently spell-corrects a zero-result search ("Showing results for ...");
+        // ESearch does not, so mirror that via ESpell and retry once with the corrected term.
+        if (totalCount == 0)
+        {
+            var corrected = await GetSpellCorrectedTermAsync(term);
+            if (corrected != null)
+                (totalCount, pmids) = await SearchPmidsAsync(corrected);
+        }
+
         if (pmids.Count == 0)
             return (totalCount, new());
 
         return (totalCount, await FetchArticlesAsync(pmids));
+    }
+
+    // Stores a zero-result search under its spell-corrected term, so it dedupes against the
+    // correctly spelled URL and the digest category sees the real keyword. Any failure keeps the URL.
+    public async Task<string> NormalizeUrlAsync(string url)
+    {
+        try
+        {
+            var term = ExtractSearchTerm(url);
+            if (string.IsNullOrWhiteSpace(term))
+                return url;
+
+            var query = BuildQuery(new Dictionary<string, string?>
+            {
+                ["db"] = "pubmed", ["term"] = term, ["retmax"] = "0", ["retmode"] = "xml"
+            });
+            var response = await _httpClient.GetAsync($"esearch.fcgi?{query}");
+            response.EnsureSuccessStatusCode();
+            var count = XDocument.Parse(await response.Content.ReadAsStringAsync()).Root?.Element("Count")?.Value;
+            if (count != "0")
+                return url;
+
+            var corrected = await GetSpellCorrectedTermAsync(term);
+            return corrected is null
+                ? url
+                : Regex.Replace(url, @"(?<=[?&]term=)[^&]*", System.Net.WebUtility.UrlEncode(corrected));
+        }
+        catch
+        {
+            return url;
+        }
+    }
+
+    private async Task<string?> GetSpellCorrectedTermAsync(string term)
+    {
+        await Task.Delay(RequestDelay);
+        var query = BuildQuery(new Dictionary<string, string?> { ["db"] = "pubmed", ["term"] = term });
+        var response = await _httpClient.GetAsync($"espell.fcgi?{query}");
+        response.EnsureSuccessStatusCode();
+
+        var xml = XDocument.Parse(await response.Content.ReadAsStringAsync());
+        var corrected = xml.Root?.Element("CorrectedQuery")?.Value;
+        return string.IsNullOrWhiteSpace(corrected) || corrected == term ? null : corrected;
     }
 
     private static string ExtractSearchTerm(string url)

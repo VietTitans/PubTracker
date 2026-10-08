@@ -110,6 +110,7 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
         // Throws InvalidOperationException if no provider recognizes the URL; this is
         // the "unsupported source" signal the controller maps to a 400 response.
         var provider = _sourceFactory.CreateProvider(targetUrl);
+        targetUrl = await provider.NormalizeUrlAsync(targetUrl);
         var baseUrl = new Uri(targetUrl).GetLeftPart(UriPartial.Authority);
 
         await using (var transaction = await _dbContext.Database.BeginTransactionAsync())

@@ -50,14 +50,8 @@ public class KeycloakAdminUserSync : IKeycloakUserSync
         var user = await getResponse.Content.ReadFromJsonAsync<JsonObject>()
             ?? throw new HttpRequestException("Keycloak returned an empty user representation.");
 
-        var oldEmail = user["email"]?.GetValue<string>();
+        // Username is left alone (the realm does not use email-as-username), so the old login keeps working.
         user["email"] = newEmail;
-
-        // With "email as username" on in the realm, the username is the email, so it moves too.
-        if (oldEmail != null && string.Equals(user["username"]?.GetValue<string>(), oldEmail, StringComparison.OrdinalIgnoreCase))
-        {
-            user["username"] = newEmail;
-        }
 
         using var putRequest = new HttpRequestMessage(HttpMethod.Put, userUrl)
         {
