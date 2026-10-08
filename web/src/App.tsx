@@ -786,7 +786,7 @@ function App() {
           <input
             id="target-url"
             type="url"
-            placeholder="Paste a PEDro or PubMed search URL"
+            placeholder="Paste a search URL"
             value={targetUrl}
             onChange={(e) => setTargetUrl(e.target.value)}
             required
