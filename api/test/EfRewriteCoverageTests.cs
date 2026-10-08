@@ -138,6 +138,7 @@ public class EfRewriteCoverageTests : IClassFixture<PubTrackerWebApplicationFact
         // Poll both together first so B's records get persisted, and this same combined-digest
         // send advances the user's watermark for B past those records' first_seen_at.
         await pollingService.PollAllSearchQueriesAsync();
+        await _factory.DrainOutboxAsync();
         Assert.Single(_factory.EmailSender.SentEmails, e => e.ToEmail == user.Email);
         _factory.EmailSender.SentEmails.Clear();
 
@@ -148,6 +149,7 @@ public class EfRewriteCoverageTests : IClassFixture<PubTrackerWebApplicationFact
         // Targeted poll of A only; B must still be swept in via GetOtherPendingDigestsForUserAsync,
         // with no re-fetch of B from its source.
         var results = await pollingService.PollSearchQueriesAsync(new[] { queryA.Id });
+        await _factory.DrainOutboxAsync();
         Assert.Single(results);
         Assert.True(results[0].IsSuccessful, results[0].ErrorMessage);
 

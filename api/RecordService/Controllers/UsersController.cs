@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using RecordData;
 using RecordService.BusinessLogic.UsersService;
 using RecordService.DTOs.UserDto;
+using RecordService.Exceptions;
 using RecordService.Extensions;
 using System.Security.Claims;
 
@@ -143,10 +144,14 @@ public class UsersController : ControllerBase
                 Email = dto.Email
             };
 
-            await _userService.UpdateUserAsync(int.Parse(userId), user);
+            await _userService.UpdateUserAsync(int.Parse(userId), user, User.FindFirstValue("sub"));
 
             var updatedUser = await _userService.GetUserByIdAsync(int.Parse(userId));
             return Ok(updatedUser.ToResponseDto());
+        }
+        catch (EmailAlreadyInUseException ex)
+        {
+            return StatusCode(409, new { message = ex.Message });
         }
         catch (Exception ex)
         {

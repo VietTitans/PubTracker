@@ -83,7 +83,7 @@ public class SearchQueriesController : ControllerBase
 
         if (string.IsNullOrWhiteSpace(dto.TargetUrl))
         {
-            return BadRequest(new { message = "TargetUrl is required." });
+            return BadRequest(new { message = "A URL is required." });
         }
 
         try

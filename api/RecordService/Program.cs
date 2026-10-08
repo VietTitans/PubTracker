@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using RecordService.Authentication;
 using RecordService.DataAccess;
+using RecordService.DataAccess.DigestOutbox;
 using RecordService.DataAccess.Email;
 using RecordService.DataAccess.ExternalSources;
 using RecordService.DataAccess.Keycloak;
@@ -16,6 +17,7 @@ using RecordService.BusinessLogic.SearchQueriesService;
 using RecordService.BusinessLogic.RecordPollingService;
 using RecordService.BusinessLogic.SourcesService;
 using RecordService.BusinessLogic.DigestService;
+using RecordService.BusinessLogic.DigestOutboxService;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -111,6 +113,8 @@ builder.Services.AddScoped<IUsersService, UsersService>();
 builder.Services.AddScoped<ISearchQueriesService, SearchQueriesService>();
 builder.Services.AddScoped<ISourcesService, SourcesService>();
 builder.Services.AddScoped<IDigestService, DigestService>();
+builder.Services.AddScoped<IDigestOutboxDataAccess, DigestOutboxDataAccess>();
+builder.Services.AddScoped<IDigestOutboxService, DigestOutboxService>();
 builder.Services.AddSingleton(new PollCycleAdvisoryLock(connectionString));
 builder.Services.AddScoped<IRecordPollingService, RecordPollingService>();
 
@@ -120,6 +124,13 @@ builder.Services.AddHostedService(serviceProvider => new RecordPollingBackground
     serviceProvider.GetRequiredService<IServiceScopeFactory>(),
     serviceProvider.GetRequiredService<ILogger<RecordPollingBackgroundService>>(),
     TimeSpan.FromHours(pollIntervalHours)));
+
+// Background worker: sends queued digest emails from the outbox, with retry
+var digestOutboxIntervalSeconds = builder.Configuration.GetValue<double?>("Scheduler:DigestOutboxIntervalSeconds") ?? 30;
+builder.Services.AddHostedService(serviceProvider => new DigestOutboxBackgroundService(
+    serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+    serviceProvider.GetRequiredService<ILogger<DigestOutboxBackgroundService>>(),
+    TimeSpan.FromSeconds(digestOutboxIntervalSeconds)));
 
 // Background scheduler: purges users past their soft-delete grace period (see
 // UsersDataAccess.DeletionGracePeriodDays)

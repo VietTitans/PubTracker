@@ -53,6 +53,7 @@ public class SearchQueryPollingEndToEndTests : IClassFixture<PubTrackerWebApplic
         var pollingService = scope.ServiceProvider.GetRequiredService<IRecordPollingService>();
 
         var firstPollResults = await pollingService.PollAllSearchQueriesAsync();
+        await _factory.DrainOutboxAsync();
         var firstResult = Assert.Single(firstPollResults);
         Assert.True(firstResult.IsSuccessful);
         Assert.Equal(2, firstResult.NewRecordCount);
@@ -61,6 +62,7 @@ public class SearchQueryPollingEndToEndTests : IClassFixture<PubTrackerWebApplic
         Assert.Equal(user.Email, sentEmail.ToEmail);
 
         var secondPollResults = await pollingService.PollAllSearchQueriesAsync();
+        await _factory.DrainOutboxAsync();
         var secondResult = Assert.Single(secondPollResults);
         Assert.True(secondResult.IsSuccessful);
         Assert.Equal(0, secondResult.NewRecordCount);

@@ -66,6 +66,7 @@ public class ConcurrentPollRaceTests : IClassFixture<PubTrackerWebApplicationFac
         await Task.WhenAll(
             pollingServiceA.PollSearchQueryAsync(searchQueryId),
             pollingServiceB.PollSearchQueryAsync(searchQueryId));
+        await _factory.DrainOutboxAsync();
 
         // The subscriber should get exactly one digest for this batch of new records, not one
         // per concurrent poll that happened to race for the same watermark.

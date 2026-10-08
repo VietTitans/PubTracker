@@ -5,7 +5,9 @@ using Microsoft.Extensions.Logging.Abstractions;
 using Npgsql;
 using RecordService.BusinessLogic.DigestService;
 using RecordService.BusinessLogic.RecordPollingService;
+using RecordService.BusinessLogic.DigestOutboxService;
 using RecordService.DataAccess;
+using RecordService.DataAccess.DigestOutbox;
 using RecordService.DataAccess.Email;
 using RecordService.DataAccess.ExternalSources;
 using RecordService.DataAccess.Summarization;
@@ -73,10 +75,12 @@ public class DigestPollEndToEndManualTest
         ISummaryGenerator summaryGenerator = string.IsNullOrEmpty(llmApiKey)
             ? new NullSummaryGenerator()
             : new ChatCompletionsSummaryGenerator(new HttpClient(), llmBaseUrl!, llmApiKey, llmModel!);
-        var digestService = new DigestService(usersDataAccess, emailSender, NullLogger<DigestService>.Instance);
-        var pollingService = new RecordPollingService(searchQueriesDataAccess, recordsDataAccess, digestService, summaryGenerator, new PollCycleAdvisoryLock(connectionString), NullLogger<RecordPollingService>.Instance);
+        var digestService = new DigestService(usersDataAccess);
+        var outboxDataAccess = new DigestOutboxDataAccess(dbContext, searchQueriesDataAccess);
+        var pollingService = new RecordPollingService(searchQueriesDataAccess, recordsDataAccess, digestService, outboxDataAccess, summaryGenerator, new PollCycleAdvisoryLock(connectionString), NullLogger<RecordPollingService>.Instance);
 
         var results = await pollingService.PollSearchQueriesAsync(SearchQueryIds);
+        await new DigestOutboxService(outboxDataAccess, usersDataAccess, emailSender, NullLogger<DigestOutboxService>.Instance).ProcessDueAsync();
 
         foreach (var result in results)
         {

@@ -65,6 +65,7 @@ public class AuthorIntentionEndToEndTests : IClassFixture<PubTrackerWebApplicati
 
         var pollingService = scope.ServiceProvider.GetRequiredService<IRecordPollingService>();
         await pollingService.PollAllSearchQueriesAsync();
+        await _factory.DrainOutboxAsync();
 
         Assert.Equal(
             new[] { "fakeunique:success:1", "fakeunique:success:2" },
@@ -100,6 +101,7 @@ public class AuthorIntentionEndToEndTests : IClassFixture<PubTrackerWebApplicati
 
         var pollingService = scope.ServiceProvider.GetRequiredService<IRecordPollingService>();
         var results = await pollingService.PollAllSearchQueriesAsync();
+        await _factory.DrainOutboxAsync();
 
         Assert.Contains(results, r => r.IsSuccessful);
 
@@ -153,6 +155,7 @@ public class AuthorIntentionEndToEndTests : IClassFixture<PubTrackerWebApplicati
         // first (inserting the shared records and generating their intentions), then B; whose
         // upsert finds both records already present and so must not trigger generation again.
         await pollingService.PollAllSearchQueriesAsync();
+        await _factory.DrainOutboxAsync();
 
         Assert.Equal(
             new[] { "fakeunique:dedup-shared:1", "fakeunique:dedup-shared:2" },

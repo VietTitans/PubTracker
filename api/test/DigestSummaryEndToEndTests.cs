@@ -55,6 +55,7 @@ public class DigestSummaryEndToEndTests : IClassFixture<PubTrackerWebApplication
 
         var pollingService = scope.ServiceProvider.GetRequiredService<IRecordPollingService>();
         await pollingService.PollAllSearchQueriesAsync();
+        await _factory.DrainOutboxAsync();
 
         var sentEmail = Assert.Single(_factory.EmailSender.SentEmails, e => e.ToEmail == user.Email);
         Assert.Contains("AI Summary", sentEmail.HtmlBody);
@@ -85,6 +86,7 @@ public class DigestSummaryEndToEndTests : IClassFixture<PubTrackerWebApplication
 
         var pollingService = scope.ServiceProvider.GetRequiredService<IRecordPollingService>();
         var results = await pollingService.PollAllSearchQueriesAsync();
+        await _factory.DrainOutboxAsync();
 
         Assert.Contains(results, r => r.IsSuccessful);
         Assert.Single(_factory.EmailSender.SentEmails, e => e.ToEmail == user.Email);
@@ -124,6 +126,7 @@ public class DigestSummaryEndToEndTests : IClassFixture<PubTrackerWebApplication
 
         var pollingService = scope.ServiceProvider.GetRequiredService<IRecordPollingService>();
         await pollingService.PollAllSearchQueriesAsync();
+        await _factory.DrainOutboxAsync();
 
         Assert.Equal(callsBefore + 1, _factory.SummaryGenerator.Calls.Count);
 

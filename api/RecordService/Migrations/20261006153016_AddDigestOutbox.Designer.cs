@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 using RecordService.DataAccess;
@@ -11,9 +12,11 @@ using RecordService.DataAccess;
 namespace RecordService.Migrations
 {
     [DbContext(typeof(PubTrackerDbContext))]
-    partial class PubTrackerDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261006153016_AddDigestOutbox")]
+    partial class AddDigestOutbox
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

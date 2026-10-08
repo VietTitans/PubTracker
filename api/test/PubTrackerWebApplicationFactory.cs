@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using RecordService.BusinessLogic.DigestOutboxService;
 using RecordService.DataAccess.Email;
 using RecordService.DataAccess.ExternalSources;
 using RecordService.DataAccess.Summarization;
@@ -44,6 +45,8 @@ public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, I
         Environment.SetEnvironmentVariable("Email__ApiKey", "test-api-key");
         Environment.SetEnvironmentVariable("Email__FromAddress", "digest@example.com");
         Environment.SetEnvironmentVariable("Email__FromName", "PubTracker");
+        // Tests drain the digest outbox explicitly (DrainOutboxAsync); keep the background worker from racing them.
+        Environment.SetEnvironmentVariable("Scheduler__DigestOutboxIntervalSeconds", "86400");
     }
 
     protected override void ConfigureWebHost(IWebHostBuilder builder)
@@ -60,6 +63,13 @@ public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, I
             services.RemoveAll<ISummaryGenerator>();
             services.AddSingleton<ISummaryGenerator>(SummaryGenerator);
         });
+    }
+
+    /// <summary>Sends every due digest outbox row now (what DigestOutboxBackgroundService does on its interval).</summary>
+    public async Task<int> DrainOutboxAsync()
+    {
+        using var scope = Services.CreateScope();
+        return await scope.ServiceProvider.GetRequiredService<IDigestOutboxService>().ProcessDueAsync();
     }
 
     public new async Task DisposeAsync()

@@ -15,6 +15,7 @@ public class PubTrackerDbContext : DbContext
     public DbSet<RecordEntity> Records => Set<RecordEntity>();
     public DbSet<UserSearchQueryEntity> UserSearchQueries => Set<UserSearchQueryEntity>();
     public DbSet<UserSearchQueryDigestEntity> UserSearchQueryDigests => Set<UserSearchQueryDigestEntity>();
+    public DbSet<DigestOutboxEntity> DigestOutbox => Set<DigestOutboxEntity>();
     public DbSet<SourceRecordEntity> SourceRecords => Set<SourceRecordEntity>();
     public DbSet<SearchQueryRecordEntity> SearchQueryRecords => Set<SearchQueryRecordEntity>();
 
@@ -90,6 +91,24 @@ public class PubTrackerDbContext : DbContext
             entity.Property(e => e.LastDigestSentAt).HasColumnName("last_digest_sent_at");
             entity.HasOne<UserEntity>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.NoAction);
             entity.HasOne<SearchQueryEntity>().WithMany().HasForeignKey(e => e.SearchQueryId).OnDelete(DeleteBehavior.NoAction);
+        });
+
+        modelBuilder.Entity<DigestOutboxEntity>(entity =>
+        {
+            entity.ToTable("digest_outbox");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Subject).HasColumnName("subject");
+            entity.Property(e => e.HtmlBody).HasColumnName("html_body");
+            entity.Property(e => e.ClaimsJson).HasColumnName("claims").HasColumnType("jsonb");
+            entity.Property(e => e.Attempts).HasColumnName("attempts").HasDefaultValue(0);
+            entity.Property(e => e.NextAttemptAt).HasColumnName("next_attempt_at");
+            entity.Property(e => e.SentAt).HasColumnName("sent_at");
+            entity.Property(e => e.FailedAt).HasColumnName("failed_at");
+            entity.Property(e => e.LastError).HasColumnName("last_error");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at");
+            entity.HasOne<UserEntity>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasIndex(e => e.NextAttemptAt).HasFilter("sent_at IS NULL AND failed_at IS NULL");
         });
 
         modelBuilder.Entity<SourceRecordEntity>(entity =>

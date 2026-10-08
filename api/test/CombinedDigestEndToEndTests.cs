@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using RecordData;
@@ -66,6 +67,7 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
         // one Postgres container/class fixture); filter to just the two this test created.
         var allResults = await pollingService.PollAllSearchQueriesAsync();
         var results = allResults.Where(r => createdSearchQueryIds.Contains(r.SearchQueryId)).ToList();
+        await _factory.DrainOutboxAsync();
 
         Assert.Equal(2, results.Count);
         Assert.All(results, r => Assert.True(r.IsSuccessful, r.ErrorMessage));
@@ -77,7 +79,7 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
     }
 
     [Fact]
-    public async Task TwoSubscribers_OneEmailFails_OnlyThatSubscriberIsRetried()
+    public async Task TwoSubscribers_OneEmailFails_OnlyThatSubscriberIsRetriedFromOutbox()
     {
         using var scope = _factory.Services.CreateScope();
         var usersDataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
@@ -122,17 +124,20 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
         // a class share one Postgres container/class fixture); filter to just this test's query.
         _factory.EmailSender.FailForAddresses.Add(userB.Email);
         var firstResult = (await pollingService.PollAllSearchQueriesAsync()).Single(r => r.SearchQueryId == searchQueryId);
-        Assert.False(firstResult.IsSuccessful); // one of the two subscribers' sends failed
+        Assert.True(firstResult.IsSuccessful); // both digests were queued; sending is the outbox's job
+        await _factory.DrainOutboxAsync();
 
         Assert.Single(_factory.EmailSender.SentEmails, e => e.ToEmail == userA.Email);
         Assert.DoesNotContain(_factory.EmailSender.SentEmails, e => e.ToEmail == userB.Email);
 
+        // userB's failed send is backed off, not lost; make it due again and let it succeed.
         _factory.EmailSender.FailForAddresses.Remove(userB.Email);
-        var secondResult = (await pollingService.PollAllSearchQueriesAsync()).Single(r => r.SearchQueryId == searchQueryId);
-        Assert.True(secondResult.IsSuccessful);
+        var dbContext = scope.ServiceProvider.GetRequiredService<PubTrackerDbContext>();
+        await dbContext.Database.ExecuteSqlRawAsync("UPDATE digest_outbox SET next_attempt_at = now() WHERE sent_at IS NULL AND failed_at IS NULL");
+        await _factory.DrainOutboxAsync();
 
-        // userA already received their email on the first poll and must not get a duplicate;
-        // userB's failed send from the first poll is retried and now succeeds.
+        // userA already received their email and must not get a duplicate;
+        // userB's failed send is retried and now succeeds.
         Assert.Single(_factory.EmailSender.SentEmails, e => e.ToEmail == userA.Email);
         Assert.Single(_factory.EmailSender.SentEmails, e => e.ToEmail == userB.Email);
     }

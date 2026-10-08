@@ -46,6 +46,14 @@
         }
       ],
       "realmRoles": ["User"]
+    },
+    {
+      "username": "service-account-pubtracker-api-admin",
+      "enabled": true,
+      "serviceAccountClientId": "pubtracker-api-admin",
+      "clientRoles": {
+        "realm-management": ["view-users", "manage-users"]
+      }
     }
   ],
   "clients": [
@@ -91,6 +99,20 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "pubtracker-api-admin",
+      "name": "PubTracker API (admin)",
+      "description": "Lets the API update users' emails in Keycloak. Dev secret: replace it outside local development.",
+      "enabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "secret": "dev-admin-client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true
     }
   ]
 }

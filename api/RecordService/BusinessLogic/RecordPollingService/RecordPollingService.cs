@@ -1,6 +1,7 @@
 using RecordData;
 using RecordService.BusinessLogic.DigestService;
 using RecordService.DataAccess;
+using RecordService.DataAccess.DigestOutbox;
 using RecordService.DataAccess.Summarization;
 using RecordService.Models;
 
@@ -24,6 +25,7 @@ public class RecordPollingService : IRecordPollingService
     private readonly ISearchQueriesDataAccess _searchQueriesDataAccess;
     private readonly IRecordsDataAccess _recordsDataAccess;
     private readonly IDigestService _digestService;
+    private readonly IDigestOutboxDataAccess _digestOutboxDataAccess;
     private readonly ISummaryGenerator _summaryGenerator;
     private readonly PollCycleAdvisoryLock _advisoryLock;
     private readonly ILogger<RecordPollingService> _logger;
@@ -32,6 +34,7 @@ public class RecordPollingService : IRecordPollingService
         ISearchQueriesDataAccess searchQueriesDataAccess,
         IRecordsDataAccess recordsDataAccess,
         IDigestService digestService,
+        IDigestOutboxDataAccess digestOutboxDataAccess,
         ISummaryGenerator summaryGenerator,
         PollCycleAdvisoryLock advisoryLock,
         ILogger<RecordPollingService> logger)
@@ -39,6 +42,7 @@ public class RecordPollingService : IRecordPollingService
         _searchQueriesDataAccess = searchQueriesDataAccess;
         _recordsDataAccess = recordsDataAccess;
         _digestService = digestService;
+        _digestOutboxDataAccess = digestOutboxDataAccess;
         _summaryGenerator = summaryGenerator;
         _advisoryLock = advisoryLock;
         _logger = logger;
@@ -330,56 +334,48 @@ public class RecordPollingService : IRecordPollingService
             }
         }
 
-        // 3. Claim each watermark atomically BEFORE sending, so only the poll that wins the
-        //    claim sends. A lost claim (another poll already advanced it) is dropped; its
-        //    digest is that other poll's job.
-        //    ponytail: at-most-once on crash; if the process dies between claim and send, that
-        //    digest is lost (watermark already advanced). Add a claim lease column if that matters.
-        var claimed = new Dictionary<(int UserId, int SearchQueryId), (PendingUserDigest Digest, DateTime WatermarkToStamp, DateTime? ExpectedOld)>();
-        foreach (var (key, value) in pendingByUserAndQuery)
+        // 3. Per user: claim every watermark and queue the rendered digest in ONE transaction
+        //    (digest outbox), so a crash can't advance a watermark without a digest to send. A
+        //    lost claim (another poll already advanced it) is dropped; its digest is that other
+        //    poll's job. DigestOutboxBackgroundService sends the queued rows with retry.
+        var successByKey = new Dictionary<(int UserId, int SearchQueryId), bool>();
+        foreach (var userGroup in pendingByUserAndQuery.GroupBy(kv => kv.Key.UserId))
         {
-            if (await _searchQueriesDataAccess.TryClaimUserDigestWatermarkAsync(
-                    key.UserId, key.SearchQueryId, value.ExpectedOld, value.WatermarkToStamp))
-            {
-                claimed[key] = value;
-            }
-            else
-            {
-                _logger.LogInformation(
-                    "User {UserId}, search query {SearchQueryId}: watermark already claimed by another poll, skipping send",
-                    key.UserId, key.SearchQueryId);
-            }
-        }
+            var userId = userGroup.Key;
+            var claims = userGroup
+                .Select(kv => new DigestClaim(kv.Key.SearchQueryId, kv.Value.ExpectedOld, kv.Value.WatermarkToStamp))
+                .ToList();
 
-        var successByKey = claimed.Count > 0
-            ? await TrySendCombinedDigestsAsync(claimed.Values.Select(v => v.Digest).ToList())
-            : new Dictionary<(int, int), bool>();
-
-        foreach (var ((userId, searchQueryId), (_, watermarkToStamp, expectedOld)) in claimed)
-        {
-            if (!successByKey[(userId, searchQueryId)])
+            try
             {
-                await _searchQueriesDataAccess.ReleaseUserDigestClaimAsync(userId, searchQueryId, expectedOld, watermarkToStamp);
-                _logger.LogWarning(
-                    "User {UserId}, search query {SearchQueryId}: digest send failed, watermark rolled back",
-                    userId, searchQueryId);
+                var claimedQueryIds = await _digestOutboxDataAccess.EnqueueWithClaimsAsync(userId, claims, claimedIds =>
+                    _digestService.BuildCombinedDigestAsync(
+                        userId,
+                        userGroup.Where(kv => claimedIds.Contains(kv.Key.SearchQueryId)).Select(kv => kv.Value.Digest).ToList()));
+
+                foreach (var claim in claims)
+                {
+                    successByKey[(userId, claim.SearchQueryId)] = true;
+                    if (!claimedQueryIds.Contains(claim.SearchQueryId))
+                    {
+                        _logger.LogInformation(
+                            "User {UserId}, search query {SearchQueryId}: watermark already claimed by another poll, skipping send",
+                            userId, claim.SearchQueryId);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                // Transaction rolled back: nothing claimed, so the next poll retries these.
+                _logger.LogWarning(ex, "Failed to queue digest for user {UserId} ({Count} quer(ies))", userId, claims.Count);
+                foreach (var claim in claims)
+                {
+                    successByKey[(userId, claim.SearchQueryId)] = false;
+                }
             }
         }
 
         return BuildResults(outcomes, successByKey);
-    }
-
-    private async Task<Dictionary<(int, int), bool>> TrySendCombinedDigestsAsync(IReadOnlyList<PendingUserDigest> pendingDigests)
-    {
-        try
-        {
-            return (await _digestService.SendCombinedDigestsAsync(pendingDigests)).ToDictionary(kv => kv.Key, kv => kv.Value);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to send combined digests for {Count} (user, query) pair(s)", pendingDigests.Count);
-            return pendingDigests.ToDictionary(p => (p.UserId, p.SearchQueryId), _ => false);
-        }
     }
 
     private static List<PollResult> BuildResults(
@@ -408,7 +404,7 @@ public class RecordPollingService : IRecordPollingService
                 SearchQueryId = outcome.SearchQuery.Id,
                 IsSuccessful = digestSucceeded,
                 NewRecordCount = outcome.NewlyLinkedCount,
-                ErrorMessage = digestSucceeded ? null : $"Digest send failed for {failedCount} subscriber(s); they'll be retried on next poll."
+                ErrorMessage = digestSucceeded ? null : $"Digest could not be queued for {failedCount} subscriber(s); they'll be retried on next poll."
             });
         }
         return results;
