@@ -145,7 +145,7 @@ builder.Services.AddScoped<IErrorHandler, DefaultErrorHandler>();
 
 // Keycloak (real login). JWT `sub` is a Keycloak-generated UUID, not our internal
 // users.id; GetOrProvisionByKeycloakSubAsync resolves/creates the matching users row on
-// first successful validation, and the resulting internal id is what's written back onto
+// first successful validation, and the resulting internal id is what's written back onto   
 // the principal as ClaimTypes.NameIdentifier, so existing claims-reading controller code
 // (int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier))) keeps working unchanged.
 //
@@ -297,6 +297,30 @@ var app = builder.Build();
 using (var migrationScope = app.Services.CreateScope())
 {
     migrationScope.ServiceProvider.GetRequiredService<RecordService.DataAccess.PubTrackerDbContext>().Database.Migrate();
+}
+
+// CLI: `dotnet run --project api/RecordService -- send-digest <userId>` emails every record already
+// registered for the user's subscribed queries as if new. Bypasses outbox/watermarks; no workers start.
+if (args.Length == 2 && args[0] == "send-digest")
+{
+    using var scope = app.Services.CreateScope();
+    var sp = scope.ServiceProvider;
+    var userId = int.Parse(args[1]);
+    var users = sp.GetRequiredService<IUsersDataAccess>();
+    var records = sp.GetRequiredService<IRecordsDataAccess>();
+    var pending = new List<RecordService.Models.PendingUserDigest>();
+    foreach (var q in await users.GetSearchQueriesByUserAsync(userId))
+    {
+        var all = await records.GetRecordsSeenSinceAsync(q.Id, null);
+        if (all.Count > 0)
+            pending.Add(new() { UserId = userId, SearchQueryId = q.Id, TargetUrl = q.TargetUrl, Records = all });
+    }
+    var digest = await sp.GetRequiredService<IDigestService>().BuildCombinedDigestAsync(userId, pending);
+    if (digest is null) { Console.WriteLine("Nothing to send."); return; }
+    var user = await users.GetUserByIdAsync(userId);
+    await sp.GetRequiredService<IEmailSender>().SendAsync(user.Email, digest.Value.Subject, digest.Value.HtmlBody);
+    Console.WriteLine($"Sent {pending.Sum(p => p.Records.Count)} record(s) to {user.Email}.");
+    return;
 }
 
 // Configure the HTTP request pipeline.
