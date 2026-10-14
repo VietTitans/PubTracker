@@ -29,6 +29,11 @@ public class SearchQueriesService : ISearchQueriesService
         return await _dataAccess.GetUserSubscribersForQueryAsync(searchQueryId);
     }
 
+    public async Task<Paged<int>> GetUserSubscribersPageForQueryAsync(int searchQueryId, int page, int pageSize)
+    {
+        return await _dataAccess.GetUserSubscribersPageForQueryAsync(searchQueryId, page, pageSize);
+    }
+
     public async Task<SearchQuery> SubscribeAsync(int userId, string targetUrl)
     {
         var searchQuery = await _dataAccess.SubscribeAsync(userId, targetUrl);

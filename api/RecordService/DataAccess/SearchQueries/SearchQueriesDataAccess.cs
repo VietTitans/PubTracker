@@ -69,6 +69,19 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
             .ToListAsync();
     }
 
+    public async Task<Paged<int>> GetUserSubscribersPageForQueryAsync(int searchQueryId, int page, int pageSize)
+    {
+        var subscriptions = _dbContext.UserSearchQueries.Where(usq => usq.SearchQueryId == searchQueryId);
+        var totalCount = await subscriptions.CountAsync();
+        var items = await subscriptions
+            .OrderBy(usq => usq.UserId)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(usq => usq.UserId)
+            .ToListAsync();
+        return new Paged<int> { Items = items, TotalCount = totalCount };
+    }
+
     public async Task<SourceSearchResult> ExecuteSourceSearchAsync(int searchQueryId, string sourceUrl, DateTime? lastRunDate = null)
     {
         try

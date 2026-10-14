@@ -8,6 +8,7 @@ public interface ISearchQueriesDataAccess
     Task<SearchQuery?> GetSearchQueryByIdAsync(int searchQueryId);
     Task<List<SearchQuery>> GetAllSearchQueriesAsync();
     Task<List<int>> GetUserSubscribersForQueryAsync(int searchQueryId);
+    Task<Paged<int>> GetUserSubscribersPageForQueryAsync(int searchQueryId, int page, int pageSize);
 
     /// <summary>
     /// Executes a search against the external literature source specified in the URL.

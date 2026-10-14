@@ -5,8 +5,9 @@ namespace RecordService.DataAccess;
 public interface IUsersDataAccess
 {
     Task<User> GetUserByIdAsync(int userId);
-    Task<List<User>> GetUsersAsync();
+    Task<Paged<User>> GetUsersPageAsync(int page, int pageSize);
     Task<List<SearchQuery>> GetSearchQueriesByUserAsync(int userId);
+    Task<Paged<SearchQuery>> GetSearchQueriesPageByUserAsync(int userId, int page, int pageSize);
     Task<User> CreateUserAsync(User user);
 
     /// <summary>

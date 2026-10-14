@@ -2,6 +2,7 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RecordService.BusinessLogic.SourcesService;
+using RecordService.DTOs;
 using RecordService.Extensions;
 
 namespace RecordService.Controllers;
@@ -37,12 +38,12 @@ public class SourcesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAllSources()
+    public async Task<IActionResult> GetSources([FromQuery] PageRequest pageRequest)
     {
         try
         {
-            var sources = await _sourcesService.GetAllSourcesAsync();
-            return Ok(sources.ToResponseDtoList());
+            var sources = await _sourcesService.GetSourcesPageAsync(pageRequest.Page, pageRequest.PageSize);
+            return Ok(sources.ToPagedResponseDto(pageRequest));
         }
         catch (Exception ex)
         {

@@ -90,8 +90,28 @@ export function deleteCurrentUser(): Promise<void> {
   });
 }
 
-export function getSearchQueriesForUser(userId: number): Promise<SearchQuery[]> {
-  return request<SearchQuery[]>(`${API_PREFIX}/Users/${userId}/search-queries`);
+interface PagedResponse<T> {
+  items: T[];
+  page: number;
+  pageSize: number;
+  totalCount: number;
+}
+
+const MAX_PAGE_SIZE = 100;
+
+// The UI shows every subscription at once, so walk all pages rather than only the first.
+export async function getSearchQueriesForUser(userId: number): Promise<SearchQuery[]> {
+  const queries: SearchQuery[] = [];
+  for (let page = 1; ; page++) {
+    const result = await request<PagedResponse<SearchQuery>>(
+      `${API_PREFIX}/Users/${userId}/search-queries?page=${page}&pageSize=${MAX_PAGE_SIZE}`
+    );
+    queries.push(...result.items);
+    // An empty page also ends the walk, in case rows were removed while paging.
+    if (result.items.length === 0 || queries.length >= result.totalCount) {
+      return queries;
+    }
+  }
 }
 
 export function getSearchQueryById(searchQueryId: number): Promise<SearchQuery> {

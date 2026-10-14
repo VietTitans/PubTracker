@@ -1,4 +1,5 @@
 using RecordData;
+using RecordService.DTOs;
 using RecordService.DTOs.UserDto;
 
 namespace RecordService.Extensions;
@@ -21,13 +22,10 @@ public static class UserMappingExtensions
         };
     }
 
-    /// Maps a collection of User models to UserResponseDtos
-    public static List<UserResponseDto> ToResponseDtoList(this List<User> users)
+    /// Maps a page of User models to a paged response of UserResponseDtos
+    public static PagedResponseDto<UserResponseDto> ToPagedResponseDto(this Paged<User> users, PageRequest pageRequest)
     {
-        if (users == null)
-            return new List<UserResponseDto>();
-
-        return users.Select(u => u.ToResponseDto()).ToList();
+        return users.ToPagedResponseDto(pageRequest, u => u.ToResponseDto());
     }
 
     /// Maps a CreateUserDto to a User model

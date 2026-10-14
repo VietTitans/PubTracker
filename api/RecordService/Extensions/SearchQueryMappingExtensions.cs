@@ -1,6 +1,7 @@
 using RecordData;
 using RecordService.BusinessLogic.DigestService;
 using RecordService.DataAccess.ExternalSources;
+using RecordService.DTOs;
 using RecordService.DTOs.SearchQueryDto;
 
 namespace RecordService.Extensions;
@@ -32,6 +33,11 @@ public static class SearchQueryMappingExtensions
             SourceDetector.SourceType.Pedro => PedroDigestMessageBuilder.GetKeywordTags(targetUrl),
             _ => new List<string>()
         };
+    }
+
+    public static PagedResponseDto<SearchQueryResponseDto> ToPagedResponseDto(this Paged<SearchQuery> searchQueries, PageRequest pageRequest)
+    {
+        return searchQueries.ToPagedResponseDto(pageRequest, s => s.ToResponseDto());
     }
 
     public static List<SearchQueryResponseDto> ToResponseDtoList(this List<SearchQuery> searchQueries)

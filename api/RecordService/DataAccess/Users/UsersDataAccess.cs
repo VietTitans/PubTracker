@@ -27,30 +27,54 @@ public class UsersDataAccess : IUsersDataAccess
             .FirstOrDefaultAsync();
     }
 
-    public async Task<List<User>> GetUsersAsync()
+    public async Task<Paged<User>> GetUsersPageAsync(int page, int pageSize)
     {
-        return await _dbContext.Users.Select(ToUser).ToListAsync();
+        var totalCount = await _dbContext.Users.CountAsync();
+        var items = await _dbContext.Users
+            .OrderBy(u => u.Id)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(ToUser)
+            .ToListAsync();
+        return new Paged<User> { Items = items, TotalCount = totalCount };
     }
 
     public async Task<List<SearchQuery>> GetSearchQueriesByUserAsync(int userId)
     {
-        return await _dbContext.UserSearchQueries
-            .Where(usq => usq.UserId == userId)
-            .Join(_dbContext.SearchQueries, usq => usq.SearchQueryId, sq => sq.Id, (usq, sq) => sq)
-            .Select(sq => new SearchQuery
-            {
-                Id = sq.Id,
-                SourceId = sq.SourceId ?? 0,
-                TargetUrl = sq.TargetUrl ?? string.Empty,
-                LastDigestSentAt = sq.LastDigestSentAt,
-                RecordCount = _dbContext.SearchQueryRecords.Count(sqr => sqr.SearchQueryId == sq.Id),
-                LastFetchedAt = _dbContext.SearchQueryRecords
-                    .Where(sqr => sqr.SearchQueryId == sq.Id)
-                    .Max(sqr => (DateTime?)sqr.FirstSeenAt),
-                SourceRecordCount = sq.SourceRecordCount,
-                LastPollFailedAt = sq.LastPollFailedAt
-            })
+        return await ToSearchQueries(UserSearchQueryEntities(userId)).ToListAsync();
+    }
+
+    public async Task<Paged<SearchQuery>> GetSearchQueriesPageByUserAsync(int userId, int page, int pageSize)
+    {
+        var entities = UserSearchQueryEntities(userId);
+        var totalCount = await entities.CountAsync();
+        var items = await ToSearchQueries(entities.OrderBy(sq => sq.Id).Skip((page - 1) * pageSize).Take(pageSize))
             .ToListAsync();
+        return new Paged<SearchQuery> { Items = items, TotalCount = totalCount };
+    }
+
+    private IQueryable<SearchQueryEntity> UserSearchQueryEntities(int userId)
+    {
+        return _dbContext.UserSearchQueries
+            .Where(usq => usq.UserId == userId)
+            .Join(_dbContext.SearchQueries, usq => usq.SearchQueryId, sq => sq.Id, (usq, sq) => sq);
+    }
+
+    private IQueryable<SearchQuery> ToSearchQueries(IQueryable<SearchQueryEntity> entities)
+    {
+        return entities.Select(sq => new SearchQuery
+        {
+            Id = sq.Id,
+            SourceId = sq.SourceId ?? 0,
+            TargetUrl = sq.TargetUrl ?? string.Empty,
+            LastDigestSentAt = sq.LastDigestSentAt,
+            RecordCount = _dbContext.SearchQueryRecords.Count(sqr => sqr.SearchQueryId == sq.Id),
+            LastFetchedAt = _dbContext.SearchQueryRecords
+                .Where(sqr => sqr.SearchQueryId == sq.Id)
+                .Max(sqr => (DateTime?)sqr.FirstSeenAt),
+            SourceRecordCount = sq.SourceRecordCount,
+            LastPollFailedAt = sq.LastPollFailedAt
+        });
     }
 
     public async Task<User> CreateUserAsync(User user)

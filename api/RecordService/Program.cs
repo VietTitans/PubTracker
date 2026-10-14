@@ -31,7 +31,19 @@ if (string.IsNullOrEmpty(connectionString))
 builder.Services.AddDbContext<RecordService.DataAccess.PubTrackerDbContext>(options =>
     options.UseNpgsql(connectionString));
 
-builder.Services.AddControllers();
+builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
+{
+    // [ApiController] rejects invalid input before the action runs; answer with the same
+    // { message } shape as every other error instead of the default ProblemDetails body.
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var message = context.ModelState.Values
+            .SelectMany(v => v.Errors)
+            .Select(e => e.ErrorMessage)
+            .FirstOrDefault(m => !string.IsNullOrEmpty(m)) ?? "Invalid request.";
+        return context.HttpContext.RequestServices.GetRequiredService<IErrorHandler>().BadRequest(message);
+    };
+});
 
 builder.Services.AddApiVersioning(options =>
 {

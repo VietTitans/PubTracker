@@ -1,4 +1,5 @@
 using RecordData;
+using RecordService.DTOs;
 using RecordService.DTOs.Source;
 
 namespace RecordService.Extensions;
@@ -15,8 +16,8 @@ public static class SourceMappingExtensions
         };
     }
 
-    public static List<SourceResponseDto> ToResponseDtoList(this List<Source> sources)
+    public static PagedResponseDto<SourceResponseDto> ToPagedResponseDto(this Paged<Source> sources, PageRequest pageRequest)
     {
-        return sources.Select(s => s.ToResponseDto()).ToList();
+        return sources.ToPagedResponseDto(pageRequest, s => s.ToResponseDto());
     }
 }

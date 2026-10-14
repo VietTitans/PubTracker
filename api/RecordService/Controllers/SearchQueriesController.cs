@@ -2,6 +2,7 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RecordService.BusinessLogic.SearchQueriesService;
+using RecordService.DTOs;
 using RecordService.DTOs.SearchQueryDto;
 using RecordService.Exceptions;
 using RecordService.Extensions;
@@ -58,12 +59,12 @@ public class SearchQueriesController : ControllerBase
 
     [Authorize(Policy = "AdminOnly")]
     [HttpGet("{searchQueryId}/users")]
-    public async Task<IActionResult> GetSearchQueryUsers(int searchQueryId)
+    public async Task<IActionResult> GetSearchQueryUsers(int searchQueryId, [FromQuery] PageRequest pageRequest)
     {
         try
         {
-            var userIds = await _searchQueriesService.GetUserSubscribersForQueryAsync(searchQueryId);
-            return Ok(new { userIds = userIds });
+            var userIds = await _searchQueriesService.GetUserSubscribersPageForQueryAsync(searchQueryId, pageRequest.Page, pageRequest.PageSize);
+            return Ok(userIds.ToPagedResponseDto(pageRequest, id => id));
         }
         catch (Exception ex)
         {

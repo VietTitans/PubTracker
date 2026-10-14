@@ -22,14 +22,19 @@ public class UsersService : IUsersService
         return await _dataAccess.GetUserByIdAsync(userId);
     }
 
-    public async Task<List<User>> GetUsersAsync()
+    public async Task<Paged<User>> GetUsersPageAsync(int page, int pageSize)
     {
-        return await _dataAccess.GetUsersAsync();
+        return await _dataAccess.GetUsersPageAsync(page, pageSize);
     }
 
     public async Task<List<SearchQuery>> GetSearchQueriesByUserAsync(int userId)
     {
         return await _dataAccess.GetSearchQueriesByUserAsync(userId);
+    }
+
+    public async Task<Paged<SearchQuery>> GetSearchQueriesPageByUserAsync(int userId, int page, int pageSize)
+    {
+        return await _dataAccess.GetSearchQueriesPageByUserAsync(userId, page, pageSize);
     }
 
     public async Task<User> CreateUserAsync(User user)

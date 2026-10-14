@@ -3,6 +3,7 @@ using Asp.Versioning;
 using Microsoft.AspNetCore.Mvc;
 using RecordData;
 using RecordService.BusinessLogic.UsersService;
+using RecordService.DTOs;
 using RecordService.DTOs.UserDto;
 using RecordService.Exceptions;
 using RecordService.Extensions;
@@ -84,12 +85,12 @@ public class UsersController : ControllerBase
 
     [Authorize(Policy = "AdminOnly")]
     [HttpGet]
-    public async Task<IActionResult> GetUsers()
+    public async Task<IActionResult> GetUsers([FromQuery] PageRequest pageRequest)
     {
         try
         {
-            var users = await _userService.GetUsersAsync();
-            return Ok(users.ToResponseDtoList());
+            var users = await _userService.GetUsersPageAsync(pageRequest.Page, pageRequest.PageSize);
+            return Ok(users.ToPagedResponseDto(pageRequest));
         }
         catch (Exception ex)
         {
@@ -182,7 +183,7 @@ public class UsersController : ControllerBase
 
     [Authorize]
     [HttpGet("{userId}/search-queries")]
-    public async Task<IActionResult> GetUserSearchQueries(int userId)
+    public async Task<IActionResult> GetUserSearchQueries(int userId, [FromQuery] PageRequest pageRequest)
     {
         var callerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (callerId == null)
@@ -197,8 +198,8 @@ public class UsersController : ControllerBase
 
         try
         {
-            var queries = await _userService.GetSearchQueriesByUserAsync(userId);
-            return Ok(queries.ToResponseDtoList());
+            var queries = await _userService.GetSearchQueriesPageByUserAsync(userId, pageRequest.Page, pageRequest.PageSize);
+            return Ok(queries.ToPagedResponseDto(pageRequest));
         }
         catch (Exception ex)
         {
@@ -208,7 +209,7 @@ public class UsersController : ControllerBase
 
     [Authorize]
     [HttpGet("me/search-queries")]
-    public async Task<IActionResult> GetCurrentUserSearchQueries()
+    public async Task<IActionResult> GetCurrentUserSearchQueries([FromQuery] PageRequest pageRequest)
     {
         var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (userId == null)
@@ -218,8 +219,8 @@ public class UsersController : ControllerBase
 
         try
         {
-            var queries = await _userService.GetSearchQueriesByUserAsync(int.Parse(userId));
-            return Ok(queries.ToResponseDtoList());
+            var queries = await _userService.GetSearchQueriesPageByUserAsync(int.Parse(userId), pageRequest.Page, pageRequest.PageSize);
+            return Ok(queries.ToPagedResponseDto(pageRequest));
         }
         catch (Exception ex)
         {
