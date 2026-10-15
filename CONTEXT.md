@@ -25,7 +25,7 @@ The email of Records first seen after a subscriber's watermark, combined across 
 _Avoid_: Newsletter, alert, notification
 
 **Digest summary**:
-An AI-written summary of 3-5 sentences covering the batch of new Records for one Search Query in one poll. Not stored on a Record.
+An AI-written summary of 5-6 sentences covering every new Record found for one Search Query in one poll, based on their abstracts. Not stored on a Record.
 _Avoid_: Summary (unqualified), AI summary
 
 **Author intention**:

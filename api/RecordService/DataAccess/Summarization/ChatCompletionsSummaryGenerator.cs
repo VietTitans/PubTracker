@@ -13,22 +13,27 @@ namespace RecordService.DataAccess.Summarization;
 /// not a new implementation. baseUrl must include the API version path and a trailing slash
 /// (e.g. "https://api.openai.com/v1/") so it combines correctly with the relative request URI.
 ///
-/// One call covers the whole digest rather than summarizing per-record/per-cluster first: even a
-/// large digest's record titles/abstracts fit easily in a single prompt within any modern model's
-/// context window, and one call lets the model relate records to each other instead of
-/// re-synthesizing from isolated per-record summaries. RecordCap/AbstractCharCap are just a cheap
-/// safety net for the unlikely oversized-digest case.
+/// The digest summary covers every new record that has an abstract. A batch that fits in one
+/// chunk (Llm:SummaryChunkSize) is summarized in a single call, which lets the model relate the
+/// records to each other. A bigger batch is summarized chunk by chunk, and the chunk summaries
+/// are then combined in one final call, so no record is dropped however large the batch is.
 /// </summary>
 public class ChatCompletionsSummaryGenerator : ISummaryGenerator
 {
-    private const int RecordCap = 50;
-    private const int AbstractCharCap = 500;
+    private const int AbstractCharCap = 500; // author intention only; the digest summary uses summaryAbstractChars
+    private const int MaxConcurrentChunkCalls = 5;
 
     private readonly HttpClient _httpClient;
     private readonly string _model;
+    private readonly int _summaryChunkSize;
+    private readonly int _summaryAbstractChars;
 
-    public ChatCompletionsSummaryGenerator(HttpClient httpClient, string baseUrl, string apiKey, string model)
+    public ChatCompletionsSummaryGenerator(
+        HttpClient httpClient, string baseUrl, string apiKey, string model,
+        int summaryChunkSize = 40, int summaryAbstractChars = 1000)
     {
+        _summaryChunkSize = Math.Max(1, summaryChunkSize);
+        _summaryAbstractChars = Math.Max(1, summaryAbstractChars);
         _httpClient = httpClient ?? throw new ArgumentNullException(nameof(httpClient));
         _model = model ?? throw new ArgumentNullException(nameof(model));
 
@@ -39,14 +44,36 @@ public class ChatCompletionsSummaryGenerator : ISummaryGenerator
 
     public async Task<string> SummarizeAsync(IReadOnlyList<LiteratureRecord> records)
     {
-        if (records.Count == 0)
+        var withAbstract = records.Where(r => !string.IsNullOrWhiteSpace(r.Abstract)).ToList();
+        if (withAbstract.Count == 0)
         {
             return string.Empty;
         }
 
+        var chunks = withAbstract.Chunk(_summaryChunkSize).ToList();
+        if (chunks.Count == 1)
+        {
+            return await RequestChatCompletionAsync(FinalSummaryPrompt, BuildRecordsPrompt(chunks[0]));
+        }
+
+        using var throttle = new SemaphoreSlim(MaxConcurrentChunkCalls);
+        var partials = await Task.WhenAll(chunks.Select(async chunk =>
+        {
+            await throttle.WaitAsync();
+            try
+            {
+                return await RequestChatCompletionAsync(ChunkSummaryPrompt, BuildRecordsPrompt(chunk));
+            }
+            finally
+            {
+                throttle.Release();
+            }
+        }));
+
         return await RequestChatCompletionAsync(
-            "You write a short, friendly summary (3-5 sentences) of what's new in this email update about research articles. Use plain, everyday language a non-technical reader would understand - avoid jargon. Reply with the summary prose only - no title, heading, or markdown formatting. Avoid emdashes, bullet points, or lists. Do not include any text that is not part of the summary.",
-            BuildRecordsPrompt(records));
+            FinalSummaryPrompt,
+            "Summaries of consecutive batches of the new records, to combine into one summary:\n"
+            + string.Join("\n", partials.Select(partial => "- " + partial)));
     }
 
     public async Task<string> GenerateAuthorIntentionAsync(LiteratureRecord record)
@@ -78,20 +105,21 @@ public class ChatCompletionsSummaryGenerator : ISummaryGenerator
         return completion?.Choices?.FirstOrDefault()?.Message?.Content?.Trim() ?? string.Empty;
     }
 
-    private static string BuildRecordsPrompt(IReadOnlyList<LiteratureRecord> records)
+    private const string FinalSummaryPrompt =
+        "You write a friendly summary (5-6 sentences) of what's new in this email update about research articles, based on their abstracts. Use plain, everyday language a non-technical reader would understand - avoid jargon. Reply with the summary prose only - no title, heading, or markdown formatting. Avoid emdashes, bullet points, or lists. Do not include any text that is not part of the summary.";
+
+    private const string ChunkSummaryPrompt =
+        "You summarize one batch of new research articles, based on their abstracts, in 3-4 sentences covering the main topics and findings. Use plain, everyday language. Reply with the summary prose only - no title, heading, or markdown formatting. Avoid emdashes, bullet points, or lists. Do not include any text that is not part of the summary.";
+
+    private string BuildRecordsPrompt(IEnumerable<LiteratureRecord> records)
     {
         var sb = new StringBuilder("New records to summarize:\n");
-        foreach (var record in records.Take(RecordCap))
+        foreach (var record in records)
         {
-            sb.Append("- ").Append(record.Title);
-            if (!string.IsNullOrWhiteSpace(record.Abstract))
-            {
-                var truncated = record.Abstract.Length > AbstractCharCap
-                    ? record.Abstract[..AbstractCharCap] + "..."
-                    : record.Abstract;
-                sb.Append(": ").Append(truncated);
-            }
-            sb.Append('\n');
+            var abstractText = record.Abstract!.Length > _summaryAbstractChars
+                ? record.Abstract[.._summaryAbstractChars] + "..."
+                : record.Abstract;
+            sb.Append("- ").Append(record.Title).Append(": ").Append(abstractText).Append('\n');
         }
         return sb.ToString();
     }

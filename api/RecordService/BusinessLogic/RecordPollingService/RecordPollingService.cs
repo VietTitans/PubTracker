@@ -265,7 +265,7 @@ public class RecordPollingService : IRecordPollingService
     }
 
     // Fills the author intention of records that have an abstract and none yet, newest first and
-    // at most Llm:MaxIntentionsPerPoll per poll: this covers the records this poll just stored
+    // at most Llm:MaxAuthorIntentionsPerPoll per poll: this covers the records this poll just stored
     // and, over later polls, old records no poll returns again. It runs once per record, not per
     // subscriber or digest. A failed call is logged and the record stays null, so a later poll
     // retries it; a successful but empty reply is stored as "" and not retried. A generation
@@ -279,12 +279,12 @@ public class RecordPollingService : IRecordPollingService
     private async Task GenerateMissingAuthorIntentionsAsync()
     {
         // No LLM configured: skip, so nothing is stored as "attempted" and records fill in once a key is set.
-        if (_summaryGenerator is NullSummaryGenerator || _maxIntentionsPerPoll <= 0)
+        if (_summaryGenerator is NullSummaryGenerator || _maxAuthorIntentionsPerPoll <= 0)
         {
             return;
         }
 
-        var missing = await _recordsDataAccess.GetRecordsMissingAuthorIntentionAsync(_maxIntentionsPerPoll);
+        var missing = await _recordsDataAccess.GetRecordsMissingAuthorIntentionAsync(_maxAuthorIntentionsPerPoll);
         if (missing.Count == 0)
         {
             return;

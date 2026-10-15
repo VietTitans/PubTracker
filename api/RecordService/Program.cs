@@ -103,7 +103,9 @@ builder.Services.AddScoped<ISummaryGenerator>(serviceProvider =>
         ? new NullSummaryGenerator()
         : new ChatCompletionsSummaryGenerator(
             serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(),
-            llmBaseUrl!, llmApiKey, llmModel!));
+            llmBaseUrl!, llmApiKey, llmModel!,
+            builder.Configuration.GetValue("Llm:SummaryChunkSize", 40),
+            builder.Configuration.GetValue("Llm:SummaryAbstractChars", 1000)));
 
 // Business Logic Layer: Register interfaces to implementations
 builder.Services.AddScoped<IUsersService, UsersService>();

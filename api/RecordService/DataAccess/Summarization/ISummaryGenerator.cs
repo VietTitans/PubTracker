@@ -9,6 +9,10 @@ namespace RecordService.DataAccess.Summarization;
 /// </summary>
 public interface ISummaryGenerator
 {
+    /// <summary>
+    /// 5-6 sentence summary of every given record that has an abstract (the digest summary).
+    /// Returns an empty string when none has one.
+    /// </summary>
     Task<string> SummarizeAsync(IReadOnlyList<LiteratureRecord> records);
 
     /// <summary>
