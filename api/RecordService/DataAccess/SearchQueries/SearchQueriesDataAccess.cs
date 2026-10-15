@@ -27,7 +27,7 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
                 SourceId = sq.SourceId ?? 0,
                 TargetUrl = sq.TargetUrl ?? string.Empty,
                 LastDigestSentAt = sq.LastDigestSentAt,
-                RecordCount = _dbContext.SearchQueryRecords.Count(sqr => sqr.SearchQueryId == sq.Id),
+                StoredRecordCount = _dbContext.SearchQueryRecords.Count(sqr => sqr.SearchQueryId == sq.Id),
                 LastFetchedAt = _dbContext.SearchQueryRecords
                     .Where(sqr => sqr.SearchQueryId == sq.Id)
                     .Max(sqr => (DateTime?)sqr.FirstSeenAt),

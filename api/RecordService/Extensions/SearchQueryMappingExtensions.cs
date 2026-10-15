@@ -16,7 +16,7 @@ public static class SearchQueryMappingExtensions
             TargetUrl = searchQuery.TargetUrl,
             Subscribers = searchQuery.Subscribers,
             LastDigestSentAt = searchQuery.LastDigestSentAt,
-            RecordCount = searchQuery.RecordCount,
+            StoredRecordCount = searchQuery.StoredRecordCount,
             LastFetchedAt = searchQuery.LastFetchedAt,
             SourceRecordCount = searchQuery.SourceRecordCount,
             Tags = GetKeywordTags(searchQuery.TargetUrl),

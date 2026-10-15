@@ -81,7 +81,7 @@ public class DigestOutboxTests : IClassFixture<PubTrackerWebApplicationFactory>
         for (var attempt = 0; attempt < DigestOutboxService.MaxAttempts; attempt++)
         {
             await _factory.DrainOutboxAsync();
-            await dbContext.Database.ExecuteSqlRawAsync("UPDATE digest_outbox SET next_attempt_at = now() WHERE sent_at IS NULL AND failed_at IS NULL");
+            await dbContext.Database.ExecuteSqlRawAsync("UPDATE digest_outbox SET next_attempt_at = now() - interval '1 hour' WHERE sent_at IS NULL AND failed_at IS NULL");
         }
 
         Assert.Equal(1, await dbContext.DigestOutbox.AsNoTracking().CountAsync(o => o.UserId == user.Id && o.FailedAt != null));

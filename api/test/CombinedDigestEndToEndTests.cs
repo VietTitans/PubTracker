@@ -135,7 +135,7 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
         // userB's failed send is backed off, not lost; make it due again and let it succeed.
         _factory.EmailSender.FailForAddresses.Remove(userB.Email);
         var dbContext = scope.ServiceProvider.GetRequiredService<PubTrackerDbContext>();
-        await dbContext.Database.ExecuteSqlRawAsync("UPDATE digest_outbox SET next_attempt_at = now() WHERE sent_at IS NULL AND failed_at IS NULL");
+        await dbContext.Database.ExecuteSqlRawAsync("UPDATE digest_outbox SET next_attempt_at = now() - interval '1 hour' WHERE sent_at IS NULL AND failed_at IS NULL");
         await _factory.DrainOutboxAsync();
 
         // userA already received their email and must not get a duplicate;

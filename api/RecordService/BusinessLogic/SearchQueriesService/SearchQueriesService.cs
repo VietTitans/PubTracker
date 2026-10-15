@@ -6,14 +6,15 @@ namespace RecordService.BusinessLogic.SearchQueriesService;
 
 public class SearchQueriesService : ISearchQueriesService
 {
-    private static readonly TimeSpan InitialPollDelay = TimeSpan.FromSeconds(5);
-
+    private readonly TimeSpan _initialPollDelay;
     private readonly ISearchQueriesDataAccess _dataAccess;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<SearchQueriesService> _logger;
 
-    public SearchQueriesService(ISearchQueriesDataAccess dataAccess, IServiceScopeFactory scopeFactory, ILogger<SearchQueriesService> logger)
+    public SearchQueriesService(ISearchQueriesDataAccess dataAccess, IServiceScopeFactory scopeFactory, ILogger<SearchQueriesService> logger, IConfiguration configuration)
     {
+        // Configurable so tests can park the background poll instead of racing their own polls.
+        _initialPollDelay = TimeSpan.FromSeconds(configuration.GetValue("Scheduler:InitialPollDelaySeconds", 5));
         _dataAccess = dataAccess;
         _scopeFactory = scopeFactory;
         _logger = logger;
@@ -55,7 +56,7 @@ public class SearchQueriesService : ISearchQueriesService
     {
         try
         {
-            await Task.Delay(InitialPollDelay);
+            await Task.Delay(_initialPollDelay);
 
             using var scope = _scopeFactory.CreateScope();
             var pollingService = scope.ServiceProvider.GetRequiredService<IRecordPollingService>();

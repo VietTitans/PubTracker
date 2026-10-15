@@ -12,7 +12,7 @@ public class SearchQueryResponseDto
 
     public DateTime? LastDigestSentAt { get; set; }
 
-    public int RecordCount { get; set; }
+    public int StoredRecordCount { get; set; }
 
     public DateTime? LastFetchedAt { get; set; }
 
