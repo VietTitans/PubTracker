@@ -63,6 +63,7 @@ public class ConcurrentPollRaceTests : IClassFixture<PubTrackerWebApplicationFac
         var pollingServiceA = scopeA.ServiceProvider.GetRequiredService<IRecordPollingService>();
         var pollingServiceB = scopeB.ServiceProvider.GetRequiredService<IRecordPollingService>();
 
+        await _factory.SkipBaselinePollAsync();
         await Task.WhenAll(
             pollingServiceA.PollSearchQueryAsync(searchQueryId),
             pollingServiceB.PollSearchQueryAsync(searchQueryId));

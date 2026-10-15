@@ -4,6 +4,19 @@ Literature-monitoring SaaS: paste a search URL from a scientific database (PubMe
 later IEEE/Scopus), and PubTracker polls it on a schedule, deduplicates new records, and
 emails a digest of what's new.
 
+> **Disclaimer:** PEDro scraping is disabled by default and requires PEDro's explicit permission.
+> See [Third-Party Data Sources](#disclaimer-third-party-data-sources) below.
+
+## Disclaimer: Third-Party Data Sources
+
+PubTracker is a portfolio and demonstration project. It is not affiliated with, endorsed by, or sponsored by any of the databases it connects to.
+
+**PEDro (Physiotherapy Evidence Database).** The PEDro provider retrieves and parses pages from the PEDro website. PEDro does not offer a public API for this purpose, and its terms of use may restrict automated access. Before you run this system against PEDro, you must contact PEDro (https://pedro.org.au) and obtain their explicit permission to access their website programmatically. The author does not grant, and cannot grant, that permission on PEDro's behalf. Do not deploy the PEDro provider in a production or public setting without it. Respect any rate limits, robots.txt directives, and usage conditions PEDro specifies.
+
+**PubMed / NCBI.** The PubMed provider uses NCBI's official E-utilities API. You must follow NCBI's usage policies, including rate limits and the use of a registered API key and contact email (`Ncbi:ApiKey`, `Ncbi:ContactEmail`).
+
+**Your responsibility.** Anyone who runs, deploys, or modifies this software is solely responsible for complying with the terms of service, copyright rules, and applicable laws of every source they query. The software is provided "as is", without warranty, and the author accepts no liability for misuse. Records and abstracts remain the property of their respective publishers and databases.
+
 ## Quick start (Docker)
 
 ```bash
@@ -45,6 +58,7 @@ Set via environment variables (`Section__Key`) or `appsettings`.
 | `Keycloak:Authority`, `Keycloak:MetadataAddress`, `Keycloak:Audience` | no | OIDC (default: local Keycloak `:8081`) |
 | `Llm:BaseUrl`, `Llm:ApiKey`, `Llm:Model` | no | AI digest summaries (any OpenAI-compatible endpoint); no key = no summaries |
 | `Ncbi:ApiKey`, `Ncbi:ContactEmail` | no | PubMed rate limits |
+| `Sources:<Name>:Enabled` | no | Per-source toggle, override in `docker/docker-compose.yml`; defaults live in `Sources/SourceCatalog.cs` (`PubMed` on, `Pedro` off). Enable a scraped source only after obtaining its owner's permission (see [Disclaimer](#disclaimer-third-party-data-sources)) |
 | `Cors:WebAppOrigin` | no | Default `http://localhost:5173` |
 | `Scheduler:PollIntervalHours` | no | Default 168 (weekly) |
 | `Scheduler:UserPurgeIntervalHours` | no | Default 24 |

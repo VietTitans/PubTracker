@@ -64,6 +64,10 @@ services:
       Email__ApiKey: ${EMAIL_API_KEY}
       Email__FromAddress: ${EMAIL_FROM_ADDRESS}
       Email__FromName: ${EMAIL_FROM_NAME}
+      # Literature sources: true/false overrides the default in SourceCatalog (blank = default).
+      # Enable a scraped source only with its owner's permission (see README).
+      Sources__PubMed__Enabled: ${SOURCES_PUBMED_ENABLED:-}
+      Sources__Pedro__Enabled: ${SOURCES_PEDRO_ENABLED:-}
       Ncbi__ApiKey: ${NCBI_API_KEY}
       Ncbi__ContactEmail: ${NCBI_CONTACT_EMAIL}
       Llm__BaseUrl: ${LLM_BASE_URL}

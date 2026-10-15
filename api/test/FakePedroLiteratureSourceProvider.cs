@@ -6,7 +6,7 @@ namespace test;
 /// <summary>
 /// Second test-only ILiteratureSourceProvider stand-in, alongside FakeLiteratureSourceProvider,
 /// so E2E tests can exercise a user subscribed to two distinct sources at once without hitting
-/// live PubMed/PEDro. CanHandle matches a URL containing "pedro" so SourceDetector routes its
+/// live PubMed/PEDro. CanHandle matches a URL containing "pedro" so SourceCatalog routes its
 /// digest content through PedroDigestMessageBuilder, distinguishing it from
 /// FakeLiteratureSourceProvider's Unknown-source fallback path.
 /// </summary>

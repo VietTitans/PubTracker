@@ -26,6 +26,15 @@ public static class PubMedHttpClientExtensions
     /// reach); the breaker's job here is to bound how long a dead source can hold the global
     /// poll-cycle lock, not to model NCBI's true failure rate.
     /// </summary>
+    public static void AddPubMedSource(IServiceCollection services, IConfiguration config)
+    {
+        services.AddPubMedHttpClient(attemptTimeout: TimeSpan.FromSeconds(15));
+        services.AddSingleton<PubMedProvider>(sp =>
+            new PubMedProvider(
+                sp.GetRequiredService<IHttpClientFactory>().CreateClient(HttpClientName),
+                config["Ncbi:ApiKey"], config["Ncbi:ContactEmail"]));
+    }
+
     public static IHttpResiliencePipelineBuilder AddPubMedHttpClient(this IServiceCollection services, TimeSpan attemptTimeout)
     {
         return services.AddHttpClient(HttpClientName)

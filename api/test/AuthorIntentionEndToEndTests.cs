@@ -64,6 +64,7 @@ public class AuthorIntentionEndToEndTests : IClassFixture<PubTrackerWebApplicati
         var callsBefore = _factory.SummaryGenerator.AuthorIntentionCalls.Count;
 
         var pollingService = scope.ServiceProvider.GetRequiredService<IRecordPollingService>();
+        await _factory.SkipBaselinePollAsync();
         await pollingService.PollAllSearchQueriesAsync();
         await _factory.DrainOutboxAsync();
 
@@ -100,6 +101,7 @@ public class AuthorIntentionEndToEndTests : IClassFixture<PubTrackerWebApplicati
         createResponse.EnsureSuccessStatusCode();
 
         var pollingService = scope.ServiceProvider.GetRequiredService<IRecordPollingService>();
+        await _factory.SkipBaselinePollAsync();
         var results = await pollingService.PollAllSearchQueriesAsync();
         await _factory.DrainOutboxAsync();
 

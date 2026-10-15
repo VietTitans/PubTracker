@@ -1,8 +1,10 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using RecordService.BusinessLogic.DigestOutboxService;
+using RecordService.DataAccess;
 using RecordService.DataAccess.Email;
 using RecordService.DataAccess.ExternalSources;
 using RecordService.DataAccess.Summarization;
@@ -63,6 +65,17 @@ public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, I
             services.RemoveAll<ISummaryGenerator>();
             services.AddSingleton<ISummaryGenerator>(SummaryGenerator);
         });
+    }
+
+    /// <summary>
+    /// A query's first poll is a baseline that never emails (see RecordPollingService.FetchOneAsync).
+    /// Call after subscribing so the next poll is an ordinary one that does.
+    /// </summary>
+    public async Task SkipBaselinePollAsync()
+    {
+        using var scope = Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<PubTrackerDbContext>();
+        await dbContext.Database.ExecuteSqlRawAsync("UPDATE search_queries SET last_polled_at = TIMESTAMPTZ 'epoch' WHERE last_polled_at IS NULL");
     }
 
     /// <summary>Sends every due digest outbox row now (what DigestOutboxBackgroundService does on its interval).</summary>

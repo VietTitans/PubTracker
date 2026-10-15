@@ -39,6 +39,7 @@ public class DigestOutboxTests : IClassFixture<PubTrackerWebApplicationFactory>
         var response = await client.PostAsJsonAsync("/api/v1/SearchQueries",
             new CreateSearchQueryDto { TargetUrl = $"{FakeLiteratureSourceProvider.TestUrl}?case={urlCase}" });
         response.EnsureSuccessStatusCode();
+        await _factory.SkipBaselinePollAsync();
         var created = await response.Content.ReadFromJsonAsync<SearchQueryResponseDto>();
         return (user, created!.Id);
     }

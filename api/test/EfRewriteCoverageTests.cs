@@ -137,6 +137,7 @@ public class EfRewriteCoverageTests : IClassFixture<PubTrackerWebApplicationFact
 
         // Poll both together first so B's records get persisted, and this same combined-digest
         // send advances the user's watermark for B past those records' first_seen_at.
+        await _factory.SkipBaselinePollAsync();
         await pollingService.PollAllSearchQueriesAsync();
         await _factory.DrainOutboxAsync();
         Assert.Single(_factory.EmailSender.SentEmails, e => e.ToEmail == user.Email);

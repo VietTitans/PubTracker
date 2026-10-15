@@ -1,6 +1,5 @@
 using RecordData;
-using RecordService.BusinessLogic.DigestService;
-using RecordService.DataAccess.ExternalSources;
+using RecordService.Sources;
 using RecordService.DTOs;
 using RecordService.DTOs.SearchQueryDto;
 
@@ -27,12 +26,7 @@ public static class SearchQueryMappingExtensions
 
     private static List<string> GetKeywordTags(string targetUrl)
     {
-        return SourceDetector.DetectSource(targetUrl) switch
-        {
-            SourceDetector.SourceType.PubMed => PubMedDigestMessageBuilder.GetKeywordTags(targetUrl),
-            SourceDetector.SourceType.Pedro => PedroDigestMessageBuilder.GetKeywordTags(targetUrl),
-            _ => new List<string>()
-        };
+        return SourceCatalog.Detect(targetUrl)?.GetKeywordTags(targetUrl) ?? new List<string>();
     }
 
     public static PagedResponseDto<SearchQueryResponseDto> ToPagedResponseDto(this Paged<SearchQuery> searchQueries, PageRequest pageRequest)

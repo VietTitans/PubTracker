@@ -54,6 +54,7 @@ public class DigestSummaryEndToEndTests : IClassFixture<PubTrackerWebApplication
         createResponse.EnsureSuccessStatusCode();
 
         var pollingService = scope.ServiceProvider.GetRequiredService<IRecordPollingService>();
+        await _factory.SkipBaselinePollAsync();
         await pollingService.PollAllSearchQueriesAsync();
         await _factory.DrainOutboxAsync();
 
@@ -85,6 +86,7 @@ public class DigestSummaryEndToEndTests : IClassFixture<PubTrackerWebApplication
         createResponse.EnsureSuccessStatusCode();
 
         var pollingService = scope.ServiceProvider.GetRequiredService<IRecordPollingService>();
+        await _factory.SkipBaselinePollAsync();
         var results = await pollingService.PollAllSearchQueriesAsync();
         await _factory.DrainOutboxAsync();
 
@@ -125,6 +127,7 @@ public class DigestSummaryEndToEndTests : IClassFixture<PubTrackerWebApplication
         var callsBefore = _factory.SummaryGenerator.Calls.Count;
 
         var pollingService = scope.ServiceProvider.GetRequiredService<IRecordPollingService>();
+        await _factory.SkipBaselinePollAsync();
         await pollingService.PollAllSearchQueriesAsync();
         await _factory.DrainOutboxAsync();
 

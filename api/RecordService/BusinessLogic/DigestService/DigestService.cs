@@ -1,7 +1,7 @@
 using System.Net;
 using System.Text;
 using RecordService.DataAccess;
-using RecordService.DataAccess.ExternalSources;
+using RecordService.Sources;
 using RecordService.Models;
 
 namespace RecordService.BusinessLogic.DigestService;
@@ -37,12 +37,9 @@ public class DigestService : IDigestService
         var sb = new StringBuilder();
         foreach (var q in pendingQueries)
         {
-            var section = SourceDetector.DetectSource(q.TargetUrl) switch
-            {
-                SourceDetector.SourceType.Pedro => PedroDigestMessageBuilder.BuildHtmlBody(q.TargetUrl, q.Records, q.Summary),
-                SourceDetector.SourceType.PubMed => PubMedDigestMessageBuilder.BuildHtmlBody(q.TargetUrl, q.Records, q.Summary),
-                _ => BuildHtmlBody(q.TargetUrl, q.Records, q.Summary)
-            };
+            var section = SourceCatalog.Detect(q.TargetUrl) is { } source
+                ? source.BuildDigest(q.TargetUrl, q.Records, q.Summary)
+                : BuildHtmlBody(q.TargetUrl, q.Records, q.Summary);
             sb.Append("<div style=\"margin:0 0 32px;\">").Append(section).Append("</div>");
         }
         return sb.ToString();

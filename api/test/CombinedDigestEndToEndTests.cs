@@ -65,6 +65,7 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
         // PollAllSearchQueriesAsync polls every query in this class's shared database, which by
         // now may include the isolation test's own query too (test methods within a class share
         // one Postgres container/class fixture); filter to just the two this test created.
+        await _factory.SkipBaselinePollAsync();
         var allResults = await pollingService.PollAllSearchQueriesAsync();
         var results = allResults.Where(r => createdSearchQueryIds.Contains(r.SearchQueryId)).ToList();
         await _factory.DrainOutboxAsync();
@@ -123,6 +124,7 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
         // now may include OneUser_SubscribedToTwoQueries's own queries too (test methods within
         // a class share one Postgres container/class fixture); filter to just this test's query.
         _factory.EmailSender.FailForAddresses.Add(userB.Email);
+        await _factory.SkipBaselinePollAsync();
         var firstResult = (await pollingService.PollAllSearchQueriesAsync()).Single(r => r.SearchQueryId == searchQueryId);
         Assert.True(firstResult.IsSuccessful); // both digests were queued; sending is the outbox's job
         await _factory.DrainOutboxAsync();

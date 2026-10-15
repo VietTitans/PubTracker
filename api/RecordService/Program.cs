@@ -10,6 +10,7 @@ using RecordService.DataAccess.Email;
 using RecordService.DataAccess.ExternalSources;
 using RecordService.DataAccess.Keycloak;
 using RecordService.DataAccess.Summarization;
+using RecordService.Sources;
 using RecordService.ErrorHandling;
 using RecordService.Workers;
 using RecordService.BusinessLogic.UsersService;
@@ -66,23 +67,7 @@ builder.Services.AddCors(options =>
 });
 
 // External Literature Sources: Register providers for factory pattern
-var ncbiApiKey = builder.Configuration["Ncbi:ApiKey"];
-var ncbiContactEmail = builder.Configuration["Ncbi:ContactEmail"];
-builder.Services.AddPubMedHttpClient(attemptTimeout: TimeSpan.FromSeconds(15));
-builder.Services.AddSingleton<PubMedProvider>(sp =>
-    new PubMedProvider(
-        sp.GetRequiredService<IHttpClientFactory>().CreateClient(PubMedHttpClientExtensions.HttpClientName),
-        ncbiApiKey, ncbiContactEmail));
-builder.Services.AddSingleton<PedroProvider>();
-builder.Services.AddSingleton<LiteratureSourceFactory>(serviceProvider =>
-{
-    var providers = new ILiteratureSourceProvider[]
-    {
-        serviceProvider.GetRequiredService<PubMedProvider>(),
-        serviceProvider.GetRequiredService<PedroProvider>()
-    };
-    return new LiteratureSourceFactory(providers);
-});
+builder.Services.AddLiteratureSources(builder.Configuration);
 
 // Data Access Layer: Register interfaces to implementations
 builder.Services.AddScoped<IUsersDataAccess, UsersDataAccess>();

@@ -58,8 +58,8 @@ public class SearchQueryPollingEndToEndTests : IClassFixture<PubTrackerWebApplic
         Assert.True(firstResult.IsSuccessful);
         Assert.Equal(2, firstResult.NewRecordCount);
 
-        var sentEmail = Assert.Single(_factory.EmailSender.SentEmails);
-        Assert.Equal(user.Email, sentEmail.ToEmail);
+        // First poll of a new query is a baseline: the backlog is recorded, never emailed.
+        Assert.Empty(_factory.EmailSender.SentEmails);
 
         var secondPollResults = await pollingService.PollAllSearchQueriesAsync();
         await _factory.DrainOutboxAsync();
@@ -67,6 +67,6 @@ public class SearchQueryPollingEndToEndTests : IClassFixture<PubTrackerWebApplic
         Assert.True(secondResult.IsSuccessful);
         Assert.Equal(0, secondResult.NewRecordCount);
 
-        Assert.Single(_factory.EmailSender.SentEmails);
+        Assert.Empty(_factory.EmailSender.SentEmails);
     }
 }

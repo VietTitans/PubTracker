@@ -176,6 +176,31 @@ public class RecordPollingService : IRecordPollingService
 
             var fetchedPendingRecords = new List<LiteratureRecord>();
             var fetchReadAt = DateTime.UtcNow;
+
+            if (searchQuery.LastPolledAt == null)
+            {
+                // First-ever fetch of this query: what came back is the existing backlog, not
+                // news, and subscribe seeded each watermark to NOW() before these records got
+                // their first_seen_at, so without this the backlog would be emailed as a digest
+                // right after subscribing. Move every watermark past it instead.
+                foreach (var (userId, _) in subscriberWatermarks)
+                {
+                    await _searchQueriesDataAccess.UpdateUserDigestWatermarkAsync(userId, searchQuery.Id, fetchReadAt);
+                }
+
+                _logger.LogInformation(
+                    "Search query {SearchQueryId}: baseline poll, {FetchedCount} records recorded, no digest",
+                    searchQuery.Id, searchResult.NewRecords.Count);
+
+                return new FetchOutcome
+                {
+                    SearchQuery = searchQuery,
+                    FetchSucceeded = true,
+                    NewlyLinkedCount = newlyLinkedRecords.Count,
+                    FetchReadAt = fetchReadAt
+                };
+            }
+
             string? summary = null;
             if (subscriberWatermarks.Count > 0)
             {
