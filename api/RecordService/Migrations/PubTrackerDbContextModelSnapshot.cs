@@ -22,6 +22,67 @@ namespace RecordService.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("RecordService.DataAccess.Entities.DatabaseSuggestionEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<int?>("CreatedByUserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("WebsiteUrl")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)")
+                        .HasColumnName("website_url");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByUserId");
+
+                    b.ToTable("database_suggestions", (string)null);
+                });
+
+            modelBuilder.Entity("RecordService.DataAccess.Entities.DatabaseSuggestionVoteEntity", b =>
+                {
+                    b.Property<int>("SuggestionId")
+                        .HasColumnType("integer")
+                        .HasColumnName("suggestion_id");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("SuggestionId", "UserId");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("database_suggestion_votes", (string)null);
+                });
+
             modelBuilder.Entity("RecordService.DataAccess.Entities.DigestOutboxEntity", b =>
                 {
                     b.Property<int>("Id")
@@ -84,6 +145,44 @@ namespace RecordService.Migrations
                     b.HasIndex("UserId");
 
                     b.ToTable("digest_outbox", (string)null);
+                });
+
+            modelBuilder.Entity("RecordService.DataAccess.Entities.FeedbackEntity", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer")
+                        .HasColumnName("id");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("CreatedAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at")
+                        .HasDefaultValueSql("NOW()");
+
+                    b.Property<string>("Message")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)")
+                        .HasColumnName("message");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("type");
+
+                    b.Property<int?>("UserId")
+                        .HasColumnType("integer")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("feedback", (string)null);
                 });
 
             modelBuilder.Entity("RecordService.DataAccess.Entities.RecordEntity", b =>
@@ -349,6 +448,29 @@ namespace RecordService.Migrations
                     b.ToTable("user_search_queries", (string)null);
                 });
 
+            modelBuilder.Entity("RecordService.DataAccess.Entities.DatabaseSuggestionEntity", b =>
+                {
+                    b.HasOne("RecordService.DataAccess.Entities.UserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("CreatedByUserId")
+                        .OnDelete(DeleteBehavior.SetNull);
+                });
+
+            modelBuilder.Entity("RecordService.DataAccess.Entities.DatabaseSuggestionVoteEntity", b =>
+                {
+                    b.HasOne("RecordService.DataAccess.Entities.DatabaseSuggestionEntity", null)
+                        .WithMany()
+                        .HasForeignKey("SuggestionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("RecordService.DataAccess.Entities.UserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("RecordService.DataAccess.Entities.DigestOutboxEntity", b =>
                 {
                     b.HasOne("RecordService.DataAccess.Entities.UserEntity", null)
@@ -356,6 +478,14 @@ namespace RecordService.Migrations
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("RecordService.DataAccess.Entities.FeedbackEntity", b =>
+                {
+                    b.HasOne("RecordService.DataAccess.Entities.UserEntity", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("RecordService.DataAccess.Entities.SearchQueryEntity", b =>

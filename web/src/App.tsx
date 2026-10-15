@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link, NavLink, Route, Routes } from "react-router-dom";
 import {
   deleteCurrentUser,
   getCurrentUser,
@@ -11,8 +12,12 @@ import {
   type User,
 } from "./api/client";
 import { useAuth } from "./auth/useAuth";
-import { detectSourceLabel } from "./lib/sourceLabel"; 
+import { detectSourceLabel } from "./lib/sourceLabel";
+import FeedbackPage from "./pages/FeedbackPage";
+import SuggestPage from "./pages/SuggestPage";
 import "./App.css";
+
+const PENDING_URL_KEY = "pendingUrl";
 
 function ExternalLinkIcon() {
   return (
@@ -580,6 +585,15 @@ function App() {
       const currentUser = await getCurrentUser();
       setUser(currentUser);
       setSearchQueries(await getSearchQueriesForUser(currentUser.id));
+
+      // A URL typed on the signed-out home page survives the Keycloak round trip here.
+      const pendingUrl = sessionStorage.getItem(PENDING_URL_KEY);
+      if (pendingUrl) {
+        sessionStorage.removeItem(PENDING_URL_KEY);
+        const newQuery = await subscribeToSearchQuery(pendingUrl);
+        setSearchQueries(await getSearchQueriesForUser(currentUser.id));
+        scheduleRecordCountRefresh(currentUser.id, newQuery.id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -731,43 +745,82 @@ function App() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="screen-center">
-        <div className="theme-toggle-corner">
-          <ThemeToggle />
-        </div>
-        <div className="auth-card">
-          <h1>PubTracker</h1>
-          <p className="tagline">
-            Paste a search URL from PEDro or PubMed and get a digest whenever new results appear.
-          </p>
-          {error && (
-            <p className="alert" role="alert">
-              {error}
-            </p>
-          )}
-          <button className="btn btn-primary btn-block" onClick={handleLogin}>
-            Sign in
-          </button>
-        </div>
-      </div>
-    );
+  function handleSignedOutSearch(e: React.FormEvent) {
+    e.preventDefault();
+    if (!targetUrl.trim()) {
+      return;
+    }
+    sessionStorage.setItem(PENDING_URL_KEY, targetUrl.trim());
+    void handleLogin();
   }
+
+  const searchBox = (
+    <form onSubmit={isAuthenticated ? handleSubscribe : handleSignedOutSearch} className="search-box">
+      <input
+        id="target-url"
+        type="url"
+        placeholder="Paste a search URL"
+        aria-label="Search URL"
+        value={targetUrl}
+        onChange={(e) => setTargetUrl(e.target.value)}
+        required
+      />
+      <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+        {isSubmitting ? <Spinner /> : "Subscribe"}
+      </button>
+    </form>
+  );
+
+  const signedOutHome = (
+    <section className="hero">
+      <h2>Track new research. Get a digest.</h2>
+      {searchBox}
+      <ol className="steps">
+        <li>
+          <strong>1</strong>Paste a search URL
+        </li>
+        <li>
+          <strong>2</strong>We check it on a schedule
+        </li>
+        <li>
+          <strong>3</strong>New results land in your inbox
+        </li>
+      </ol>
+      <p className="supported">
+        <span className="badge badge-pubmed">PubMed</span>
+        <span>
+          More databases coming. <Link to="/suggest">Suggest one</Link>.
+        </span>
+      </p>
+    </section>
+  );
 
   return (
     <main className="app">
       <header className="header-row">
-        <h1>PubTracker</h1>
+        <h1>
+          <Link to="/">PubTracker</Link>
+        </h1>
+        <nav className="nav-links">
+          <NavLink to="/" end>
+            Home
+          </NavLink>
+          <NavLink to="/feedback">Feedback</NavLink>
+          <NavLink to="/suggest">Suggest a database</NavLink>
+        </nav>
         <div className="header-actions">
           <ThemeToggle />
-          {user && (
+          {user ? (
             <UserMenu
               user={user}
               onOpenProfile={() => setIsProfileOpen(true)}
               onOpenSettings={() => setIsSettingsOpen(true)}
               onSignOut={() => logout()}
             />
+          ) : (
+            <button className="btn btn-primary btn-sm" onClick={handleLogin}>
+              Sign in
+            </button>
           )}
         </div>
       </header>
@@ -778,24 +831,17 @@ function App() {
         </p>
       )}
 
-      <section className="card">
-        <label className="field-label" htmlFor="target-url">
-          Add a search
-        </label>
-        <form onSubmit={handleSubscribe} className="subscribe-form">
-          <input
-            id="target-url"
-            type="url"
-            placeholder="Paste a search URL"
-            value={targetUrl}
-            onChange={(e) => setTargetUrl(e.target.value)}
-            required
-          />
-          <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-            {isSubmitting ? <Spinner /> : "Subscribe"}
-          </button>
-        </form>
-      </section>
+      <Routes>
+        <Route path="/feedback" element={<FeedbackPage isAuthenticated={isAuthenticated} onLogin={handleLogin} />} />
+        <Route path="/suggest" element={<SuggestPage isAuthenticated={isAuthenticated} onLogin={handleLogin} />} />
+        <Route
+          path="*"
+          element={
+            !isAuthenticated ? (
+              signedOutHome
+            ) : (
+              <>
+      <section className="hero hero-compact">{searchBox}</section>
 
       <section>
         <div className="section-header">
@@ -881,6 +927,11 @@ function App() {
           </ul>
         )}
       </section>
+              </>
+            )
+          }
+        />
+      </Routes>
 
       {confirmTarget && (
         <ConfirmDialog

@@ -17,6 +17,8 @@ using RecordService.BusinessLogic.UsersService;
 using RecordService.BusinessLogic.SearchQueriesService;
 using RecordService.BusinessLogic.RecordPollingService;
 using RecordService.BusinessLogic.SourcesService;
+using RecordService.BusinessLogic.FeedbackService;
+using RecordService.BusinessLogic.DatabaseSuggestionsService;
 using RecordService.BusinessLogic.DigestService;
 using RecordService.BusinessLogic.DigestOutboxService;
 
@@ -74,6 +76,8 @@ builder.Services.AddScoped<IUsersDataAccess, UsersDataAccess>();
 builder.Services.AddScoped<ISourcesDataAccess, SourcesDataAccess>();
 builder.Services.AddScoped<ISearchQueriesDataAccess, SearchQueriesDataAccess>();
 builder.Services.AddScoped<IRecordsDataAccess, RecordsDataAccess>();
+builder.Services.AddScoped<IFeedbackDataAccess, FeedbackDataAccess>();
+builder.Services.AddScoped<IDatabaseSuggestionsDataAccess, DatabaseSuggestionsDataAccess>();
 
 // Send Email provider
 var emailApiKey = builder.Configuration["Email:ApiKey"];
@@ -111,6 +115,8 @@ builder.Services.AddScoped<ISummaryGenerator>(serviceProvider =>
 builder.Services.AddScoped<IUsersService, UsersService>();
 builder.Services.AddScoped<ISearchQueriesService, SearchQueriesService>();
 builder.Services.AddScoped<ISourcesService, SourcesService>();
+builder.Services.AddScoped<IFeedbackService, FeedbackService>();
+builder.Services.AddScoped<IDatabaseSuggestionsService, DatabaseSuggestionsService>();
 builder.Services.AddScoped<IDigestService, DigestService>();
 builder.Services.AddScoped<IDigestOutboxDataAccess, DigestOutboxDataAccess>();
 builder.Services.AddScoped<IDigestOutboxService, DigestOutboxService>();

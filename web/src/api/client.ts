@@ -130,3 +130,39 @@ export function unsubscribeFromSearchQuery(searchQueryId: number): Promise<void>
     method: "DELETE",
   });
 }
+
+export interface DatabaseSuggestion {
+  id: number;
+  name: string;
+  websiteUrl: string;
+  voteCount: number;
+  hasVoted: boolean;
+}
+
+export function submitFeedback(dto: { type: string; message: string }): Promise<void> {
+  return request<void>(`${API_PREFIX}/Feedback`, {
+    method: "POST",
+    body: JSON.stringify(dto),
+  });
+}
+
+// Ordered by votes, so the first page holds what matters; the UI has no paging controls.
+export async function getDatabaseSuggestions(): Promise<DatabaseSuggestion[]> {
+  const result = await request<PagedResponse<DatabaseSuggestion>>(
+    `${API_PREFIX}/DatabaseSuggestions?page=1&pageSize=${MAX_PAGE_SIZE}`
+  );
+  return result.items;
+}
+
+export function suggestDatabase(dto: { name: string; websiteUrl: string; reason?: string }): Promise<DatabaseSuggestion> {
+  return request<DatabaseSuggestion>(`${API_PREFIX}/DatabaseSuggestions`, {
+    method: "POST",
+    body: JSON.stringify(dto),
+  });
+}
+
+export function setSuggestionVote(suggestionId: number, voted: boolean): Promise<void> {
+  return request<void>(`${API_PREFIX}/DatabaseSuggestions/${suggestionId}/vote`, {
+    method: voted ? "PUT" : "DELETE",
+  });
+}

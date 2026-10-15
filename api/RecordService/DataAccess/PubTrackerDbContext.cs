@@ -1,5 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using RecordService.DataAccess.Entities;
+using RecordService.DTOs.DatabaseSuggestionDto;
+using RecordService.DTOs.FeedbackDto;
 using RecordService.DTOs.UserDto;
 
 namespace RecordService.DataAccess;
@@ -19,6 +21,9 @@ public class PubTrackerDbContext : DbContext
     public DbSet<DigestOutboxEntity> DigestOutbox => Set<DigestOutboxEntity>();
     public DbSet<SourceRecordEntity> SourceRecords => Set<SourceRecordEntity>();
     public DbSet<SearchQueryRecordEntity> SearchQueryRecords => Set<SearchQueryRecordEntity>();
+    public DbSet<FeedbackEntity> Feedback => Set<FeedbackEntity>();
+    public DbSet<DatabaseSuggestionEntity> DatabaseSuggestions => Set<DatabaseSuggestionEntity>();
+    public DbSet<DatabaseSuggestionVoteEntity> DatabaseSuggestionVotes => Set<DatabaseSuggestionVoteEntity>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -133,6 +138,40 @@ public class PubTrackerDbContext : DbContext
             entity.Property(e => e.FirstSeenAt).HasColumnName("first_seen_at");
             entity.HasOne<SearchQueryEntity>().WithMany().HasForeignKey(e => e.SearchQueryId).OnDelete(DeleteBehavior.NoAction);
             entity.HasOne<RecordEntity>().WithMany().HasForeignKey(e => e.RecordId).OnDelete(DeleteBehavior.NoAction);
+        });
+
+        // Feedback and suggestions outlive the submitter: purging a user nulls the author, votes go with the user.
+        modelBuilder.Entity<FeedbackEntity>(entity =>
+        {
+            entity.ToTable("feedback");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.Property(e => e.Type).HasColumnName("type").HasMaxLength(FeedbackFieldLimits.Type);
+            entity.Property(e => e.Message).HasColumnName("message").HasMaxLength(FeedbackFieldLimits.Message);
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("NOW()");
+            entity.HasOne<UserEntity>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<DatabaseSuggestionEntity>(entity =>
+        {
+            entity.ToTable("database_suggestions");
+            entity.Property(e => e.Id).HasColumnName("id");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(DatabaseSuggestionFieldLimits.Name);
+            entity.Property(e => e.WebsiteUrl).HasColumnName("website_url").HasMaxLength(DatabaseSuggestionFieldLimits.WebsiteUrl);
+            entity.Property(e => e.Reason).HasColumnName("reason").HasMaxLength(DatabaseSuggestionFieldLimits.Reason);
+            entity.Property(e => e.CreatedByUserId).HasColumnName("created_by_user_id");
+            entity.Property(e => e.CreatedAt).HasColumnName("created_at").HasDefaultValueSql("NOW()");
+            entity.HasOne<UserEntity>().WithMany().HasForeignKey(e => e.CreatedByUserId).OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<DatabaseSuggestionVoteEntity>(entity =>
+        {
+            entity.ToTable("database_suggestion_votes");
+            entity.HasKey(e => new { e.SuggestionId, e.UserId });
+            entity.Property(e => e.SuggestionId).HasColumnName("suggestion_id");
+            entity.Property(e => e.UserId).HasColumnName("user_id");
+            entity.HasOne<DatabaseSuggestionEntity>().WithMany().HasForeignKey(e => e.SuggestionId).OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne<UserEntity>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Cascade);
         });
     }
 }

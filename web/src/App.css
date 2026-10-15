@@ -667,3 +667,150 @@
     transform: translateY(8px) scale(0.98);
   }
 }
+
+.nav-links {
+  display: flex;
+  gap: 16px;
+  font-size: 14px;
+  margin-right: auto;
+}
+
+.nav-links a,
+.header-row h1 a {
+  color: var(--text);
+  text-decoration: none;
+}
+
+.header-row h1 a {
+  color: var(--text-h);
+}
+
+.nav-links a.active {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.hero {
+  text-align: center;
+  padding-top: 32px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.hero h2 {
+  font-size: 32px;
+  line-height: 1.2;
+}
+
+.hero-compact {
+  padding-top: 0;
+}
+
+.search-box {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 20px;
+  border: 2px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+
+.search-box:focus-within {
+  border-color: var(--accent);
+}
+
+.search-box input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text-h);
+  font-size: 18px;
+  padding: 10px 0;
+}
+
+.search-box .btn {
+  border-radius: 999px;
+  padding: 10px 20px;
+}
+
+.steps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 12px;
+  text-align: left;
+}
+
+.steps li {
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-sm);
+  padding: 12px;
+  font-size: 14px;
+}
+
+.steps strong {
+  display: block;
+  color: var(--accent);
+  font-size: 22px;
+}
+
+.supported {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.supported a {
+  color: var(--accent);
+}
+
+.page-card h2 {
+  font-size: 22px;
+  margin-bottom: 4px;
+}
+
+.page-hint {
+  color: var(--text-dim);
+  font-size: 14px;
+  margin-bottom: 20px;
+}
+
+.notice {
+  color: var(--accent-hover);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-bottom: 16px;
+}
+
+select.text-input,
+textarea.text-input {
+  font: inherit;
+}
+
+textarea.text-input {
+  resize: vertical;
+}
+
+.suggestion-name {
+  flex: 1;
+  color: var(--text-h);
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.suggestion-votes {
+  font-weight: 600;
+  color: var(--text-h);
+}
