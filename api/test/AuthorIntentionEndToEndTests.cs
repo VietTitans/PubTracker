@@ -2,6 +2,7 @@ using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using RecordData;
 using RecordService.BusinessLogic.RecordPollingService;
+using Microsoft.EntityFrameworkCore;
 using RecordService.DataAccess;
 using RecordService.DTOs.SearchQueryDto;
 
@@ -70,7 +71,7 @@ public class AuthorIntentionEndToEndTests : IClassFixture<PubTrackerWebApplicati
 
         Assert.Equal(
             new[] { "fakeunique:success:1", "fakeunique:success:2" },
-            _factory.SummaryGenerator.AuthorIntentionCalls.Skip(callsBefore).OrderBy(id => id));
+            _factory.SummaryGenerator.AuthorIntentionCalls.Skip(callsBefore).Where(id => id.StartsWith("fakeunique:success:")).OrderBy(id => id));
 
         // FakeUniqueLiteratureSourceProvider's URL matches neither PubMed nor PEDro, so this goes
         // through DigestService.BuildHtmlBody's generic fallback, not DigestMessageFormatter -
@@ -161,6 +162,88 @@ public class AuthorIntentionEndToEndTests : IClassFixture<PubTrackerWebApplicati
 
         Assert.Equal(
             new[] { "fakeunique:dedup-shared:1", "fakeunique:dedup-shared:2" },
-            _factory.SummaryGenerator.AuthorIntentionCalls.Skip(callsBefore).OrderBy(id => id));
+            _factory.SummaryGenerator.AuthorIntentionCalls.Skip(callsBefore).Where(id => id.StartsWith("fakeunique:dedup-shared:")).OrderBy(id => id));
+    }
+
+    private async Task SeedRecordAsync(PubTrackerDbContext dbContext, string externalId, string? abstractText)
+    {
+        await dbContext.Database.ExecuteSqlInterpolatedAsync(
+            $"INSERT INTO records (external_id, title, abstract) VALUES ({externalId}, {externalId}, {abstractText})");
+    }
+
+    private async Task<string?> ReadIntentionAsync(PubTrackerDbContext dbContext, string externalId) =>
+        await dbContext.Records.AsNoTracking().Where(r => r.ExternalId == externalId).Select(r => r.AuthorIntention).SingleAsync();
+
+    private async Task<IRecordPollingService> SubscribeAndGetPollingServiceAsync(IServiceScope scope, string name)
+    {
+        var user = await scope.ServiceProvider.GetRequiredService<IUsersDataAccess>().CreateUserAsync(new User
+        {
+            Name = name,
+            Username = name,
+            Email = $"{name}@example.com"
+        });
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Debug-User-Id", user.Id.ToString());
+        (await client.PostAsJsonAsync("/api/v1/SearchQueries",
+            new CreateSearchQueryDto { TargetUrl = $"{FakeUniqueLiteratureSourceProvider.BaseUrl}?recordSet={name}" })).EnsureSuccessStatusCode();
+        await _factory.SkipBaselinePollAsync();
+        return scope.ServiceProvider.GetRequiredService<IRecordPollingService>();
+    }
+
+    [Fact]
+    public async Task PollAll_OldRecordMissingIntention_IsBackfilled_AndRecordWithoutAbstractIsSkipped()
+    {
+        _factory.SummaryGenerator.AuthorIntentionShouldThrow = false;
+        _factory.SummaryGenerator.AuthorIntentionFixed = "Backfilled intention.";
+
+        using var scope = _factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<PubTrackerDbContext>();
+        await SeedRecordAsync(dbContext, "backfill-old:1", "An abstract.");
+        await SeedRecordAsync(dbContext, "backfill-old:noabstract", null);
+        var pollingService = await SubscribeAndGetPollingServiceAsync(scope, "backfill-old");
+
+        await pollingService.PollAllSearchQueriesAsync();
+
+        Assert.Equal("Backfilled intention.", await ReadIntentionAsync(dbContext, "backfill-old:1"));
+        Assert.Null(await ReadIntentionAsync(dbContext, "backfill-old:noabstract"));
+        Assert.DoesNotContain("backfill-old:noabstract", _factory.SummaryGenerator.AuthorIntentionCalls);
+    }
+
+    [Fact]
+    public async Task PollAll_FailedIntention_StaysNull_AndIsRetriedOnNextPoll()
+    {
+        _factory.SummaryGenerator.AuthorIntentionFixed = "Second try worked.";
+
+        using var scope = _factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<PubTrackerDbContext>();
+        await SeedRecordAsync(dbContext, "backfill-retry:1", "An abstract.");
+        var pollingService = await SubscribeAndGetPollingServiceAsync(scope, "backfill-retry");
+
+        _factory.SummaryGenerator.AuthorIntentionShouldThrow = true;
+        await pollingService.PollAllSearchQueriesAsync();
+        Assert.Null(await ReadIntentionAsync(dbContext, "backfill-retry:1"));
+
+        _factory.SummaryGenerator.AuthorIntentionShouldThrow = false;
+        await pollingService.PollAllSearchQueriesAsync();
+        Assert.Equal("Second try worked.", await ReadIntentionAsync(dbContext, "backfill-retry:1"));
+    }
+
+    [Fact]
+    public async Task PollAll_EmptyReply_IsStoredAsEmptyString_AndNotRetried()
+    {
+        _factory.SummaryGenerator.AuthorIntentionShouldThrow = false;
+        _factory.SummaryGenerator.AuthorIntentionFixed = string.Empty;
+
+        using var scope = _factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<PubTrackerDbContext>();
+        await SeedRecordAsync(dbContext, "backfill-empty:1", "An abstract.");
+        var pollingService = await SubscribeAndGetPollingServiceAsync(scope, "backfill-empty");
+
+        await pollingService.PollAllSearchQueriesAsync();
+        Assert.Equal(string.Empty, await ReadIntentionAsync(dbContext, "backfill-empty:1"));
+
+        _factory.SummaryGenerator.AuthorIntentionFixed = "Should not be used.";
+        await pollingService.PollAllSearchQueriesAsync();
+        Assert.Equal(string.Empty, await ReadIntentionAsync(dbContext, "backfill-empty:1"));
     }
 }

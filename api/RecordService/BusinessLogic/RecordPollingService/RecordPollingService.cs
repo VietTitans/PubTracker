@@ -29,6 +29,7 @@ public class RecordPollingService : IRecordPollingService
     private readonly ISummaryGenerator _summaryGenerator;
     private readonly PollCycleAdvisoryLock _advisoryLock;
     private readonly ILogger<RecordPollingService> _logger;
+    private readonly int _maxAuthorIntentionsPerPoll;
 
     public RecordPollingService(
         ISearchQueriesDataAccess searchQueriesDataAccess,
@@ -37,7 +38,8 @@ public class RecordPollingService : IRecordPollingService
         IDigestOutboxDataAccess digestOutboxDataAccess,
         ISummaryGenerator summaryGenerator,
         PollCycleAdvisoryLock advisoryLock,
-        ILogger<RecordPollingService> logger)
+        ILogger<RecordPollingService> logger,
+        IConfiguration configuration)
     {
         _searchQueriesDataAccess = searchQueriesDataAccess;
         _recordsDataAccess = recordsDataAccess;
@@ -46,6 +48,7 @@ public class RecordPollingService : IRecordPollingService
         _summaryGenerator = summaryGenerator;
         _advisoryLock = advisoryLock;
         _logger = logger;
+        _maxAuthorIntentionsPerPoll = configuration.GetValue("Llm:MaxAuthorIntentionsPerPoll", 50);
     }
 
     public async Task<List<PollResult>> PollAllSearchQueriesAsync(CancellationToken cancellationToken = default)
@@ -166,9 +169,9 @@ public class RecordPollingService : IRecordPollingService
 
             var persistResult = searchResult.NewRecords.Count > 0
                 ? await _recordsDataAccess.PersistSearchResultsAsync(searchQuery.Id, searchQuery.SourceId, searchResult.NewRecords)
-                : new PersistResult { NewlyLinkedRecords = new(), NewlyInsertedRecords = new() };
+                : new PersistResult { NewlyLinkedRecords = new() };
 
-            await GenerateAuthorIntentionsAsync(persistResult.NewlyInsertedRecords);
+            await GenerateMissingAuthorIntentionsAsync();
 
             var newlyLinkedRecords = persistResult.NewlyLinkedRecords;
 
@@ -261,26 +264,35 @@ public class RecordPollingService : IRecordPollingService
         }
     }
 
-    // Runs once per genuinely new record (not per subscriber, not per digest send; see
-    // RecordsDataAccess.PersistSearchResultsAsync's xmax = 0 check for how "genuinely new" is
-    // determined), so the same record is never re-summarized just because a second search query
-    // later links to it too. A generation failure is logged and skipped, never blocks the poll.
+    // Fills the author intention of records that have an abstract and none yet, newest first and
+    // at most Llm:MaxIntentionsPerPoll per poll: this covers the records this poll just stored
+    // and, over later polls, old records no poll returns again. It runs once per record, not per
+    // subscriber or digest. A failed call is logged and the record stays null, so a later poll
+    // retries it; a successful but empty reply is stored as "" and not retried. A generation
+    // failure never blocks the poll.
     //
     // The LLM calls run concurrently (bounded by MaxConcurrentAuthorIntentionCalls) since they
     // only hit HttpClient, which is safe for concurrent use. The resulting DB writes then run
     // sequentially afterward, since _recordsDataAccess shares one scoped PubTrackerDbContext
     // (EF Core's DbContext is not safe for concurrent use); this still gets nearly the whole
     // latency win, since the LLM round-trips are what dominate (~1s each vs. a single-row update).
-    private async Task GenerateAuthorIntentionsAsync(IReadOnlyList<LiteratureRecord> newlyInsertedRecords)
+    private async Task GenerateMissingAuthorIntentionsAsync()
     {
-        if (newlyInsertedRecords.Count == 0)
+        // No LLM configured: skip, so nothing is stored as "attempted" and records fill in once a key is set.
+        if (_summaryGenerator is NullSummaryGenerator || _maxIntentionsPerPoll <= 0)
+        {
+            return;
+        }
+
+        var missing = await _recordsDataAccess.GetRecordsMissingAuthorIntentionAsync(_maxIntentionsPerPoll);
+        if (missing.Count == 0)
         {
             return;
         }
 
         using var throttle = new SemaphoreSlim(MaxConcurrentAuthorIntentionCalls);
 
-        var intentions = await Task.WhenAll(newlyInsertedRecords.Select(async record =>
+        var intentions = await Task.WhenAll(missing.Select(async record =>
         {
             await throttle.WaitAsync();
             try
@@ -300,9 +312,9 @@ public class RecordPollingService : IRecordPollingService
 
         foreach (var (externalId, intention) in intentions)
         {
-            if (!string.IsNullOrWhiteSpace(intention))
+            if (intention != null)
             {
-                await _recordsDataAccess.UpdateAuthorIntentionAsync(externalId, intention);
+                await _recordsDataAccess.UpdateAuthorIntentionAsync(externalId, intention.Trim());
             }
         }
     }

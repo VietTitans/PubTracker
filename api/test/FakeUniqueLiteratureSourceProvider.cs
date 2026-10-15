@@ -32,8 +32,8 @@ public class FakeUniqueLiteratureSourceProvider : ILiteratureSourceProvider
 
         var allRecords = new List<LiteratureRecord>
         {
-            new() { ExternalId = $"fakeunique:{recordSet}:1", Title = $"Fake Unique Record 1 ({recordSet})", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-2) },
-            new() { ExternalId = $"fakeunique:{recordSet}:2", Title = $"Fake Unique Record 2 ({recordSet})", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-1) }
+            new() { ExternalId = $"fakeunique:{recordSet}:1", Title = $"Fake Unique Record 1 ({recordSet})", Abstract = "Fake abstract.", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-2) },
+            new() { ExternalId = $"fakeunique:{recordSet}:2", Title = $"Fake Unique Record 2 ({recordSet})", Abstract = "Fake abstract.", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-1) }
         };
 
         var newRecords = lastRunDate.HasValue

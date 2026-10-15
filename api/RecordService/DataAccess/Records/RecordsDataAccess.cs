@@ -12,12 +12,9 @@ public class RecordsDataAccess : IRecordsDataAccess
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
     }
 
-    private record RecordUpsertRow(int Id, bool WasInserted);
-
     public async Task<PersistResult> PersistSearchResultsAsync(int searchQueryId, int sourceId, IReadOnlyList<LiteratureRecord> records)
     {
         var newlyLinkedRecords = new List<LiteratureRecord>();
-        var newlyInsertedRecords = new List<LiteratureRecord>();
 
         await using (var transaction = await _dbContext.Database.BeginTransactionAsync())
         {
@@ -25,19 +22,15 @@ public class RecordsDataAccess : IRecordsDataAccess
             {
                 foreach (var record in records)
                 {
-                    var upsertResult = (await _dbContext.Database.SqlQuery<RecordUpsertRow>(
+                    var upsertResult = (await _dbContext.Database.SqlQuery<int>(
                         $"""
                          INSERT INTO records (external_id, doi, title, abstract, source_url)
                          VALUES ({record.ExternalId}, {record.Doi}, {record.Title}, {record.Abstract}, {record.SourceUrl})
                          ON CONFLICT (external_id) DO UPDATE
                              SET doi = EXCLUDED.doi, title = EXCLUDED.title, abstract = EXCLUDED.abstract, source_url = EXCLUDED.source_url
-                         RETURNING id, (xmax = 0) AS "WasInserted"
+                         RETURNING id
                          """).ToListAsync()).Single();
-                    var recordId = upsertResult.Id;
-                    if (upsertResult.WasInserted)
-                    {
-                        newlyInsertedRecords.Add(record);
-                    }
+                    var recordId = upsertResult;
 
                     await _dbContext.Database.ExecuteSqlInterpolatedAsync(
                         $"""
@@ -68,7 +61,7 @@ public class RecordsDataAccess : IRecordsDataAccess
             }
         }
 
-        return new PersistResult { NewlyLinkedRecords = newlyLinkedRecords, NewlyInsertedRecords = newlyInsertedRecords };
+        return new PersistResult { NewlyLinkedRecords = newlyLinkedRecords };
     }
 
     public async Task UpdateAuthorIntentionAsync(string externalId, string authorIntention)
@@ -76,6 +69,23 @@ public class RecordsDataAccess : IRecordsDataAccess
         await _dbContext.Records
             .Where(r => r.ExternalId == externalId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(r => r.AuthorIntention, authorIntention));
+    }
+
+    public async Task<List<LiteratureRecord>> GetRecordsMissingAuthorIntentionAsync(int limit)
+    {
+        return await _dbContext.Records
+            .Where(r => r.AuthorIntention == null && r.Abstract != null && r.Abstract.Trim() != "")
+            .OrderByDescending(r => r.Id)
+            .Take(limit)
+            .Select(r => new LiteratureRecord
+            {
+                ExternalId = r.ExternalId,
+                Doi = r.Doi,
+                Title = r.Title,
+                Abstract = r.Abstract,
+                SourceUrl = r.SourceUrl
+            })
+            .ToListAsync();
     }
 
     public async Task<List<LiteratureRecord>> GetRecordsSeenSinceAsync(int searchQueryId, DateTime? since)

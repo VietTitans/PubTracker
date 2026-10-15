@@ -77,7 +77,7 @@ public class DigestPollEndToEndManualTest
             : new ChatCompletionsSummaryGenerator(new HttpClient(), llmBaseUrl!, llmApiKey, llmModel!);
         var digestService = new DigestService(usersDataAccess);
         var outboxDataAccess = new DigestOutboxDataAccess(dbContext, searchQueriesDataAccess);
-        var pollingService = new RecordPollingService(searchQueriesDataAccess, recordsDataAccess, digestService, outboxDataAccess, summaryGenerator, new PollCycleAdvisoryLock(connectionString), NullLogger<RecordPollingService>.Instance);
+        var pollingService = new RecordPollingService(searchQueriesDataAccess, recordsDataAccess, digestService, outboxDataAccess, summaryGenerator, new PollCycleAdvisoryLock(connectionString), NullLogger<RecordPollingService>.Instance, new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
 
         var results = await pollingService.PollSearchQueriesAsync(SearchQueryIds);
         await new DigestOutboxService(outboxDataAccess, usersDataAccess, emailSender, NullLogger<DigestOutboxService>.Instance).ProcessDueAsync();

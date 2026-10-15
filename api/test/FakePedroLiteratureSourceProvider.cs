@@ -22,8 +22,8 @@ public class FakePedroLiteratureSourceProvider : ILiteratureSourceProvider
     {
         var allRecords = new List<LiteratureRecord>
         {
-            new() { ExternalId = "fakepedro:1", Title = "Fake Pedro Record 1", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-2) },
-            new() { ExternalId = "fakepedro:2", Title = "Fake Pedro Record 2", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-1) }
+            new() { ExternalId = "fakepedro:1", Title = "Fake Pedro Record 1", Abstract = "Fake abstract.", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-2) },
+            new() { ExternalId = "fakepedro:2", Title = "Fake Pedro Record 2", Abstract = "Fake abstract.", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-1) }
         };
 
         var newRecords = lastRunDate.HasValue

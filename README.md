@@ -57,6 +57,7 @@ Set via environment variables (`Section__Key`) or `appsettings`.
 | `Email:ApiKey`, `Email:FromAddress`, `Email:FromName` | yes | Brevo digest emails |
 | `Keycloak:Authority`, `Keycloak:MetadataAddress`, `Keycloak:Audience` | no | OIDC (default: local Keycloak `:8081`) |
 | `Llm:BaseUrl`, `Llm:ApiKey`, `Llm:Model` | no | AI digest summaries (any OpenAI-compatible endpoint); no key = no summaries |
+| `Llm:MaxIntentionsPerPoll` | no | Default 50. Max records per poll that get an AI author intention (new ones first, then older records missing one) |
 | `Ncbi:ApiKey`, `Ncbi:ContactEmail` | no | PubMed rate limits |
 | `Sources:<Name>:Enabled` | no | Per-source toggle, override in `docker/docker-compose.yml`; defaults live in `Sources/SourceCatalog.cs` (`PubMed` on, `Pedro` off). Enable a scraped source only after obtaining its owner's permission (see [Disclaimer](#disclaimer-third-party-data-sources)) |
 | `Cors:WebAppOrigin` | no | Default `http://localhost:5173` |

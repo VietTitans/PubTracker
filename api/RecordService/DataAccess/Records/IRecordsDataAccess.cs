@@ -9,6 +9,13 @@ public interface IRecordsDataAccess
     /// </summary>
     Task<PersistResult> PersistSearchResultsAsync(int searchQueryId, int sourceId, IReadOnlyList<LiteratureRecord> records);
 
+    /// <summary>
+    /// Newest-first records that have an abstract but no author intention yet (null, not the
+    /// empty string, which means "attempted, nothing to show"), at most <paramref name="limit"/>.
+    /// Not tied to any search query, so it also reaches records no poll will return again.
+    /// </summary>
+    Task<List<LiteratureRecord>> GetRecordsMissingAuthorIntentionAsync(int limit);
+
     /// <summary>Sets the cached author-intention text for the record with the given external id.</summary>
     Task UpdateAuthorIntentionAsync(string externalId, string authorIntention);
 

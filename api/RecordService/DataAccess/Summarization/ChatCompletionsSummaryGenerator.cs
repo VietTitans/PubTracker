@@ -45,14 +45,14 @@ public class ChatCompletionsSummaryGenerator : ISummaryGenerator
         }
 
         return await RequestChatCompletionAsync(
-            "You write a short, friendly summary (2-4 sentences) of what's new in this email update about research articles. Use plain, everyday language a non-technical reader would understand - avoid jargon. Reply with the summary prose only - no title, heading, or markdown formatting. Avoid emdashes, bullet points, or lists. Do not include any text that is not part of the summary.",
+            "You write a short, friendly summary (3-5 sentences) of what's new in this email update about research articles. Use plain, everyday language a non-technical reader would understand - avoid jargon. Reply with the summary prose only - no title, heading, or markdown formatting. Avoid emdashes, bullet points, or lists. Do not include any text that is not part of the summary.",
             BuildRecordsPrompt(records));
     }
 
     public async Task<string> GenerateAuthorIntentionAsync(LiteratureRecord record)
     {
         return await RequestChatCompletionAsync(
-            "In one short sentence, state what the study's authors set out to investigate or show, based on its title and abstract. Do not restate the title verbatim. Reply with that one sentence only - no title, heading, or markdown formatting. Avoid emdashes, bullet points, or lists. Do not include any text that is not part of the summary.",
+            "In one or two short sentences, state what the study's authors set out to investigate or show, based on its title and abstract. Do not restate the title verbatim. Reply with those sentences only - no title, heading, or markdown formatting. Avoid emdashes, bullet points, or lists. Do not include any text that is not part of the summary.",
             BuildRecordPrompt(record));
     }
 
