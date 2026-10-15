@@ -66,7 +66,7 @@ public class PubTrackerDbContext : DbContext
             entity.Property(e => e.ExternalId).HasColumnName("external_id");
             entity.Property(e => e.Doi).HasColumnName("doi");
             entity.Property(e => e.Title).HasColumnName("title");
-            entity.Property(e => e.Description).HasColumnName("description");
+            entity.Property(e => e.Abstract).HasColumnName("abstract");
             entity.Property(e => e.SourceUrl).HasColumnName("source_url");
             entity.Property(e => e.AuthorIntention).HasColumnName("author_intention");
             entity.HasIndex(e => e.ExternalId).IsUnique();

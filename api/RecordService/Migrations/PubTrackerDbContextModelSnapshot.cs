@@ -95,13 +95,13 @@ namespace RecordService.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<string>("Abstract")
+                        .HasColumnType("text")
+                        .HasColumnName("abstract");
+
                     b.Property<string>("AuthorIntention")
                         .HasColumnType("text")
                         .HasColumnName("author_intention");
-
-                    b.Property<string>("Description")
-                        .HasColumnType("text")
-                        .HasColumnName("description");
 
                     b.Property<string>("Doi")
                         .HasColumnType("text")

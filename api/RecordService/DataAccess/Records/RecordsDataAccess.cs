@@ -27,10 +27,10 @@ public class RecordsDataAccess : IRecordsDataAccess
                 {
                     var upsertResult = (await _dbContext.Database.SqlQuery<RecordUpsertRow>(
                         $"""
-                         INSERT INTO records (external_id, doi, title, description, source_url)
+                         INSERT INTO records (external_id, doi, title, abstract, source_url)
                          VALUES ({record.ExternalId}, {record.Doi}, {record.Title}, {record.Abstract}, {record.SourceUrl})
                          ON CONFLICT (external_id) DO UPDATE
-                             SET doi = EXCLUDED.doi, title = EXCLUDED.title, description = EXCLUDED.description, source_url = EXCLUDED.source_url
+                             SET doi = EXCLUDED.doi, title = EXCLUDED.title, abstract = EXCLUDED.abstract, source_url = EXCLUDED.source_url
                          RETURNING id, (xmax = 0) AS "WasInserted"
                          """).ToListAsync()).Single();
                     var recordId = upsertResult.Id;
@@ -92,7 +92,7 @@ public class RecordsDataAccess : IRecordsDataAccess
                 ExternalId = r.ExternalId,
                 Doi = r.Doi,
                 Title = r.Title,
-                Abstract = r.Description,
+                Abstract = r.Abstract,
                 SourceUrl = r.SourceUrl,
                 AuthorIntention = r.AuthorIntention,
                 FirstSeenAt = sqr.FirstSeenAt ?? default

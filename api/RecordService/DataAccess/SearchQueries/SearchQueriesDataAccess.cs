@@ -266,7 +266,7 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
                 r.ExternalId,
                 r.Doi,
                 r.Title,
-                r.Description,
+                r.Abstract,
                 r.SourceUrl,
                 sqr.FirstSeenAt,
                 d.LastDigestSentAt
@@ -285,7 +285,7 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
                     ExternalId = r.ExternalId,
                     Doi = r.Doi,
                     Title = r.Title,
-                    Abstract = r.Description,
+                    Abstract = r.Abstract,
                     SourceUrl = r.SourceUrl,
                     FirstSeenAt = r.FirstSeenAt ?? default
                 }).ToList()

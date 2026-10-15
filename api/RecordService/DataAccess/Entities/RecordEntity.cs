@@ -6,7 +6,7 @@ public class RecordEntity
     public string ExternalId { get; set; } = string.Empty;
     public string? Doi { get; set; }
     public string Title { get; set; } = string.Empty;
-    public string? Description { get; set; }
+    public string? Abstract { get; set; }
     public string? SourceUrl { get; set; }
     public string? AuthorIntention { get; set; }
 }
