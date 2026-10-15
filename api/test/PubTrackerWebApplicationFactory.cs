@@ -8,13 +8,14 @@ using RecordService.DataAccess;
 using RecordService.DataAccess.Email;
 using RecordService.DataAccess.ExternalSources;
 using RecordService.DataAccess.Summarization;
+using Npgsql;
 using Testcontainers.PostgreSql;
 
 namespace test;
 
 /// <summary>
-/// Boots the real RecordService app against an ephemeral Testcontainers Postgres instance
-/// (schema applied by the app's own EF Core migrations, same as any other environment; see
+/// Boots the real RecordService app against its own throwaway database inside a shared
+/// Testcontainers Postgres instance (schema applied by the app's own EF Core migrations, same as any other environment; see
 /// Program.cs) and swaps the real PubMed/PEDro providers for FakeLiteratureSourceProvider, so
 /// tests exercise the real HTTP -> Service -> DataAccess -> Postgres path without depending on
 /// live external sources.
@@ -28,11 +29,22 @@ namespace test;
 /// </summary>
 public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, IAsyncLifetime
 {
-    private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:16-alpine")
-        .WithDatabase("pubtracker_test")
-        .WithUsername("pubtracker")
-        .WithPassword("pubtracker")
-        .Build();
+    // One container for the whole test run; each factory gets its own database inside it. Safe
+    // because every factory-using class shares one xunit [Collection], so factories never overlap.
+    // Testcontainers' Ryuk reaper removes the container when the test process exits.
+    private static readonly Lazy<Task<PostgreSqlContainer>> SharedPostgres = new(async () =>
+    {
+        var container = new PostgreSqlBuilder("postgres:16-alpine")
+            .WithDatabase("pubtracker_test")
+            .WithUsername("pubtracker")
+            .WithPassword("pubtracker")
+            .Build();
+        await container.StartAsync();
+        return container;
+    });
+
+    private readonly string _databaseName = $"pt_{Guid.NewGuid():N}";
+    private string _adminConnectionString = null!;
 
     public readonly FakeEmailSender EmailSender = new();
     public readonly FakeSummaryGenerator SummaryGenerator = new();
@@ -40,10 +52,19 @@ public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, I
 
     public async Task InitializeAsync()
     {
-        await _postgres.StartAsync();
+        var postgres = await SharedPostgres.Value;
+        _adminConnectionString = postgres.GetConnectionString();
+
+        await using (var admin = new NpgsqlConnection(_adminConnectionString))
+        {
+            await admin.OpenAsync();
+            await using var create = new NpgsqlCommand($"CREATE DATABASE {_databaseName}", admin);
+            await create.ExecuteNonQueryAsync();
+        }
+        var connectionString = new NpgsqlConnectionStringBuilder(_adminConnectionString) { Database = _databaseName }.ConnectionString;
 
         Environment.SetEnvironmentVariable("ASPNETCORE_ENVIRONMENT", "Development");
-        Environment.SetEnvironmentVariable("ConnectionStrings__DefaultConnection", _postgres.GetConnectionString());
+        Environment.SetEnvironmentVariable("ConnectionStrings__DefaultConnection", connectionString);
         Environment.SetEnvironmentVariable("Email__ApiKey", "test-api-key");
         Environment.SetEnvironmentVariable("Email__FromAddress", "digest@example.com");
         Environment.SetEnvironmentVariable("Email__FromName", "PubTracker");
@@ -89,7 +110,11 @@ public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, I
 
     public new async Task DisposeAsync()
     {
-        await _postgres.DisposeAsync();
         await base.DisposeAsync();
+        NpgsqlConnection.ClearAllPools();
+        await using var admin = new NpgsqlConnection(_adminConnectionString);
+        await admin.OpenAsync();
+        await using var drop = new NpgsqlCommand($"DROP DATABASE IF EXISTS {_databaseName} WITH (FORCE)", admin);
+        await drop.ExecuteNonQueryAsync();
     }
 }
