@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
 using RecordService.BusinessLogic.DigestOutboxService;
 using RecordService.DataAccess;
 using RecordService.DataAccess.Email;
@@ -78,6 +79,11 @@ public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, I
     {
         builder.ConfigureServices(services =>
         {
+            // No background workers: the poll worker runs a cycle at startup while the database is
+            // still empty, and on a slow machine it can land after a test subscribes and poll the
+            // new query first. Tests poll and drain the outbox explicitly.
+            services.RemoveAll<IHostedService>();
+
             services.RemoveAll<LiteratureSourceFactory>();
             services.AddSingleton(new LiteratureSourceFactory(
                 new ILiteratureSourceProvider[] { LiteratureSourceProvider, new FakePedroLiteratureSourceProvider(), new FakeUniqueLiteratureSourceProvider() }));
