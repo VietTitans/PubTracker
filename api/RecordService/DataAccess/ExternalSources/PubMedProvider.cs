@@ -13,6 +13,7 @@ namespace RecordService.DataAccess.ExternalSources;
 /// </summary>
 public class PubMedProvider : ILiteratureSourceProvider
 {
+    private const string AllowedHost = "pubmed.ncbi.nlm.nih.gov";
     private const string EutilsBaseUrl = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/";
     private const int EsearchPageSize = 9999; // NCBI's per-request ceiling for a plain (non-history) ESearch
     private const int EfetchBatchSize = 200; // keep individual EFetch responses to a reasonable size
@@ -33,7 +34,9 @@ public class PubMedProvider : ILiteratureSourceProvider
 
     public bool CanHandle(string url)
     {
-        return !string.IsNullOrWhiteSpace(url) && url.ToLowerInvariant().Contains("pubmed");
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            && uri.Scheme == Uri.UriSchemeHttps
+            && string.Equals(uri.Host, AllowedHost, StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<SourceSearchResult> SearchAsync(string url, DateTime? lastRunDate = null)

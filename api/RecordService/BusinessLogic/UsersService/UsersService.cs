@@ -1,6 +1,7 @@
 ﻿using RecordData;
 using RecordService.DataAccess;
 using RecordService.DataAccess.Keycloak;
+using RecordService.DTOs.UserDto;
 
 namespace RecordService.BusinessLogic.UsersService;
 
@@ -44,7 +45,12 @@ public class UsersService : IUsersService
 
     public async Task<User> GetOrProvisionByKeycloakSubAsync(string keycloakSub, string email, string name, string username)
     {
-        return await _dataAccess.GetOrProvisionByKeycloakSubAsync(keycloakSub, email, name, username);
+        // Token claims bypass DTO validation; clamp to the column limits so login cannot throw.
+        return await _dataAccess.GetOrProvisionByKeycloakSubAsync(
+            keycloakSub,
+            Truncate(email, UserFieldLimits.Email),
+            Truncate(name, UserFieldLimits.Name),
+            Truncate(username, UserFieldLimits.Username));
     }
 
     public async Task UpdateUserAsync(int userId, User user, string? keycloakSub = null)
@@ -77,6 +83,9 @@ public class UsersService : IUsersService
             throw;
         }
     }
+
+    private static string Truncate(string value, int maxLength) =>
+        value.Length <= maxLength ? value : value[..maxLength];
 
     public async Task<int> PurgeExpiredDeletedUsersAsync()
     {

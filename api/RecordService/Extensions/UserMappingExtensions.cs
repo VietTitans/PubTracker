@@ -28,20 +28,6 @@ public static class UserMappingExtensions
         return users.ToPagedResponseDto(pageRequest, u => u.ToResponseDto());
     }
 
-    /// Maps a CreateUserDto to a User model
-    public static User ToUserModel(this CreateUserDto dto)
-    {
-        if (dto == null)
-            return null;
-
-        return new User
-        {
-            Name = dto.Name,
-            Username = dto.Username,
-            Email = dto.Email
-        };
-    }
-
     /// Updates a User model from an UpdateUserDto
     public static void UpdateFromDto(this User user, UpdateUserDto dto)
     {

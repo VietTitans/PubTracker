@@ -14,8 +14,8 @@ namespace RecordService.Authentication;
 /// RoleClaimType in Program.cs's ConfigureKeycloakBearer, so RequireRole checks behave the same
 /// way here as against a real Keycloak token. Sending X-Debug-Anonymous: true skips
 /// authentication entirely, simulating a real anonymous (no-token) request; needed to exercise
-/// [AllowAnonymous] endpoints that behave differently for logged-in vs. anonymous callers (e.g.
-/// UsersController.CreateUser), since otherwise this handler always authenticates the request.
+/// [AllowAnonymous] endpoints that behave differently for logged-in vs. anonymous callers,
+/// since otherwise this handler always authenticates the request.
 /// Never registered outside the Development environment, see Program.cs.
 /// </summary>
 public class DebugAuthenticationHandler : AuthenticationHandler<AuthenticationSchemeOptions>

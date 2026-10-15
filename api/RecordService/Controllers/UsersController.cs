@@ -1,5 +1,5 @@
 using Asp.Versioning;
-﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RecordData;
 using RecordService.BusinessLogic.UsersService;
@@ -17,10 +17,12 @@ namespace RecordService.Controllers;
 public class UsersController : ControllerBase
 {
     private readonly IUsersService _userService;
+    private readonly ILogger<UsersController> _logger;
 
-    public UsersController(IUsersService userService)
+    public UsersController(IUsersService userService, ILogger<UsersController> logger)
     {
         _userService = userService;
+        _logger = logger;
     }
 
     [Authorize]
@@ -46,7 +48,8 @@ public class UsersController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error retrieving user", error = ex.Message });
+            _logger.LogError(ex, "Error retrieving current user");
+            return StatusCode(500, new { message = "Error retrieving user" });
         }
     }
 
@@ -79,7 +82,8 @@ public class UsersController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error retrieving user", error = ex.Message });
+            _logger.LogError(ex, "Error retrieving user {UserId}", id);
+            return StatusCode(500, new { message = "Error retrieving user" });
         }
     }
 
@@ -94,34 +98,8 @@ public class UsersController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error retrieving users", error = ex.Message });
-        }
-    }
-
-    [Authorize(Policy = "AdminOnly")]
-    [HttpPost]
-    public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)
-    {
-        if (User.Identity?.IsAuthenticated == true)
-        {
-            return StatusCode(403, new { message = "Already logged in; cannot create a new user." });
-        }
-
-        try
-        {
-            var user = dto.ToUserModel();
-            var createdUser = await _userService.CreateUserAsync(user);
-
-            if (createdUser == null)
-            {
-                return StatusCode(500, new { message = "Error creating user" });
-            }
-
-            return CreatedAtAction(nameof(GetUserById), new { id = createdUser.Id }, createdUser.ToResponseDto());
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { message = "Error creating user", error = ex.Message });
+            _logger.LogError(ex, "Error retrieving users");
+            return StatusCode(500, new { message = "Error retrieving users" });
         }
     }
 
@@ -156,7 +134,8 @@ public class UsersController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error updating user", error = ex.Message });
+            _logger.LogError(ex, "Error updating user {UserId}", userId);
+            return StatusCode(500, new { message = "Error updating user" });
         }
     }
 
@@ -177,7 +156,8 @@ public class UsersController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error deleting user", error = ex.Message });
+            _logger.LogError(ex, "Error deleting user {UserId}", userId);
+            return StatusCode(500, new { message = "Error deleting user" });
         }
     }
 
@@ -203,7 +183,8 @@ public class UsersController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error retrieving search queries", error = ex.Message });
+            _logger.LogError(ex, "Error retrieving search queries for user {UserId}", userId);
+            return StatusCode(500, new { message = "Error retrieving search queries" });
         }
     }
 
@@ -224,7 +205,8 @@ public class UsersController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error retrieving search queries", error = ex.Message });
+            _logger.LogError(ex, "Error retrieving search queries for user {UserId}", userId);
+            return StatusCode(500, new { message = "Error retrieving search queries" });
         }
     }
 }

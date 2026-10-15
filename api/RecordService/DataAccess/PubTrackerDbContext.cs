@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RecordService.DataAccess.Entities;
+using RecordService.DTOs.UserDto;
 
 namespace RecordService.DataAccess;
 
@@ -25,9 +26,9 @@ public class PubTrackerDbContext : DbContext
         {
             entity.ToTable("users");
             entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.Name).HasColumnName("name");
-            entity.Property(e => e.Username).HasColumnName("username");
-            entity.Property(e => e.Email).HasColumnName("email");
+            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(UserFieldLimits.Name);
+            entity.Property(e => e.Username).HasColumnName("username").HasMaxLength(UserFieldLimits.Username);
+            entity.Property(e => e.Email).HasColumnName("email").HasMaxLength(UserFieldLimits.Email);
             entity.Property(e => e.KeycloakSub).HasColumnName("keycloak_sub");
             entity.Property(e => e.IsMarkedForDeletion).HasColumnName("is_marked_for_deletion").HasDefaultValue(false);
             entity.Property(e => e.DeletionRequestedAt).HasColumnName("deletion_requested_at");
@@ -48,7 +49,8 @@ public class PubTrackerDbContext : DbContext
             entity.ToTable("search_queries");
             entity.Property(e => e.Id).HasColumnName("id");
             entity.Property(e => e.SourceId).HasColumnName("source_id");
-            entity.Property(e => e.TargetUrl).HasColumnName("target_url");
+            // Wider than the 2048 input limit: PubMed normalization can rewrite the stored URL.
+            entity.Property(e => e.TargetUrl).HasColumnName("target_url").HasMaxLength(4096);
             entity.Property(e => e.LastDigestSentAt).HasColumnName("last_digest_sent_at");
             entity.Property(e => e.LastPolledAt).HasColumnName("last_polled_at");
             entity.Property(e => e.SourceRecordCount).HasColumnName("source_record_count");
