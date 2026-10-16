@@ -344,7 +344,12 @@ app.UseAuthentication();
 
 app.UseAuthorization();
 
-app.MapControllers(); 
+app.MapControllers();
+
+// Liveness + DB reachability for the deploy pipeline's post-deploy check (see docs/adr/0001).
+app.MapGet("/api/health", async (RecordService.DataAccess.PubTrackerDbContext db) =>
+    await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ok" }) : Results.StatusCode(503))
+    .AllowAnonymous();
 
 app.Run();
 

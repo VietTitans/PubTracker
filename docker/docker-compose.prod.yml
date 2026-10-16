@@ -1,0 +1,100 @@
+name: pubtracker
+# Production stack for the Oracle A1 VM (linux/arm64). Standalone, not an override of
+# docker-compose.yml: images come from GHCR instead of local builds, and nothing is published
+# to the network except Caddy on the VM's loopback, where `cloudflared` picks it up.
+# Run from this directory next to a hand-made `.env` (see .env.prod.example):
+#   TAG=<build number> docker compose -f docker-compose.prod.yml pull
+#   TAG=<build number> docker compose -f docker-compose.prod.yml up -d
+services:
+  proxy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:80:80"
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+    depends_on:
+      - web
+      - api
+      - keycloak
+  db:
+    image: postgres:16-alpine
+    container_name: postgres_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # First boot only: creates the separate `keycloak` database.
+      - ./postgres-init:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: keycloak
+    restart: unless-stopped
+    command: start --import-realm
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://db:5432/keycloak
+      KC_DB_USERNAME: ${POSTGRES_USER}
+      KC_DB_PASSWORD: ${POSTGRES_PASSWORD}
+      # TLS ends at Cloudflare; the tunnel and Caddy speak plain HTTP. The full public URL makes
+      # Keycloak emit https links regardless of the X-Forwarded-Proto it receives.
+      KC_HTTP_ENABLED: "true"
+      KC_HOSTNAME: ${PUBLIC_ORIGIN}/auth
+      KC_PROXY_HEADERS: xforwarded
+      KC_HTTP_RELATIVE_PATH: /auth
+      # Substituted into realm-export.prod.json when the realm is first imported.
+      KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
+    volumes:
+      - ./keycloak/realm-export.prod.json:/opt/keycloak/data/import/realm-export.json:ro
+  api:
+    image: ghcr.io/${GHCR_OWNER}/pubtracker-api:${TAG}
+    container_name: api
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      keycloak:
+        condition: service_started
+    environment:
+      ConnectionStrings__DefaultConnection: Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
+      ASPNETCORE_ENVIRONMENT: Production
+      Scheduler__PollIntervalHours: ${SCHEDULER_POLL_INTERVAL_HOURS:-168}
+      Email__ApiKey: ${EMAIL_API_KEY}
+      Email__FromAddress: ${EMAIL_FROM_ADDRESS}
+      Email__FromName: ${EMAIL_FROM_NAME:-PubTracker}
+      Sources__PubMed__Enabled: ${SOURCES_PUBMED_ENABLED:-}
+      Sources__Pedro__Enabled: ${SOURCES_PEDRO_ENABLED:-}
+      Ncbi__ApiKey: ${NCBI_API_KEY:-}
+      Ncbi__ContactEmail: ${NCBI_CONTACT_EMAIL:-}
+      Llm__BaseUrl: ${LLM_BASE_URL:-}
+      Llm__ApiKey: ${LLM_API_KEY:-}
+      Llm__Model: ${LLM_MODEL:-}
+      # Authority is the public issuer URL; MetadataAddress is the in-network path (see Program.cs).
+      Keycloak__Authority: ${PUBLIC_ORIGIN}/auth/realms/science-alerts-saas
+      Keycloak__MetadataAddress: http://keycloak:8080/auth/realms/science-alerts-saas/.well-known/openid-configuration
+      Keycloak__Audience: science-alerts-api
+      Keycloak__AdminClientSecret: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
+      Cors__WebAppOrigin: ${PUBLIC_ORIGIN}
+  web:
+    image: ghcr.io/${GHCR_OWNER}/pubtracker-web:${TAG}
+    container_name: web
+    restart: unless-stopped
+    depends_on:
+      - api
+
+volumes:
+  postgres_data:

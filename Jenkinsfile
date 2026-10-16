@@ -6,7 +6,11 @@ pipeline {
         disableConcurrentBuilds()
     }
 
+    // GitHub can't reach a local Jenkins, so poll (docs/adr/0001).
+    triggers { pollSCM('H/5 * * * *') }
+
     environment {
+        PUBLIC_ORIGIN = 'https://pubtracker.org'
         DOTNET_CLI_TELEMETRY_OPTOUT = '1'
         DOTNET_NOLOGO = '1'
         // Restore/Build/Test each run in a fresh, throwaway SDK container. NuGet's default
@@ -82,42 +86,37 @@ pipeline {
             }
         }
 
-        stage('Build API Docker Image') {
+        stage('Build and Push Images') {
             steps {
-                // Context is api/ (Dockerfile does `COPY . .` from WORKDIR /src and references
-                // RecordService/RecordService.csproj relatively) — matches how docker/docker-compose.yml
-                // already builds it (build.context: ../api).
-                sh "docker build -f api/Dockerfile -t pubtracker-api:${env.BUILD_NUMBER} api"
-            }
-        }
-
-        stage('Build Web Docker Image') {
-            steps {
-                // Build args match the defaults docker/docker-compose.yml passes to this same
-                // Dockerfile; Vite bakes VITE_* vars into the static bundle at build time.
-                sh """
-                    docker build -f web/Dockerfile \
-                        --build-arg VITE_API_BASE_URL=http://localhost:8080 \
-                        --build-arg VITE_KEYCLOAK_AUTHORITY=http://localhost:8081/realms/science-alerts-saas \
-                        --build-arg VITE_KEYCLOAK_CLIENT_ID=science-alerts-web \
-                        -t pubtracker-web:${env.BUILD_NUMBER} web
-                """
-            }
-        }
-
-        stage('Push Docker Images') {
-            steps {
+                // Prod VM is linux/arm64; buildx emulates it via QEMU (one-time on the Jenkins host:
+                // docker run --privileged --rm tonistiigi/binfmt --install arm64).
                 withCredentials([usernamePassword(credentialsId: 'ghcr-token', usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
                     sh '''
-                        GHCR_USER_LC=$(echo "$GHCR_USER" | tr '[:upper:]' '[:lower:]')
+                        OWNER=$(echo "$GHCR_USER" | tr '[:upper:]' '[:lower:]')
                         echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
-                        for image in pubtracker-api pubtracker-web; do
-                            docker tag $image:''' + env.BUILD_NUMBER + ''' ghcr.io/$GHCR_USER_LC/$image:''' + env.BUILD_NUMBER + '''
-                            docker tag $image:''' + env.BUILD_NUMBER + ''' ghcr.io/$GHCR_USER_LC/$image:latest
-                            docker push ghcr.io/$GHCR_USER_LC/$image:''' + env.BUILD_NUMBER + '''
-                            docker push ghcr.io/$GHCR_USER_LC/$image:latest
-                        done
+                        docker buildx inspect pt-builder >/dev/null 2>&1 || docker buildx create --name pt-builder --driver docker-container
+                        docker buildx build --builder pt-builder --platform linux/arm64 --push \
+                            --build-arg INSTALL_PLAYWRIGHT=false \
+                            -f api/Dockerfile -t ghcr.io/$OWNER/pubtracker-api:$BUILD_NUMBER api
+                        # Vite bakes VITE_* in at build time; API and Keycloak are same-origin behind Caddy.
+                        docker buildx build --builder pt-builder --platform linux/arm64 --push \
+                            --build-arg VITE_API_BASE_URL=$PUBLIC_ORIGIN \
+                            --build-arg VITE_KEYCLOAK_AUTHORITY=$PUBLIC_ORIGIN/auth/realms/science-alerts-saas \
+                            --build-arg VITE_KEYCLOAK_CLIENT_ID=science-alerts-web \
+                            -f web/Dockerfile -t ghcr.io/$OWNER/pubtracker-web:$BUILD_NUMBER web
                     '''
+                }
+            }
+        }
+
+        stage('Deploy') {
+            when { expression { env.GIT_BRANCH?.endsWith('/main') } }
+            steps {
+                withCredentials([
+                    sshUserPrivateKey(credentialsId: 'deploy-ssh-key', keyFileVariable: 'SSH_KEY', usernameVariable: 'DEPLOY_USER'),
+                    usernamePassword(credentialsId: 'cf-access-token', usernameVariable: 'TUNNEL_SERVICE_TOKEN_ID', passwordVariable: 'TUNNEL_SERVICE_TOKEN_SECRET')
+                ]) {
+                    sh 'deploy/deploy.sh $BUILD_NUMBER'
                 }
             }
         }

@@ -6,8 +6,13 @@ services:
     restart: unless-stopped
     ports:
       - "80:80"
+      - "443:443"
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
     volumes:
       - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       - web
       - api
@@ -37,7 +42,9 @@ services:
     command: start-dev --import-realm
     environment:
       KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:-admin}
+      # Caddy terminates TLS; trust its X-Forwarded-* headers so Keycloak emits https URLs.
+      KC_PROXY_HEADERS: xforwarded
       # Tells Keycloak its own routes live under /auth, so the login pages/redirects it
       # generates are already correct once the `proxy` container forwards /auth/* to it
       # unmodified; no path rewriting needed on the Caddy side.
@@ -102,3 +109,5 @@ services:
 
 volumes:
   postgres_data:
+  caddy_data:
+  caddy_config:

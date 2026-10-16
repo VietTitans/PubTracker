@@ -1,7 +1,8 @@
 # Local development entrypoint. Single port (80) in front of web/api/keycloak.
 # See the bottom of this file for what changes to go to a real domain later.
 
-:80 {
+# SITE_ADDRESS unset = plain HTTP on :80 (local). Set to the domain in prod for auto-HTTPS.
+{$SITE_ADDRESS::80} {
 	# Keycloak has KC_HTTP_RELATIVE_PATH=/auth (see docker-compose.yml), so its own
 	# routes already live under /auth/* - nothing to rewrite here.
 	handle /auth/* {
