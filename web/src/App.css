@@ -339,6 +339,10 @@
   border-color: rgba(217, 119, 6, 0.35);
 }
 
+a.badge {
+  text-decoration: none;
+}
+
 .badge-other {
   color: var(--text-dim);
   background: var(--surface-hover);
@@ -703,8 +707,33 @@
   line-height: 1.2;
 }
 
-.hero-compact {
-  padding-top: 0;
+.hero-band {
+  text-align: center;
+  padding: 56px 20px 64px;
+  border-radius: 1rem;
+  background-image:
+    radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px),
+    radial-gradient(circle at 20% 0%, rgba(13, 148, 136, 0.5), transparent 55%),
+    linear-gradient(#0f2a33, #0b1d27);
+  background-size: 18px 18px, auto, auto;
+}
+
+.hero-band h2 {
+  color: #fff;
+  font-size: 32px;
+  line-height: 1.2;
+  margin: 0 0 6px;
+}
+
+.hero-band p {
+  color: #9fc4c0;
+  margin: 0;
+}
+
+/* .app's flex gap is 28px; pull the bar up so it overlaps the band's bottom edge by half its gap. */
+.hero-band-search {
+  margin: -56px 20px 0;
+  position: relative;
 }
 
 .search-box {
@@ -713,7 +742,7 @@
   gap: 8px;
   padding: 8px 8px 8px 20px;
   border: 2px solid var(--border);
-  border-radius: 999px;
+  border-radius: 1rem;
   background: var(--surface);
   box-shadow: var(--shadow);
 }
@@ -770,7 +799,7 @@
   color: var(--text-dim);
 }
 
-.supported a {
+.supported a:not(.badge) {
   color: var(--accent);
 }
 
@@ -813,4 +842,140 @@ textarea.text-input {
 .suggestion-votes {
   font-weight: 600;
   color: var(--text-h);
+}
+
+.how-steps {
+  list-style: none;
+  margin: 0 0 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.how-steps li {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+
+.how-steps p {
+  margin: 2px 0 0;
+  font-size: 14px;
+}
+
+.how-step-num {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+}
+
+/* Fixed light palette on purpose: real emails render on white regardless of the app theme. */
+.digest-example {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  background: #fff;
+  color: #1b221f;
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.digest-subject {
+  margin: 0;
+  padding: 10px 18px;
+  font-size: 14px;
+  font-weight: 600;
+  background: #f1f3ef;
+  border-bottom: 1px solid #dfe3de;
+}
+
+.digest-subject span {
+  color: #8b948d;
+  font-weight: 400;
+}
+
+.digest-body {
+  padding: 20px 18px 4px;
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.digest-meta {
+  margin: 0 0 20px;
+  padding: 14px 18px;
+  background: #f1f3ef;
+  border-radius: 8px;
+}
+
+.digest-meta a,
+.digest-group a {
+  color: #3b6e5e;
+}
+
+.digest-summary {
+  margin: 0 0 24px;
+  padding: 14px 18px;
+  background: #eef3f0;
+  border-radius: 8px;
+}
+
+.digest-summary h4,
+.digest-group h4 {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.digest-summary p {
+  margin: 0;
+}
+
+.digest-group {
+  margin: 0 0 16px;
+  padding: 14px 18px;
+  border: 1px solid #dfe3de;
+  border-radius: 8px;
+}
+
+.digest-group ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.digest-group li {
+  padding: 8px 0;
+  line-height: 1.5;
+  border-bottom: 1px solid #eceee9;
+}
+
+.digest-group li:last-child {
+  border-bottom: 0;
+}
+
+.digest-group a {
+  color: #1b221f;
+  text-decoration: none;
+  border-bottom: 1px solid #dfe3de;
+}
+
+.digest-num {
+  display: inline-block;
+  min-width: 26px;
+  color: #8b948d;
+}
+
+.digest-intent {
+  margin: 4px 0 0 26px;
+  font-size: 13px;
+  color: #5b645d;
+  font-style: italic;
 }

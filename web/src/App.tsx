@@ -13,11 +13,14 @@ import {
 } from "./api/client";
 import { useAuth } from "./auth/useAuth";
 import { detectSourceLabel } from "./lib/sourceLabel";
+import HowItWorksPage from "./pages/HowItWorksPage";
 import FeedbackPage from "./pages/FeedbackPage";
 import SuggestPage from "./pages/SuggestPage";
 import "./App.css";
 
 const PENDING_URL_KEY = "pendingUrl";
+// Enabled-by-default sources only (PEDro is off by default server-side, see SourceCatalog.cs).
+const SUPPORTED_SOURCES = [{ label: "PubMed", cls: "badge-pubmed", url: "https://pubmed.ncbi.nlm.nih.gov/" }];
 
 function ExternalLinkIcon() {
   return (
@@ -771,6 +774,27 @@ function App() {
     </form>
   );
 
+  const supportedDatabases = (
+    <p className="supported">
+      <span>Supported:</span>
+      {SUPPORTED_SOURCES.map((src) => (
+        <a
+          key={src.label}
+          className={`badge ${src.cls}`}
+          href={src.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={`Open ${src.label} to build a search`}
+        >
+          {src.label}
+        </a>
+      ))}
+      <span>
+        More coming. <Link to="/suggest">Suggest one</Link>.
+      </span>
+    </p>
+  );
+
   const signedOutHome = (
     <section className="hero">
       <h2>Track new research. Get a digest.</h2>
@@ -780,18 +804,13 @@ function App() {
           <strong>1</strong>Paste a search URL
         </li>
         <li>
-          <strong>2</strong>We check it on a schedule
+          <strong>2</strong>We track the search results
         </li>
         <li>
           <strong>3</strong>New results land in your inbox
         </li>
       </ol>
-      <p className="supported">
-        <span className="badge badge-pubmed">PubMed</span>
-        <span>
-          More databases coming. <Link to="/suggest">Suggest one</Link>.
-        </span>
-      </p>
+{supportedDatabases}
     </section>
   );
 
@@ -805,8 +824,9 @@ function App() {
           <NavLink to="/" end>
             Home
           </NavLink>
-          <NavLink to="/feedback">Feedback</NavLink>
+          <NavLink to="/how-it-works">How it works</NavLink>
           <NavLink to="/suggest">Suggest a database</NavLink>
+          <NavLink to="/feedback">Feedback</NavLink>
         </nav>
         <div className="header-actions">
           <ThemeToggle />
@@ -832,6 +852,7 @@ function App() {
       )}
 
       <Routes>
+        <Route path="/how-it-works" element={<HowItWorksPage />} />
         <Route path="/feedback" element={<FeedbackPage isAuthenticated={isAuthenticated} onLogin={handleLogin} />} />
         <Route path="/suggest" element={<SuggestPage isAuthenticated={isAuthenticated} onLogin={handleLogin} />} />
         <Route
@@ -841,7 +862,12 @@ function App() {
               signedOutHome
             ) : (
               <>
-      <section className="hero hero-compact">{searchBox}</section>
+      <section className="hero-band">
+        <h2>Track new research</h2>
+        <p>Get a digest when something new is published.</p>
+      </section>
+      <div className="hero-band-search">{searchBox}</div>
+      {supportedDatabases}
 
       <section>
         <div className="section-header">
