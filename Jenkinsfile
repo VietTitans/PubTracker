@@ -93,7 +93,10 @@ pipeline {
             steps {
                 // Prod VM is linux/arm64; buildx emulates it via QEMU (one-time on the Jenkins host:
                 // docker run --privileged --rm tonistiigi/binfmt --install arm64).
+                // The Jenkins container's docker CLI has no buildx plugin; docker:cli bundles it.
                 withCredentials([usernamePassword(credentialsId: 'ghcr-token', usernameVariable: 'GHCR_USER', passwordVariable: 'GHCR_TOKEN')]) {
+                  script {
+                    docker.image('docker:cli').inside('-v /var/run/docker.sock:/var/run/docker.sock') {
                     sh '''
                         OWNER=$(echo "$GHCR_USER" | tr '[:upper:]' '[:lower:]')
                         echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
@@ -108,6 +111,8 @@ pipeline {
                             --build-arg VITE_KEYCLOAK_CLIENT_ID=science-alerts-web \
                             -f web/Dockerfile -t ghcr.io/$OWNER/pubtracker-web:$BUILD_NUMBER web
                     '''
+                    }
+                  }
                 }
             }
         }
