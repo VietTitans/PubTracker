@@ -22,7 +22,7 @@ pipeline {
         // Docker-outside-of-Docker setup (SDK container -> host daemon via mounted socket), so
         // its init just times out ("Initialization has been cancelled"). Standard CI workaround:
         // disable it. Tradeoff: if a test crashes mid-run, its ephemeral Postgres container won't
-        // be auto-removed — harmless locally, just prune manually if containers pile up.
+        // be auto-removed — the Test stage's post { always } block removes them instead.
         TESTCONTAINERS_RYUK_DISABLED = 'true'
         // Testcontainers guesses 172.17.0.1 (the classic Linux docker0 bridge gateway) as the
         // address to reach sibling containers' published ports, which doesn't reliably work
@@ -82,6 +82,9 @@ pipeline {
             post {
                 always {
                     archiveArtifacts artifacts: 'TestResults/*.trx', allowEmptyArchive: true
+                    // Ryuk is disabled (see environment), so remove Testcontainers' containers ourselves.
+                    // Testcontainers labels everything it starts with org.testcontainers=true.
+                    sh 'docker ps -aq --filter label=org.testcontainers=true | xargs -r docker rm -f -v'
                 }
             }
         }
