@@ -299,22 +299,118 @@
 }
 
 .search-query-list li {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 10px 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   background: var(--surface);
   transition: background-color 0.15s ease;
 }
 
-.search-query-list li.clickable {
+.query-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.query-row.clickable {
   cursor: pointer;
 }
 
 .search-query-list li:hover {
   background: var(--surface-hover);
+}
+
+.query-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.query-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.status-chip {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
+.status-ok {
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-color: var(--accent-border);
+}
+
+.status-failed {
+  color: var(--danger);
+  background: var(--danger-bg);
+  border-color: var(--danger-border);
+}
+
+.query-detail {
+  padding: 16px 16px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.query-detail .detail-list {
+  margin-bottom: 12px;
+}
+
+.query-detail .detail-url {
+  margin-bottom: 0;
+}
+
+.expand-toggle svg {
+  transition: transform 0.2s ease;
+}
+
+.expand-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.toast {
+  position: fixed;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px 10px 16px;
+  border-radius: var(--radius-sm);
+  background: var(--text-h);
+  color: var(--bg);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+  animation: toast-in 0.2s ease-out;
+}
+
+.toast .btn-ghost {
+  color: var(--bg);
+  border-color: currentColor;
+}
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 8px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toast {
+    animation: none;
+  }
 }
 
 .badge {

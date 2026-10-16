@@ -187,32 +187,17 @@ function ConfirmDialog({
   );
 }
 
-function DetailDialog({
+function DetailPanel({
   target,
   detail,
   isLoading,
   error,
-  onClose,
-  onRequestUnsubscribe,
 }: {
   target: SearchQuery;
   detail: SearchQuery | null;
   isLoading: boolean;
   error: string | null;
-  onClose: () => void;
-  onRequestUnsubscribe: () => void;
 }) {
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
-  const source = detectSourceLabel(target.targetUrl);
   const lastFetch = detail?.lastFetchedAt
     ? new Date(detail.lastFetchedAt).toLocaleString(undefined, { hour12: false })
     : "Never";
@@ -222,75 +207,53 @@ function DetailDialog({
   const keywords = detail?.tags ?? [];
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="detail-title"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="detail-header">
-          <span className={`badge badge-${source.toLowerCase()}`}>{source}</span>
-          <h3 id="detail-title">Search details</h3>
+    <div className="query-detail">
+      {error && (
+        <p className="alert" role="alert">
+          {error}
+        </p>
+      )}
+
+      <dl className="detail-list">
+        <div className="detail-tags-row">
+          <dt>Keywords</dt>
+          <dd>
+            {isLoading ? (
+              <Spinner />
+            ) : keywords.length > 0 ? (
+              <div className="tag-group">
+                {keywords.map((keyword) => (
+                  <span key={keyword} className="tag">
+                    {keyword}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              "—"
+            )}
+          </dd>
         </div>
-
-        {error && (
-          <p className="alert" role="alert">
-            {error}
-          </p>
-        )}
-
-        <dl className="detail-list">
-          <div className="detail-tags-row">
-            <dt>Keywords</dt>
-            <dd>
-              {isLoading ? (
-                <Spinner />
-              ) : keywords.length > 0 ? (
-                <div className="tag-group">
-                  {keywords.map((keyword) => (
-                    <span key={keyword} className="tag">
-                      {keyword}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                "—"
-              )}
+        <div>
+          <dt>Articles found</dt>
+          <dd>{isLoading ? <Spinner /> : (detail?.sourceRecordCount ?? "—")}</dd>
+        </div>
+        <div>
+          <dt>Last fetch</dt>
+          <dd>{isLoading ? <Spinner /> : lastFetch}</dd>
+        </div>
+        {!isLoading && lastPollFailedAt && (
+          <div>
+            <dt>Status</dt>
+            <dd className="detail-status-warning">
+              Last check failed ({lastPollFailedAt}) - will retry on the next scheduled check
             </dd>
           </div>
-          <div>
-            <dt>Records registered</dt>
-            <dd>{isLoading ? <Spinner /> : (detail?.sourceRecordCount ?? "—")}</dd>
-          </div>
-          <div>
-            <dt>Last fetch</dt>
-            <dd>{isLoading ? <Spinner /> : lastFetch}</dd>
-          </div>
-          {!isLoading && lastPollFailedAt && (
-            <div>
-              <dt>Status</dt>
-              <dd className="detail-status-warning">
-                Last check failed ({lastPollFailedAt}) - will retry on the next scheduled check
-              </dd>
-            </div>
-          )}
-        </dl>
+        )}
+      </dl>
 
-        <a href={target.targetUrl} target="_blank" rel="noreferrer" className="detail-url">
-          Click here to follow the URL
-        </a>
-
-        <div className="modal-actions">
-          <button className="btn btn-danger-outline" onClick={onRequestUnsubscribe}>
-            Unsubscribe
-          </button>
-          <button className="btn btn-ghost" onClick={onClose} autoFocus>
-            Close
-          </button>
-        </div>
-      </div>
+      <a href={target.targetUrl} target="_blank" rel="noreferrer" className="detail-url">
+        Click here to follow the URL
+      </a>
     </div>
   );
 }
@@ -550,6 +513,24 @@ function SettingsDialog({
   );
 }
 
+function formatRelative(iso: string): string {
+  const minutes = Math.round((new Date(iso).getTime() - Date.now()) / 60000);
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+  if (Math.abs(minutes) < 60) return rtf.format(minutes, "minute");
+  if (Math.abs(minutes) < 60 * 24) return rtf.format(Math.round(minutes / 60), "hour");
+  return rtf.format(Math.round(minutes / (60 * 24)), "day");
+}
+
+function getStatus(sq: SearchQuery, source: string): { kind: "ok" | "setup" | "failed"; text: string } {
+  if (sq.lastPollFailedAt) {
+    return { kind: "failed", text: `Couldn't reach ${source}, will retry` };
+  }
+  if (sq.sourceRecordCount === null) {
+    return { kind: "setup", text: "Setting up" };
+  }
+  return { kind: "ok", text: sq.lastFetchedAt ? `Checked ${formatRelative(sq.lastFetchedAt)}` : "Not checked yet" };
+}
+
 function getUrlProblem(url: string, existing: SearchQuery[]): string | null {
   if (!url) {
     return null;
@@ -573,7 +554,7 @@ function App() {
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [unsubscribingId, setUnsubscribingId] = useState<number | null>(null);
-  const [confirmTarget, setConfirmTarget] = useState<SearchQuery | null>(null);
+  const [showUndoToast, setShowUndoToast] = useState(false);
   const [undoStack, setUndoStack] = useState<string[]>([]);
   const [isRedoing, setIsRedoing] = useState(false);
   const [detailTarget, setDetailTarget] = useState<SearchQuery | null>(null);
@@ -677,19 +658,29 @@ function App() {
     }
   }
 
-  async function handleConfirmUnsubscribe() {
-    if (!user || !confirmTarget) {
+  useEffect(() => {
+    if (!showUndoToast) {
+      return;
+    }
+    const timer = window.setTimeout(() => setShowUndoToast(false), 8000);
+    return () => window.clearTimeout(timer);
+  }, [showUndoToast]);
+
+  async function handleUnsubscribe(target: SearchQuery) {
+    if (!user) {
       return;
     }
 
-    const target = confirmTarget;
     setUnsubscribingId(target.id);
     setError(null);
     try {
       await unsubscribeFromSearchQuery(target.id);
       setSearchQueries(await getSearchQueriesForUser(user.id));
-      setConfirmTarget(null);
+      if (detailTarget?.id === target.id) {
+        setDetailTarget(null);
+      }
       setUndoStack((prev) => [...prev, target.targetUrl]);
+      setShowUndoToast(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -724,6 +715,7 @@ function App() {
       setSearchQueries(await getSearchQueriesForUser(user.id));
       scheduleRecordCountRefresh(user.id, newQuery.id);
       setUndoStack((prev) => prev.slice(0, -1));
+      setShowUndoToast(false);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -741,6 +733,10 @@ function App() {
   }
 
   async function handleOpenDetail(sq: SearchQuery) {
+    if (detailTarget?.id === sq.id) {
+      setDetailTarget(null);
+      return;
+    }
     setDetailTarget(sq);
     setDetailData(null);
     setDetailError(null);
@@ -909,7 +905,7 @@ function App() {
           {searchQueries.length > 0 && <span className="count-badge">{searchQueries.length}</span>}
           {undoStack.length > 0 && (
             <button className="btn btn-ghost btn-sm section-header-action" onClick={handleRedo} disabled={isRedoing}>
-              {isRedoing ? <Spinner /> : "Redo"}
+              {isRedoing ? <Spinner /> : "Undo"}
             </button>
           )}
         </div>
@@ -924,63 +920,84 @@ function App() {
             {searchQueries.map((sq) => {
               const source = detectSourceLabel(sq.targetUrl);
               const tags = sq.tags;
+              const status = getStatus(sq, source);
+              const isExpanded = detailTarget?.id === sq.id;
               return (
-                <li key={sq.id} onClick={() => handleOpenDetail(sq)} className="clickable">
-                  <span className={`badge badge-${source.toLowerCase()}`}>{source}</span>
-                  {tags.length > 0 ? (
-                    <div className="tag-group tag-group-row">
-                      {tags.map((tag) => (
-                        <span key={tag} className="tag">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="query-url-text" title={sq.targetUrl}>
-                      {sq.targetUrl}
-                    </span>
-                  )}
-                  <div className="record-count" title="Records registered">
-                    <span className="record-count-label">Records</span>
-                    <span className="record-count-row">
-                      {sq.sourceRecordCount === null && !sq.lastPollFailedAt ? (
-                        <Spinner />
+                <li key={sq.id} className={isExpanded ? "expanded" : undefined}>
+                  <div className="query-row clickable" onClick={() => handleOpenDetail(sq)}>
+                    <span className={`badge badge-${source.toLowerCase()}`}>{source}</span>
+                    <div className="query-main">
+                      {tags.length > 0 ? (
+                        <div className="tag-group tag-group-row">
+                          {tags.map((tag) => (
+                            <span key={tag} className="tag">
+                              {tag}
+                            </span>
+                          ))}
+                        </div>
                       ) : (
-                        <span className="record-count-value">{sq.sourceRecordCount ?? "—"}</span>
-                      )}
-                      {sq.lastPollFailedAt && (
-                        <span
-                          className="record-count-status"
-                          title={`Couldn't reach ${source} on the last check - will retry on the next scheduled check`}
-                        >
-                          ⚠
+                        <span className="query-url-text" title={sq.targetUrl}>
+                          {sq.targetUrl}
                         </span>
                       )}
-                    </span>
+                      <div className="query-meta">
+                        <span className={`status-chip status-${status.kind}`}>{status.text}</span>
+                        <span>
+                          {sq.lastDigestSentAt
+                            ? `Last digest ${new Date(sq.lastDigestSentAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}`
+                            : "No digest sent yet"}
+                        </span>
+                      </div>
+                    </div>
+                    <div className="record-count" title="Articles found">
+                      <span className="record-count-label">Articles</span>
+                      <span className="record-count-row">
+                        {sq.sourceRecordCount === null && !sq.lastPollFailedAt ? (
+                          <Spinner />
+                        ) : (
+                          <span className="record-count-value">{sq.sourceRecordCount ?? "—"}</span>
+                        )}
+                      </span>
+                    </div>
+                    <a
+                      href={sq.targetUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-icon"
+                      onClick={(e) => e.stopPropagation()}
+                      aria-label="Open in new tab"
+                      title="Open in new tab"
+                    >
+                      <ExternalLinkIcon />
+                    </a>
+                    <button
+                      className="btn btn-icon btn-danger-hover"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleUnsubscribe(sq);
+                      }}
+                      disabled={unsubscribingId === sq.id}
+                      aria-label="Unsubscribe"
+                      title="Unsubscribe"
+                    >
+                      {unsubscribingId === sq.id ? <Spinner /> : <TrashIcon />}
+                    </button>
+                    <button
+                      className="btn btn-icon expand-toggle"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleOpenDetail(sq);
+                      }}
+                      aria-expanded={isExpanded}
+                      aria-label={isExpanded ? "Hide details" : "Show details"}
+                      title={isExpanded ? "Hide details" : "Show details"}
+                    >
+                      <ChevronDownIcon />
+                    </button>
                   </div>
-                  <a
-                    href={sq.targetUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn btn-icon"
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label="Open in new tab"
-                    title="Open in new tab"
-                  >
-                    <ExternalLinkIcon />
-                  </a>
-                  <button
-                    className="btn btn-icon btn-danger-hover"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setConfirmTarget(sq);
-                    }}
-                    disabled={unsubscribingId === sq.id}
-                    aria-label="Unsubscribe"
-                    title="Unsubscribe"
-                  >
-                    {unsubscribingId === sq.id ? <Spinner /> : <TrashIcon />}
-                  </button>
+                  {isExpanded && (
+                    <DetailPanel target={sq} detail={detailData} isLoading={isDetailLoading} error={detailError} />
+                  )}
                 </li>
               );
             })}
@@ -993,29 +1010,13 @@ function App() {
         />
       </Routes>
 
-      {confirmTarget && (
-        <ConfirmDialog
-          title="Unsubscribe from this search?"
-          message={confirmTarget.targetUrl}
-          confirmLabel="Unsubscribe"
-          isBusy={unsubscribingId === confirmTarget.id}
-          onConfirm={handleConfirmUnsubscribe}
-          onCancel={() => setConfirmTarget(null)}
-        />
-      )}
-
-      {detailTarget && (
-        <DetailDialog
-          target={detailTarget}
-          detail={detailData}
-          isLoading={isDetailLoading}
-          error={detailError}
-          onClose={() => setDetailTarget(null)}
-          onRequestUnsubscribe={() => {
-            setConfirmTarget(detailTarget);
-            setDetailTarget(null);
-          }}
-        />
+      {showUndoToast && (
+        <div className="toast" role="status">
+          <span>Unsubscribed.</span>
+          <button className="btn btn-ghost btn-sm" onClick={handleRedo} disabled={isRedoing}>
+            {isRedoing ? <Spinner /> : "Undo"}
+          </button>
+        </div>
       )}
 
       {isProfileOpen && user && (
