@@ -550,6 +550,21 @@ function SettingsDialog({
   );
 }
 
+function getUrlProblem(url: string, existing: SearchQuery[]): string | null {
+  if (!url) {
+    return null;
+  }
+  try {
+    new URL(url);
+  } catch {
+    return "Paste the full link, starting with https://";
+  }
+  if (existing.some((q) => q.targetUrl === url)) {
+    return "You're already subscribed to this search.";
+  }
+  return null;
+}
+
 function App() {
   const { isLoading, isAuthenticated, login, logout } = useAuth();
   const [user, setUser] = useState<User | null>(null);
@@ -758,21 +773,30 @@ function App() {
     void handleLogin();
   }
 
+  const trimmedUrl = targetUrl.trim();
+  const urlProblem = getUrlProblem(trimmedUrl, searchQueries);
+
   const searchBox = (
-    <form onSubmit={isAuthenticated ? handleSubscribe : handleSignedOutSearch} className="search-box">
+    <div>
+    <form noValidate onSubmit={isAuthenticated ? handleSubscribe : handleSignedOutSearch} className="search-box">
       <input
         id="target-url"
         type="url"
         placeholder="Paste a search URL"
         aria-label="Search URL"
+        aria-invalid={urlProblem !== null}
+        aria-describedby="target-url-problem"
         value={targetUrl}
         onChange={(e) => setTargetUrl(e.target.value)}
-        required
       />
-      <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+      <button type="submit" className="btn btn-primary" disabled={isSubmitting || !trimmedUrl || urlProblem !== null}>
         {isSubmitting ? <Spinner /> : "Subscribe"}
       </button>
     </form>
+    <p id="target-url-problem" className="url-problem" role="status">
+      {urlProblem}
+    </p>
+    </div>
   );
 
   const supportedDatabases = (
@@ -881,7 +905,7 @@ function App() {
 
       <section>
         <div className="section-header">
-          <h2>Your search queries</h2>
+          <h2>Your searches</h2>
           {searchQueries.length > 0 && <span className="count-badge">{searchQueries.length}</span>}
           {undoStack.length > 0 && (
             <button className="btn btn-ghost btn-sm section-header-action" onClick={handleRedo} disabled={isRedoing}>
@@ -892,8 +916,8 @@ function App() {
 
         {searchQueries.length === 0 ? (
           <div className="empty-state">
-            <p>No subscriptions yet.</p>
-            <p className="empty-state-hint">Paste a search URL above to start tracking new results.</p>
+            <p>No searches yet.</p>
+            <p className="empty-state-hint">Paste a search URL above to start tracking new articles.</p>
           </div>
         ) : (
           <ul className="search-query-list">

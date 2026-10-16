@@ -981,3 +981,17 @@ textarea.text-input {
   color: #5b645d;
   font-style: italic;
 }
+
+.url-problem {
+  min-height: 1.5em;
+  margin-top: 8px;
+  padding: 0 20px;
+  font-size: 14px;
+  color: var(--danger);
+  text-align: left;
+}
+
+.url-problem:empty {
+  margin-top: 0;
+  min-height: 0;
+}
