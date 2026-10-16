@@ -34,7 +34,7 @@
 .app {
   max-width: 640px;
   margin: 0 auto;
-  padding: 40px 20px 80px;
+  padding: 32px 20px 80px;
   text-align: left;
   display: flex;
   flex-direction: column;
@@ -42,6 +42,8 @@
 }
 
 .header-row {
+  padding: 16px 28px;
+  border-bottom: 1px solid var(--border);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -327,19 +329,17 @@
   border: 1px solid var(--accent-border);
 }
 
-.badge-pedro {
-  color: #2563eb;
-  background: rgba(37, 99, 235, 0.1);
-  border-color: rgba(37, 99, 235, 0.35);
-}
-
+.badge-pedro,
 .badge-pubmed {
-  color: #d97706;
-  background: rgba(217, 119, 6, 0.1);
-  border-color: rgba(217, 119, 6, 0.35);
+  color: var(--text-h);
+  background: transparent;
+  border-color: var(--border);
 }
 
 a.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   text-decoration: none;
 }
 
@@ -395,12 +395,13 @@ a.badge {
 }
 
 .btn-primary {
-  background: var(--accent);
-  color: #fff;
+  background: var(--spark);
+  color: var(--on-spark);
+  font-weight: 700;
 }
 
 .btn-primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--spark-hover);
 }
 
 .btn-ghost {
@@ -703,7 +704,7 @@ a.badge {
 }
 
 .hero h2 {
-  font-size: 32px;
+  font-size: 40px;
   line-height: 1.2;
 }
 
@@ -720,13 +721,14 @@ a.badge {
 
 .hero-band h2 {
   color: #fff;
-  font-size: 32px;
+  font-size: 44px;
   line-height: 1.2;
   margin: 0 0 6px;
 }
 
 .hero-band p {
   color: #9fc4c0;
+  font-weight: 300;
   margin: 0;
 }
 

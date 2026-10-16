@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, NavLink, Route, Routes } from "react-router-dom";
+import { motion } from "motion/react";
 import {
   deleteCurrentUser,
   getCurrentUser,
@@ -787,6 +788,9 @@ function App() {
           title={`Open ${src.label} to build a search`}
         >
           {src.label}
+          <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <path d="M14 3h7v7M21 3l-9 9M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" />
+          </svg>
         </a>
       ))}
       <span>
@@ -815,35 +819,41 @@ function App() {
   );
 
   return (
-    <main className="app">
-      <header className="header-row">
-        <h1>
-          <Link to="/">PubTracker</Link>
-        </h1>
-        <nav className="nav-links">
-          <NavLink to="/" end>
-            Home
-          </NavLink>
-          <NavLink to="/how-it-works">How it works</NavLink>
-          <NavLink to="/suggest">Suggest a database</NavLink>
-          <NavLink to="/feedback">Feedback</NavLink>
-        </nav>
-        <div className="header-actions">
-          <ThemeToggle />
-          {user ? (
-            <UserMenu
-              user={user}
-              onOpenProfile={() => setIsProfileOpen(true)}
-              onOpenSettings={() => setIsSettingsOpen(true)}
-              onSignOut={() => logout()}
-            />
-          ) : (
-            <button className="btn btn-primary btn-sm" onClick={handleLogin}>
-              Sign in
-            </button>
-          )}
-        </div>
-      </header>
+  <>
+    <header className="header-row">
+      <h1>
+        <Link to="/">PubTracker</Link>
+      </h1>
+      <nav className="nav-links">
+        <NavLink to="/" end>
+          Home
+        </NavLink>
+        <NavLink to="/how-it-works">How it works</NavLink>
+        <NavLink to="/suggest">Suggest a database</NavLink>
+        <NavLink to="/feedback">Feedback</NavLink>
+      </nav>
+      <div className="header-actions">
+        <ThemeToggle />
+        {user ? (
+          <UserMenu
+            user={user}
+            onOpenProfile={() => setIsProfileOpen(true)}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+            onSignOut={() => logout()}
+          />
+        ) : (
+          <button className="btn btn-primary btn-sm" onClick={handleLogin}>
+            Sign in
+          </button>
+        )}
+      </div>
+    </header>
+    <motion.main
+      className="app"
+      initial={{ opacity: 0, y: 12 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, ease: "easeOut" }}
+    >
 
       {error && (
         <p className="alert" role="alert">
@@ -1009,7 +1019,8 @@ function App() {
           onCancel={() => setIsDeleteAccountConfirmOpen(false)}
         />
       )}
-    </main>
+    </motion.main>
+    </>
   );
 }
 
