@@ -35,6 +35,27 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+  # Nightly encrypted dumps of the app and Keycloak databases to R2 (docs/runbooks/backup-restore.md).
+  # Built on the VM (tiny alpine image) because it ships from this repo, not from GHCR.
+  backup:
+    build: ./backup
+    container_name: backup
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      BACKUP_S3_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY_ID:-}
+      BACKUP_S3_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_ACCESS_KEY:-}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      BACKUP_RETENTION: ${BACKUP_RETENTION:-14d}
+      BACKUP_HEARTBEAT_URL: ${BACKUP_HEARTBEAT_URL:-}
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     container_name: keycloak

@@ -11,9 +11,9 @@ HOST=${DEPLOY_HOST:-ssh.pubtracker.org}
 SSH="ssh -i $SSH_KEY -o StrictHostKeyChecking=accept-new -o ProxyCommand=\"cloudflared access ssh --hostname %h\" $DEPLOY_USER@$HOST"
 
 cd "$(dirname "$0")/../docker"
-tar cf - docker-compose.prod.yml caddy/Caddyfile keycloak/realm-export.prod.json postgres-init \
+tar cf - docker-compose.prod.yml caddy/Caddyfile keycloak/realm-export.prod.json postgres-init backup \
   | eval "$SSH" 'mkdir -p ~/pubtracker && tar xf - -C ~/pubtracker'
-eval "$SSH" "cd ~/pubtracker && TAG=$TAG docker compose -f docker-compose.prod.yml pull && TAG=$TAG docker compose -f docker-compose.prod.yml up -d --remove-orphans"
+eval "$SSH" "cd ~/pubtracker && TAG=$TAG docker compose -f docker-compose.prod.yml pull && TAG=$TAG docker compose -f docker-compose.prod.yml up -d --build --remove-orphans"
 
 for i in $(seq 1 30); do
   curl -fsS "$PUBLIC_ORIGIN/api/health" && echo && exit 0
