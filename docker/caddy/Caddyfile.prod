@@ -1,11 +1,27 @@
 # Production entrypoint (docker-compose.prod.yml). Same routes as Caddyfile, plus a refusal of the
-# Keycloak admin console and master realm: admin work goes through an SSH tunnel instead.
+# Keycloak admin console and master realm (admin work goes through an SSH tunnel), and security headers.
+{
+	servers {
+		# cloudflared reaches Caddy from a private address; trust its X-Forwarded-* (the client IP and
+		# https scheme set by Cloudflare) and pass them on to the api and Keycloak.
+		trusted_proxies static private_ranges
+	}
+}
+
 {$SITE_ADDRESS::80} {
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		# Default only: Keycloak sets a stricter policy (no-referrer) on its login pages.
+		?Referrer-Policy "strict-origin-when-cross-origin"
+	}
+
 	@keycloak_admin path /auth/admin /auth/admin/* /auth/realms/master /auth/realms/master/*
 	handle @keycloak_admin {
 		respond 404
 	}
 
+	# Keycloak's login pages set their own Content-Security-Policy; ours would intersect with it.
 	handle /auth/* {
 		reverse_proxy keycloak:8080
 	}
@@ -14,7 +30,10 @@
 		reverse_proxy api:8080
 	}
 
+	# The SPA is same-origin for scripts, API calls and the Keycloak login redirect (a navigation, not a
+	# fetch). Inline styles are allowed because React sets style attributes.
 	handle {
+		header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'"
 		reverse_proxy web:80
 	}
 }

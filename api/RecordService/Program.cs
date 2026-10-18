@@ -34,6 +34,21 @@ if (string.IsNullOrEmpty(connectionString))
 builder.Services.AddDbContext<RecordService.DataAccess.PubTrackerDbContext>(options =>
     options.UseNpgsql(connectionString));
 
+// The API only ever sits behind Caddy (Cloudflare tunnel -> Caddy -> api), so the TCP peer is always the proxy
+// and the real client address / scheme arrive in X-Forwarded-*. Trust them only from private addresses (the
+// Docker network); the API port is not published, and a public peer's headers are ignored.
+builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+        | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+    foreach (var network in new[] { "127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16" })
+        options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+    // X-Forwarded-For reads "client, cloudflared" by the time it reaches the api (Caddy appends its peer).
+    options.ForwardLimit = 2;
+});
+
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
 {
     // [ApiController] rejects invalid input before the action runs; answer with the same
@@ -335,6 +350,22 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseForwardedHeaders();
+
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    finally
+    {
+        if (!context.Request.Path.Equals("/api/health", StringComparison.OrdinalIgnoreCase))
+            app.Logger.LogInformation("{ClientIp} {Method} {Path} -> {StatusCode}",
+                context.Connection.RemoteIpAddress, context.Request.Method, context.Request.Path, context.Response.StatusCode);
+    }
+});
 
 app.UseHttpsRedirection();
 

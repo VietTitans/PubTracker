@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 NET=ptb-h-net
 fail() { echo "FAIL: $*" >&2; exit 1; }
 cleanup() {
-  docker rm -f ptb-h-hb ptb-h-proxy ptb-h-api ptb-h-api404 ptb-h-web ptb-h-kc ptb-h-db >/dev/null 2>&1 || true
+  docker rm -f ptb-h-hb ptb-h-proxy ptb-h-stub ptb-h-api ptb-h-api404 ptb-h-web ptb-h-kc ptb-h-db >/dev/null 2>&1 || true
   docker network rm $NET >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -55,15 +55,39 @@ realm_jq '.clients[] | select(.clientId=="pubtracker-api-admin") | .description'
 [ "$(jq_ -r '.services.keycloak.ports[0]' <<<"$COMPOSE_JSON" | grep -c '127.0.0.1')" = 1 ] || fail "keycloak must publish only on the VM loopback"
 [ "$(jq_ -r '.services.keycloak.environment.KC_HOSTNAME_ADMIN' <<<"$COMPOSE_JSON")" != "null" ] || fail "keycloak needs KC_HOSTNAME_ADMIN for the tunnel"
 
-# Caddy: a blocked path answers 404 itself; a proxied one reaches the (absent) upstream and gets 502.
+# Caddy in front of one stub that echoes the request headers as its body, reachable as web, api and keycloak.
 docker network create $NET >/dev/null
+docker run -d --name ptb-h-stub --network $NET --network-alias web --network-alias api --network-alias keycloak python:3-alpine python -u -c '
+import threading
+from http.server import BaseHTTPRequestHandler, HTTPServer
+class H(BaseHTTPRequestHandler):
+    def do_GET(self):
+        body = str(self.headers).encode()
+        self.send_response(200); self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+for port in (80, 8080):
+    threading.Thread(target=HTTPServer(("", port), H).serve_forever, daemon=True).start()
+threading.Event().wait()' >/dev/null
 docker run -d --name ptb-h-proxy --network $NET -v "$PWD/caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro" caddy:2-alpine >/dev/null
-proxy_status() { docker exec ptb-h-proxy wget -S -q -O /dev/null "http://127.0.0.1:80$1" 2>&1 | awk '/^ *HTTP\//{print $2}' | tail -1; }
-sleep 3 # Caddy answers instantly once up
+# Prints the response headers, a blank line, then the body.
+proxy_get() { docker run --rm --network $NET curlimages/curl -s -i --max-time 5 "${@:2}" "http://ptb-h-proxy:80$1" || true; }
+wait_for 20 docker exec ptb-h-proxy wget -q -O /dev/null http://127.0.0.1:80/ || fail "caddy never served the stub web upstream"
+status_of() { proxy_get "$@" | awk '/^ *HTTP\//{print $2}' | tail -1; }
 for blocked in /auth/admin/ /auth/admin/master/console/ /auth/admin/realms /auth/realms/master /auth/realms/master/protocol/openid-connect/auth; do
-  [ "$(proxy_status $blocked)" = 404 ] || fail "$blocked must be refused by the proxy"
+  [ "$(status_of $blocked)" = 404 ] || fail "$blocked must be refused by the proxy"
 done
-[ "$(proxy_status /auth/realms/science-alerts-saas)" = 502 ] || fail "the app realm must still be proxied to keycloak"
+[ "$(status_of /auth/realms/science-alerts-saas)" = 200 ] || fail "the app realm must still be proxied to keycloak"
+for path in / /api/health /auth/realms/science-alerts-saas /auth/admin/; do
+  headers=$(proxy_get $path | tr 'A-Z' 'a-z')
+  for h in 'strict-transport-security: max-age=' 'x-content-type-options: nosniff' 'referrer-policy: '; do
+    grep -q "$h" <<<"$headers" || fail "$path is missing the header '$h'"
+  done
+done
+proxy_get / | grep -qi "content-security-policy: default-src 'self'" || fail "the SPA must be served with a CSP"
+kc_page=$(proxy_get /auth/realms/science-alerts-saas); grep -q ' 200 ' <<<"$kc_page" || fail "keycloak stub page not served"
+grep -qi "content-security-policy" <<<"$kc_page" && fail "keycloak pages must keep their own CSP, not ours"
+# The client address set by Cloudflare/cloudflared reaches the api: Caddy trusts private peers.
+proxy_get /api/Users/me --header 'X-Forwarded-For: 203.0.113.9' --header 'X-Forwarded-Proto: https' | grep -i '^x-forwarded-for:' | grep -q '^X-Forwarded-For: 203.0.113.9'   || fail "the api must receive the client address from X-Forwarded-For"
+proxy_get /api/Users/me --header 'X-Forwarded-Proto: https' | grep -qi '^x-forwarded-proto: https' || fail "the api must receive X-Forwarded-Proto: https"
 
 echo "== disk alert pings success under the threshold and /fail at or over it =="
 docker run -d --name ptb-h-hb --network $NET python:3-alpine \
