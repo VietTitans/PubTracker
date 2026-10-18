@@ -22,7 +22,7 @@ services:
     ports:
       - "127.0.0.1:80:80"
     volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
     depends_on:
       web:
         condition: service_healthy
@@ -91,12 +91,22 @@ services:
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME: ${PUBLIC_ORIGIN}/auth
       KC_PROXY_HEADERS: xforwarded
+      # The admin console is not served on the public hostname (caddy/Caddyfile.prod refuses it). It
+      # is reached through an SSH tunnel to the loopback port below (docs/runbooks/keycloak-admin.md).
+      KC_HOSTNAME_ADMIN: http://localhost:8080/auth
       KC_HTTP_RELATIVE_PATH: /auth
       # Serves /auth/health/* (it follows KC_HTTP_RELATIVE_PATH) on the management port 9000, which is
       # not published. Used by the healthcheck below.
       KC_HEALTH_ENABLED: "true"
       # Substituted into realm-export.prod.json when the realm is first imported.
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
+      # Verification and password-reset mail goes through Brevo SMTP (not the API key the app uses).
+      KEYCLOAK_SMTP_USER: ${KEYCLOAK_SMTP_USER:?set the Brevo SMTP login in .env}
+      KEYCLOAK_SMTP_PASSWORD: ${KEYCLOAK_SMTP_PASSWORD:?set the Brevo SMTP key in .env}
+      KEYCLOAK_SMTP_FROM: ${EMAIL_FROM_ADDRESS}
+      KEYCLOAK_SMTP_FROM_NAME: ${EMAIL_FROM_NAME:-PubTracker}
+    ports:
+      - "127.0.0.1:8080:8080"
     volumes:
       - ./keycloak/realm-export.prod.json:/opt/keycloak/data/import/realm-export.json:ro
     # The image has no curl, so probe the readiness endpoint over a bash socket (from the Keycloak docs).

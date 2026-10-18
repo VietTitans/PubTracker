@@ -11,7 +11,7 @@ cd "$(dirname "$0")"
 NET=ptb-h-net
 fail() { echo "FAIL: $*" >&2; exit 1; }
 cleanup() {
-  docker rm -f ptb-h-hb ptb-h-api ptb-h-api404 ptb-h-web ptb-h-kc ptb-h-db >/dev/null 2>&1 || true
+  docker rm -f ptb-h-hb ptb-h-proxy ptb-h-api ptb-h-api404 ptb-h-web ptb-h-kc ptb-h-db >/dev/null 2>&1 || true
   docker network rm $NET >/dev/null 2>&1 || true
 }
 trap cleanup EXIT
@@ -23,7 +23,7 @@ jq_() { docker run --rm -i ptb-h-jq jq "$@"; }
 wait_for() { local secs=$1; shift; for _ in $(seq "$secs"); do "$@" >/dev/null 2>&1 && return 0; sleep 1; done; return 1; }
 
 COMPOSE_JSON=$(GHCR_OWNER=x TAG=1 PUBLIC_ORIGIN=https://x POSTGRES_DB=d POSTGRES_USER=u POSTGRES_PASSWORD=p \
-  KEYCLOAK_ADMIN_PASSWORD=k KEYCLOAK_ADMIN_CLIENT_SECRET=s EMAIL_API_KEY=e EMAIL_FROM_ADDRESS=f@x.org \
+  KEYCLOAK_ADMIN_PASSWORD=k KEYCLOAK_SMTP_USER=u KEYCLOAK_SMTP_PASSWORD=p KEYCLOAK_ADMIN_CLIENT_SECRET=s EMAIL_API_KEY=e EMAIL_FROM_ADDRESS=f@x.org \
   docker compose -f docker-compose.prod.yml config --format json 2>/dev/null)
 
 echo "== compose wiring =="
@@ -41,8 +41,31 @@ offenders=$(jq_ -r '. as $c | .services | to_entries[] | .key as $svc | (.value.
 [ "$(jq_ -r '.services.api.environment.Sources__Pedro__Enabled' <<<"$COMPOSE_JSON")" = "false" ] \
   || fail "PEDro must be pinned off in the api environment"
 
-echo "== disk alert pings success under the threshold and /fail at or over it =="
+echo "== keycloak hardening: realm file and admin-console exposure =="
+REALM=keycloak/realm-export.prod.json
+realm_jq() { jq_ -r "$1" < $REALM; }
+[ "$(realm_jq '[.clients[].clientId] as $c | [.users[].serviceAccountClientId // empty | select(IN($c[]) | not)] | length')" = 0 ]   || fail "service-account user names a client that is not defined in the realm"
+[ "$(realm_jq '.users[] | select(.serviceAccountClientId == "pubtracker-api-admin").serviceAccountClientId')" = "pubtracker-api-admin" ] || fail "service-account user must be attached to pubtracker-api-admin"
+[ "$(realm_jq '.users[] | select(.serviceAccountClientId == "pubtracker-api-admin").username')" = "service-account-pubtracker-api-admin" ] || fail "service-account username must be service-account-<clientId>"
+[ "$(realm_jq '.users[] | select(.serviceAccountClientId == "pubtracker-api-admin").clientRoles["realm-management"] | sort | join(",")')" = "manage-users,view-users" ] || fail "service account lacks the user-management roles"
+[ "$(realm_jq '.verifyEmail')" = "true" ] || fail "email verification must be required"
+[ "$(realm_jq '.bruteForceProtected')" = "true" ] || fail "brute-force protection must be enabled"
+[ "$(realm_jq '.smtpServer.host')" = "smtp-relay.brevo.com" ] || fail "realm SMTP must point at Brevo"
+realm_jq '.clients[] | select(.clientId=="pubtracker-api-admin") | .description' | grep -qi "dev secret" && fail "stale 'Dev secret' description"
+[ "$(jq_ -r '.services.keycloak.ports[0]' <<<"$COMPOSE_JSON" | grep -c '127.0.0.1')" = 1 ] || fail "keycloak must publish only on the VM loopback"
+[ "$(jq_ -r '.services.keycloak.environment.KC_HOSTNAME_ADMIN' <<<"$COMPOSE_JSON")" != "null" ] || fail "keycloak needs KC_HOSTNAME_ADMIN for the tunnel"
+
+# Caddy: a blocked path answers 404 itself; a proxied one reaches the (absent) upstream and gets 502.
 docker network create $NET >/dev/null
+docker run -d --name ptb-h-proxy --network $NET -v "$PWD/caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro" caddy:2-alpine >/dev/null
+proxy_status() { docker exec ptb-h-proxy wget -S -q -O /dev/null "http://127.0.0.1:80$1" 2>&1 | awk '/^ *HTTP\//{print $2}' | tail -1; }
+sleep 3 # Caddy answers instantly once up
+for blocked in /auth/admin/ /auth/admin/master/console/ /auth/admin/realms /auth/realms/master /auth/realms/master/protocol/openid-connect/auth; do
+  [ "$(proxy_status $blocked)" = 404 ] || fail "$blocked must be refused by the proxy"
+done
+[ "$(proxy_status /auth/realms/science-alerts-saas)" = 502 ] || fail "the app realm must still be proxied to keycloak"
+
+echo "== disk alert pings success under the threshold and /fail at or over it =="
 docker run -d --name ptb-h-hb --network $NET python:3-alpine \
   sh -c 'mkdir -p /srv/ping && echo ok > /srv/ping/index.html && echo ok > /srv/ping/fail && cd /srv && python -u -m http.server 8080' >/dev/null
 printf 'FROM alpine:3.21\nRUN apk add --no-cache curl\nCOPY host/disk-alert.sh /disk-alert.sh\n' \

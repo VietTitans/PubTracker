@@ -7,7 +7,24 @@
   "registrationEmailAsUsername": false,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
-  "verifyEmail": false,
+  "verifyEmail": true,
+  "bruteForceProtected": true,
+  "failureFactor": 5,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "smtpServer": {
+    "host": "smtp-relay.brevo.com",
+    "port": "587",
+    "from": "${KEYCLOAK_SMTP_FROM}",
+    "fromDisplayName": "${KEYCLOAK_SMTP_FROM_NAME}",
+    "auth": "true",
+    "user": "${KEYCLOAK_SMTP_USER}",
+    "password": "${KEYCLOAK_SMTP_PASSWORD}",
+    "starttls": "true",
+    "ssl": "false"
+  },
   "resetPasswordAllowed": true,
   "defaultRole": {
     "name": "default-roles-science-alerts-saas",
@@ -40,10 +57,10 @@
   },
   "users": [
     {
-      "username": "pubtracker-admin",
+      "username": "service-account-pubtracker-api-admin",
       "email": "pubtracker@protonmail.com",
       "enabled": true,
-      "serviceAccountClientId": "pubtracker-admin",
+      "serviceAccountClientId": "pubtracker-api-admin",
       "clientRoles": {
         "realm-management": [
           "view-users",
@@ -103,7 +120,7 @@
     {
       "clientId": "pubtracker-api-admin",
       "name": "PubTracker API (admin)",
-      "description": "Lets the API update users' emails in Keycloak. Dev secret: replace it outside local development.",
+      "description": "Lets the API update users' emails in Keycloak. Its secret comes from KEYCLOAK_ADMIN_CLIENT_SECRET.",
       "enabled": true,
       "publicClient": false,
       "protocol": "openid-connect",

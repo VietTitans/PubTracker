@@ -1,0 +1,20 @@
+# Production entrypoint (docker-compose.prod.yml). Same routes as Caddyfile, plus a refusal of the
+# Keycloak admin console and master realm: admin work goes through an SSH tunnel instead.
+{$SITE_ADDRESS::80} {
+	@keycloak_admin path /auth/admin /auth/admin/* /auth/realms/master /auth/realms/master/*
+	handle @keycloak_admin {
+		respond 404
+	}
+
+	handle /auth/* {
+		reverse_proxy keycloak:8080
+	}
+
+	handle /api/* {
+		reverse_proxy api:8080
+	}
+
+	handle {
+		reverse_proxy web:80
+	}
+}
