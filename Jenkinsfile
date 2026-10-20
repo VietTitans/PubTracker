@@ -96,7 +96,11 @@ pipeline {
                 script {
                     // `npm run build` is `tsc -b && vite build`, so a type error fails the build here
                     // instead of inside the image build. VITE_* are only baked into the images below.
-                    docker.image('node:22-alpine').inside {
+                    // The Node image is read from web/Dockerfile's build stage, so CI and the image
+                    // always use the same Node version.
+                    def nodeImage = sh(script: '''awk '/^FROM node:.* AS build/ {print $2}' web/Dockerfile''', returnStdout: true).trim()
+                    if (!nodeImage) { error 'No "FROM node:... AS build" line found in web/Dockerfile' }
+                    docker.image(nodeImage).inside {
                         sh 'cd web && npm ci && npm run build'
                     }
                 }

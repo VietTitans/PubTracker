@@ -60,6 +60,7 @@ run_deploy 42
 [ "$RC" != 0 ] || fail "unhealthy deploy must fail the build"
 [ "$(running)" = 41 ] || fail "expected rollback to 41, got '$(running)'"
 grep -q 'rolled back to 41' "$WORK/out" || fail "rollback not reported"
+grep -q 'TAG=41 docker compose -f docker-compose.prod.yml pull' "$LOG" || fail "rollback must pull the old images"
 
 echo "== rollback target also unhealthy: still fails"
 BAD_TAGS="42 41"

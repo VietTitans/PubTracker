@@ -5,7 +5,7 @@
 1. Records the tag the `api` container is running now (also written to `~/pubtracker/.previous_tag`).
 2. Takes a database dump with `docker compose run --rm backup backup.sh` (the nightly backup tooling: encrypted, uploaded to R2). If the dump fails, the deploy stops before anything changes. A first deploy has nothing to dump.
 3. Pulls and starts the new tag.
-4. Polls `$PUBLIC_ORIGIN/api/health` for up to 150 seconds. If it never answers, it starts the previous tag again, waits for health, and **still exits non-zero**, so the build is red whichever way the rollback went.
+4. Polls `$PUBLIC_ORIGIN/api/health` for up to 150 seconds. If it never answers, it pulls and starts the previous tag again, waits for health, and **still exits non-zero**, so the build is red whichever way the rollback went.
 
 `deploy/test.sh` checks these steps with a fake VM; it needs no Docker.
 

@@ -57,7 +57,7 @@ if [ -z "$PREV" ]; then
   exit 1
 fi
 echo "rolling back to $PREV" >&2
-remote "$(compose "$PREV" 'up -d --remove-orphans')"
+remote "$(compose "$PREV" pull) && $(compose "$PREV" 'up -d --remove-orphans')"
 if healthy; then
   echo "rolled back to $PREV; failing the build because $TAG was unhealthy" >&2
 else
