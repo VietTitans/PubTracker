@@ -230,3 +230,4 @@ __marimo__/
 /api/test/bin
 /api/test/obj
 .claude/settings.local.json
+docker/.env.prod
