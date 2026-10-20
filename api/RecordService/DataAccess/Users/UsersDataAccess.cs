@@ -8,7 +8,7 @@ public class UsersDataAccess : IUsersDataAccess
 {
     // How long a soft-deleted account can be revived by signing back in before the purge
     // worker (see UserPurgeBackgroundService) hard-deletes it for good.
-    private const int DeletionGracePeriodDays = 14;
+    private const int DeletionGracePeriodDays = 30;
 
     private readonly PubTrackerDbContext _dbContext;
     private readonly IHttpContextAccessor _httpContextAccessor;

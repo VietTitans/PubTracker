@@ -2,7 +2,7 @@
 
 The `backup` service in `docker/docker-compose.prod.yml` dumps the app database and the Keycloak database every night at 03:15 UTC, encrypts each dump with `age`, and uploads it to an EU Cloudflare R2 bucket. Dumps older than 14 days are deleted after a successful run. A heartbeat is pinged only after everything succeeded, so a missing ping is the alert.
 
-Deleted accounts age out of backups with the 14-day retention (see the privacy policy for the combined retention figure).
+Deleted accounts are removed after a 30-day grace period and then age out of backups with the 14-day retention, so their data can persist up to about 44 days in total (see the privacy policy for the combined retention figure).
 
 ## One-time setup
 

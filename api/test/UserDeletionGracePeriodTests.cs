@@ -1,9 +1,12 @@
+using System.Net.Http.Json;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using RecordData;
+using RecordService.BusinessLogic.RecordPollingService;
 using RecordService.BusinessLogic.UsersService;
 using RecordService.DataAccess;
+using RecordService.DTOs.SearchQueryDto;
 
 namespace test;
 
@@ -36,13 +39,13 @@ public class UserDeletionGracePeriodTests : IClassFixture<PubTrackerWebApplicati
         {
             Name = "Regretful User", Username = "regretful", Email = "regretful@example.com"
         });
-        await MarkDeletedAsync(connectionString, withinGraceUser.Id, "sub-within-grace", DateTime.UtcNow.AddDays(-5));
+        await MarkDeletedAsync(connectionString, withinGraceUser.Id, "sub-within-grace", DateTime.UtcNow.AddDays(-20));
 
         var pastGraceUser = await usersDataAccess.CreateUserAsync(new User
         {
             Name = "Too Late User", Username = "too-late", Email = "too-late@example.com"
         });
-        await MarkDeletedAsync(connectionString, pastGraceUser.Id, "sub-past-grace", DateTime.UtcNow.AddDays(-20));
+        await MarkDeletedAsync(connectionString, pastGraceUser.Id, "sub-past-grace", DateTime.UtcNow.AddDays(-40));
         var searchQueryId = await SeedSearchQuerySubscriptionAsync(connectionString, pastGraceUser.Id);
 
         var justDeletedUser = await usersDataAccess.CreateUserAsync(new User
@@ -101,6 +104,56 @@ public class UserDeletionGracePeriodTests : IClassFixture<PubTrackerWebApplicati
 
         Assert.False(reactivated.IsMarkedForDeletion);
         Assert.Null(reactivated.DeletionRequestedAt);
+    }
+
+    [Fact]
+    public async Task UserMarkedForDeletion_GetsNoDigest_AndIsSkippedInPolling_ButGetsTheBacklogAfterSigningBackIn()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var usersDataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
+        var pollingService = scope.ServiceProvider.GetRequiredService<IRecordPollingService>();
+        var connectionString = scope.ServiceProvider.GetRequiredService<IConfiguration>().GetConnectionString("DefaultConnection")!;
+
+        var user = await usersDataAccess.CreateUserAsync(new User
+        {
+            Name = "Leaving User", Username = "leaving-user", Email = "leaving-user@example.com"
+        });
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Debug-User-Id", user.Id.ToString());
+        var createResponse = await client.PostAsJsonAsync("/api/v1/SearchQueries", new CreateSearchQueryDto
+        {
+            TargetUrl = $"{FakeLiteratureSourceProvider.TestUrl}?case=pending-deletion"
+        });
+        createResponse.EnsureSuccessStatusCode();
+        await _factory.SkipBaselinePollAsync();
+
+        await MarkDeletedAsync(connectionString, user.Id, "sub-leaving", DateTime.UtcNow.AddDays(-1));
+        var watermarkBefore = await DigestWatermarkAsync(connectionString, user.Id);
+
+        await pollingService.PollAllSearchQueriesAsync();
+        await _factory.DrainOutboxAsync();
+
+        Assert.DoesNotContain(_factory.EmailSender.SentEmails, e => e.ToEmail == user.Email);
+        Assert.Equal(watermarkBefore, await DigestWatermarkAsync(connectionString, user.Id));
+
+        // Signing back in undoes the deletion; the next poll sends what was held back.
+        await usersDataAccess.GetOrProvisionByKeycloakSubAsync("sub-leaving", user.Email, user.Name, user.Username);
+        await pollingService.PollAllSearchQueriesAsync();
+        await _factory.DrainOutboxAsync();
+
+        var email = Assert.Single(_factory.EmailSender.SentEmails, e => e.ToEmail == user.Email);
+        Assert.Contains("Fake Record 1", email.HtmlBody);
+    }
+
+    private static async Task<DateTime?> DigestWatermarkAsync(string connectionString, int userId)
+    {
+        using var connection = new NpgsqlConnection(connectionString);
+        await connection.OpenAsync();
+        using var command = new NpgsqlCommand(
+            "SELECT last_digest_sent_at FROM user_search_query_digests WHERE user_id = @userId", connection);
+        command.Parameters.AddWithValue("@userId", userId);
+        var value = await command.ExecuteScalarAsync();
+        return value is null or DBNull ? null : (DateTime)value;
     }
 
     private static async Task MarkDeletedAsync(string connectionString, int userId, string? keycloakSub, DateTime deletionRequestedAt)

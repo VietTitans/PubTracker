@@ -529,7 +529,7 @@ function SettingsDialog({
         <div className="danger-zone">
           <p className="danger-zone-title">Delete account</p>
           <p className="modal-message">
-            You have 14 days to recover your account by signing in again. After that, your account and all subscriptions will be permanently deleted.
+            You have 30 days to recover your account by signing in again. After that, your account and all subscriptions will be permanently deleted.
           </p>
           <button className="btn btn-danger-outline" onClick={onRequestDeleteAccount}>
             Delete account
