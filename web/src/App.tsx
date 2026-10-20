@@ -14,6 +14,7 @@ import {
 } from "./api/client";
 import { useAuth } from "./auth/useAuth";
 import { detectSourceLabel } from "./lib/sourceLabel";
+import { PrivacyPage, TermsPage } from "./pages/LegalPages";
 import FeedbackPage from "./pages/FeedbackPage";
 import SuggestPage from "./pages/SuggestPage";
 import "./App.css";
@@ -847,6 +848,8 @@ function App() {
 
       <Routes>
         <Route path="/feedback" element={<FeedbackPage isAuthenticated={isAuthenticated} onLogin={handleLogin} />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
         <Route path="/suggest" element={<SuggestPage isAuthenticated={isAuthenticated} onLogin={handleLogin} />} />
         <Route
           path="*"
@@ -1008,6 +1011,10 @@ function App() {
           onCancel={() => setIsDeleteAccountConfirmOpen(false)}
         />
       )}
+      <footer className="nav-links">
+        <Link to="/privacy">Privacy policy</Link>
+        <Link to="/terms">Terms</Link>
+      </footer>
     </main>
   );
 }

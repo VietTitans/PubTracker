@@ -34,13 +34,15 @@ public class DigestService : IDigestService
         return (subject, BuildCombinedHtmlBody(
             userQueries,
             q => _unsubscribeTokens.SubscriptionUrl(userId, q.SearchQueryId),
-            _unsubscribeTokens.StopAllUrl(userId)));
+            _unsubscribeTokens.StopAllUrl(userId),
+            _unsubscribeTokens.PrivacyUrl));
     }
 
     public static string BuildCombinedHtmlBody(
         IReadOnlyList<PendingUserDigest> pendingQueries,
         Func<PendingUserDigest, string>? subscriptionUnsubscribeUrl = null,
-        string? stopAllUrl = null)
+        string? stopAllUrl = null,
+        string? privacyUrl = null)
     {
         var sb = new StringBuilder();
         foreach (var q in pendingQueries)
@@ -58,6 +60,10 @@ public class DigestService : IDigestService
         if (stopAllUrl != null && pendingQueries.Count > 0)
         {
             sb.Append(DigestMessageFormatter.BuildUnsubscribeLine("Stop all Digests", stopAllUrl));
+        }
+        if (privacyUrl != null && pendingQueries.Count > 0)
+        {
+            sb.Append(DigestMessageFormatter.BuildUnsubscribeLine("Privacy policy", privacyUrl));
         }
         return sb.ToString();
     }

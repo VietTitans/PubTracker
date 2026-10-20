@@ -72,4 +72,23 @@ public class DigestServiceCombinedBuilderTests
 
         Assert.Equal(string.Empty, html);
     }
+
+    [Fact]
+    public void BuildCombinedHtmlBody_WithPrivacyUrl_LinksPrivacyPolicyInFooter()
+    {
+        var pending = new List<PendingUserDigest>
+        {
+            new()
+            {
+                UserId = 1,
+                SearchQueryId = 10,
+                TargetUrl = "https://pubmed.ncbi.nlm.nih.gov/?term=exercise",
+                Records = new List<LiteratureRecord> { MakeRecord("A PubMed exercise trial.", "1") }
+            }
+        };
+
+        var html = DigestService.BuildCombinedHtmlBody(pending, privacyUrl: "https://example.org/privacy");
+
+        Assert.Contains("href=\"https://example.org/privacy\"", html);
+    }
 }

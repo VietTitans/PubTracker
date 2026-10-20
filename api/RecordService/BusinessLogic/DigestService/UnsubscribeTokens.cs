@@ -22,6 +22,8 @@ public class UnsubscribeTokens
         _baseUrl = baseUrl.TrimEnd('/');
     }
 
+    public string PrivacyUrl => $"{_baseUrl}/privacy";
+
     public string StopAllUrl(int userId) => $"{_baseUrl}/api/v1/subscriptions/unsubscribe/{CreateStopAll(userId)}";
 
     public string SubscriptionUrl(int userId, int searchQueryId) => $"{_baseUrl}/api/v1/subscriptions/unsubscribe/{CreateForSubscription(userId, searchQueryId)}";
