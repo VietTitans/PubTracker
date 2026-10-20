@@ -135,6 +135,9 @@ services:
       Email__FromName: ${EMAIL_FROM_NAME:-PubTracker}
       Email__DailySendLimit: ${EMAIL_DAILY_SEND_LIMIT:-250}
       Subscriptions__MaxPerUser: ${SUBSCRIPTIONS_MAX_PER_USER:-20}
+      Sentry__Dsn: ${SENTRY_DSN:-}
+      Heartbeat__PollUrl: ${HEARTBEAT_POLL_URL:-}
+      Heartbeat__OutboxUrl: ${HEARTBEAT_OUTBOX_URL:-}
       Unsubscribe__SigningKey: ${UNSUBSCRIBE_SIGNING_KEY}
       Sources__PubMed__Enabled: ${SOURCES_PUBMED_ENABLED:-}
       # Pinned off: the production image is built without Chromium (INSTALL_PLAYWRIGHT=false), so PEDro

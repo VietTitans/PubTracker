@@ -11,12 +11,15 @@ public class DigestOutboxBackgroundService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<DigestOutboxBackgroundService> _logger;
     private readonly TimeSpan _interval;
+    private readonly HeartbeatPinger? _heartbeat;
 
     public DigestOutboxBackgroundService(
         IServiceScopeFactory scopeFactory,
         ILogger<DigestOutboxBackgroundService> logger,
-        TimeSpan interval)
+        TimeSpan interval,
+        HeartbeatPinger? heartbeat = null)
     {
+        _heartbeat = heartbeat;
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _interval = interval;
@@ -31,10 +34,16 @@ public class DigestOutboxBackgroundService : BackgroundService
             try
             {
                 using var scope = _scopeFactory.CreateScope();
-                var sent = await scope.ServiceProvider.GetRequiredService<IDigestOutboxService>().ProcessDueAsync(stoppingToken);
+                var outbox = scope.ServiceProvider.GetRequiredService<IDigestOutboxService>();
+                var sent = await outbox.ProcessDueAsync(stoppingToken);
                 if (sent > 0)
                 {
                     _logger.LogInformation("Digest outbox: sent {Count} digest(s)", sent);
+                }
+                // A pass whose sends failed (Brevo down, key revoked) does not ping: that silence is the alert.
+                if (_heartbeat != null && outbox.LastPassSendFailures == 0)
+                {
+                    await _heartbeat.PingAsync(stoppingToken);
                 }
             }
             catch (Exception ex) when (!stoppingToken.IsCancellationRequested)

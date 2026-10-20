@@ -12,12 +12,15 @@ public class RecordPollingBackgroundService : BackgroundService
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<RecordPollingBackgroundService> _logger;
     private readonly TimeSpan _pollInterval;
+    private readonly HeartbeatPinger? _heartbeat;
 
     public RecordPollingBackgroundService(
         IServiceScopeFactory scopeFactory,
         ILogger<RecordPollingBackgroundService> logger,
-        TimeSpan pollInterval)
+        TimeSpan pollInterval,
+        HeartbeatPinger? heartbeat = null)
     {
+        _heartbeat = heartbeat;
         _scopeFactory = scopeFactory ?? throw new ArgumentNullException(nameof(scopeFactory));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _pollInterval = pollInterval;
@@ -63,6 +66,10 @@ public class RecordPollingBackgroundService : BackgroundService
                 _logger.LogInformation(
                     "Poll cycle complete: {QueryCount} queries, {NewCount} new records",
                     results.Count, results.Sum(r => r.NewRecordCount));
+                if (_heartbeat != null)
+                {
+                    await _heartbeat.PingAsync(stoppingToken);
+                }
             }
             catch (Exception ex)
             {

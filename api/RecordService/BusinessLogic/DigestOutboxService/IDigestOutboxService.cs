@@ -13,4 +13,7 @@ public interface IDigestOutboxService
     /// <param name="utcNow">Clock override for tests; defaults to the current time.</param>
     /// <returns>Number of rows sent.</returns>
     Task<int> ProcessDueAsync(CancellationToken cancellationToken = default, DateTime? utcNow = null);
+
+    /// <summary>Sends that failed during the last <see cref="ProcessDueAsync"/> call (they are retried or failed).</summary>
+    int LastPassSendFailures { get; }
 }

@@ -10,6 +10,11 @@ public class DigestOutboxService : IDigestOutboxService
     public const int MaxAttempts = 5;
     private const int BatchSize = 20;
     private const int DefaultDailySendLimit = 250;
+    private const int QuotaAlertPercent = 80;
+
+    // The UTC day the quota alert last fired on. Static because this service is scoped (one instance
+    // per worker pass), and the alert must fire once per day, not once per pass.
+    private static DateOnly _quotaAlertedOn;
     private static readonly TimeSpan Lease = TimeSpan.FromMinutes(5);
     private static readonly TimeSpan SentRetention = TimeSpan.FromDays(30);
 
@@ -36,15 +41,20 @@ public class DigestOutboxService : IDigestOutboxService
         _logger = logger;
     }
 
+    public int LastPassSendFailures { get; private set; }
+
     public async Task<int> ProcessDueAsync(CancellationToken cancellationToken = default, DateTime? utcNow = null)
     {
         var now = utcNow ?? DateTime.UtcNow;
         var dailyLimit = _configuration.GetValue("Email:DailySendLimit", DefaultDailySendLimit);
         var sent = 0;
+        LastPassSendFailures = 0;
         while (!cancellationToken.IsCancellationRequested)
         {
             // Counts sent rows, so a restart or a second instance can't reset the day's budget.
-            var remaining = dailyLimit - await _outboxDataAccess.CountSentSinceAsync(now.Date);
+            var sentToday = await _outboxDataAccess.CountSentSinceAsync(now.Date);
+            AlertIfNearLimit(sentToday, dailyLimit, now);
+            var remaining = dailyLimit - sentToday;
             if (remaining <= 0)
             {
                 break;
@@ -69,6 +79,22 @@ public class DigestOutboxService : IDigestOutboxService
         return sent;
     }
 
+    // A logged error is what pages the owner (Sentry alert rule), so Brevo's shared daily quota is
+    // noticed before the limit is hit and Keycloak's own mails start failing.
+    private void AlertIfNearLimit(int sentToday, int dailyLimit, DateTime now)
+    {
+        var today = DateOnly.FromDateTime(now);
+        if (sentToday * 100 < dailyLimit * QuotaAlertPercent || _quotaAlertedOn == today)
+        {
+            return;
+        }
+
+        _quotaAlertedOn = today;
+        _logger.LogError(
+            "Digest sending reached {Sent} of the {Limit} emails allowed per UTC day ({Percent}% alert). The Brevo daily quota is shared with Keycloak's verification and reset emails.",
+            sentToday, dailyLimit, QuotaAlertPercent);
+    }
+
     private async Task<bool> TrySendAsync(DueDigest digest, DateTime now)
     {
         try
@@ -86,6 +112,7 @@ public class DigestOutboxService : IDigestOutboxService
         }
         catch (Exception ex)
         {
+            LastPassSendFailures++;
             _logger.LogWarning(ex, "Digest outbox {OutboxId} send failed (attempt {Attempts}/{MaxAttempts})", digest.Id, digest.Attempts, MaxAttempts);
             try
             {

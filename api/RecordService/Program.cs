@@ -1,3 +1,4 @@
+using RecordService;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
@@ -23,6 +24,34 @@ using RecordService.BusinessLogic.DigestService;
 using RecordService.BusinessLogic.DigestOutboxService;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Error reporting to Sentry (EU region DSN). No Sentry:Dsn = disabled. Personal data is never sent:
+// SendDefaultPii is off, breadcrumbs (they record URLs, some with secrets) are off, and SentryScrubber
+// strips what is left.
+void ConfigureSentry(Sentry.SentryOptions options)
+{
+    options.Dsn = builder.Configuration["Sentry:Dsn"] ?? "";
+    options.Environment = builder.Environment.EnvironmentName;
+    options.SendDefaultPii = false;
+    options.MaxBreadcrumbs = 0;
+    options.SetBeforeSend(SentryScrubber.Scrub);
+}
+
+// CLI: `dotnet RecordService.dll sentry-test` sends one test error to Sentry and exits (production check
+// that reporting works and that the event carries no personal data). It starts the SDK itself, because
+// the web host (which normally does) is never started for a CLI command.
+if (args.Length == 1 && args[0] == "sentry-test")
+{
+    using var sentry = Sentry.SentrySdk.Init(ConfigureSentry);
+    Sentry.SentrySdk.CaptureException(new InvalidOperationException("PubTracker Sentry test error"));
+    await Sentry.SentrySdk.FlushAsync(TimeSpan.FromSeconds(10));
+    Console.WriteLine(Sentry.SentrySdk.IsEnabled
+        ? "Sent a test error to Sentry."
+        : "Sentry is not enabled: set Sentry:Dsn.");
+    return;
+}
+
+builder.WebHost.UseSentry(ConfigureSentry);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
@@ -157,19 +186,29 @@ builder.Services.AddScoped<IDigestOutboxService, DigestOutboxService>();
 builder.Services.AddSingleton(new PollCycleAdvisoryLock(connectionString));
 builder.Services.AddScoped<IRecordPollingService, RecordPollingService>();
 
+// Dead-man's-switch pings (docs/runbooks/observability.md): a worker pings its URL after each successful
+// cycle, at most once per Heartbeat:MinIntervalSeconds. Unset URL = no pings.
+var heartbeatMinInterval = TimeSpan.FromSeconds(builder.Configuration.GetValue("Heartbeat:MinIntervalSeconds", 300));
+HeartbeatPinger CreateHeartbeat(IServiceProvider serviceProvider, string urlSetting) =>
+    new(serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(),
+        serviceProvider.GetRequiredService<IConfiguration>()[urlSetting], heartbeatMinInterval,
+        serviceProvider.GetRequiredService<ILogger<HeartbeatPinger>>());
+
 // Background scheduler: polls every search query for new records on an interval
 var pollIntervalHours = builder.Configuration.GetValue<double?>("Scheduler:PollIntervalHours") ?? 168;
 builder.Services.AddHostedService(serviceProvider => new RecordPollingBackgroundService(
     serviceProvider.GetRequiredService<IServiceScopeFactory>(),
     serviceProvider.GetRequiredService<ILogger<RecordPollingBackgroundService>>(),
-    TimeSpan.FromHours(pollIntervalHours)));
+    TimeSpan.FromHours(pollIntervalHours),
+    CreateHeartbeat(serviceProvider, "Heartbeat:PollUrl")));
 
 // Background worker: sends queued digest emails from the outbox, with retry
 var digestOutboxIntervalSeconds = builder.Configuration.GetValue<double?>("Scheduler:DigestOutboxIntervalSeconds") ?? 30;
 builder.Services.AddHostedService(serviceProvider => new DigestOutboxBackgroundService(
     serviceProvider.GetRequiredService<IServiceScopeFactory>(),
     serviceProvider.GetRequiredService<ILogger<DigestOutboxBackgroundService>>(),
-    TimeSpan.FromSeconds(digestOutboxIntervalSeconds)));
+    TimeSpan.FromSeconds(digestOutboxIntervalSeconds),
+    CreateHeartbeat(serviceProvider, "Heartbeat:OutboxUrl")));
 
 // Background scheduler: purges users past their soft-delete grace period (see
 // UsersDataAccess.DeletionGracePeriodDays)
