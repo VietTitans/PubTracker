@@ -11,7 +11,7 @@
 
 ## What a rollback cannot undo
 
-Rolling back changes the image, not the database. Migrations run when the new `api` starts and are not reversed. This is why every migration must stay compatible with the previous image (see CLAUDE.md): the old image has to keep working against the new schema. If a migration broke that rule, an automatic rollback leaves a running-but-broken old image. Then restore the pre-deploy dump (the "Restore drill" steps in `backup-restore.md`, loaded into production by hand).
+Rolling back changes the image, not the database. Migrations run when the new `api` starts and are not reversed. This is why every migration must stay compatible with the previous image (see CLAUDE.md): the old image has to keep working against the new schema. `MigrationSafetyTests` fails the build for the common ways of breaking it. If a migration broke that rule anyway, an automatic rollback leaves a running-but-broken old image. Then restore the pre-deploy dump (the "Restore drill" steps in `backup-restore.md`, loaded into production by hand).
 
 ## Rolling back by hand, from a laptop
 
