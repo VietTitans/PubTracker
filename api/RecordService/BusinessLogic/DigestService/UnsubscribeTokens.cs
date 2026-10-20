@@ -15,16 +15,16 @@ public class UnsubscribeTokens
     private readonly byte[] _key;
     private readonly string _baseUrl;
 
-    /// <param name="baseUrl">Public origin the API is reachable at; links are {baseUrl}/api/v1/subscribe/unsubscribe/{token}.</param>
+    /// <param name="baseUrl">Public origin the API is reachable at; links are {baseUrl}/api/v1/subscriptions/unsubscribe/{token}.</param>
     public UnsubscribeTokens(string signingKey, string baseUrl)
     {
         _key = Encoding.UTF8.GetBytes(signingKey);
         _baseUrl = baseUrl.TrimEnd('/');
     }
 
-    public string StopAllUrl(int userId) => $"{_baseUrl}/api/v1/subscribe/unsubscribe/{CreateStopAll(userId)}";
+    public string StopAllUrl(int userId) => $"{_baseUrl}/api/v1/subscriptions/unsubscribe/{CreateStopAll(userId)}";
 
-    public string SubscriptionUrl(int userId, int searchQueryId) => $"{_baseUrl}/api/v1/subscribe/unsubscribe/{CreateForSubscription(userId, searchQueryId)}";
+    public string SubscriptionUrl(int userId, int searchQueryId) => $"{_baseUrl}/api/v1/subscriptions/unsubscribe/{CreateForSubscription(userId, searchQueryId)}";
 
     public string CreateStopAll(int userId) => Sign($"u{userId}");
 

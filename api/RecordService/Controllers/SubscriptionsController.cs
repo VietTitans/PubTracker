@@ -18,14 +18,14 @@ namespace RecordService.Controllers;
 [ApiVersion("1.0")]
 [ApiController]
 [Route("api/v{version:apiVersion}/[controller]")]
-public class SubscribeController : ControllerBase
+public class SubscriptionsController : ControllerBase
 {
     private readonly UnsubscribeTokens _tokens;
     private readonly IUsersService _usersService;
     private readonly ISearchQueriesService _searchQueriesService;
-    private readonly ILogger<SubscribeController> _logger;
+    private readonly ILogger<SubscriptionsController> _logger;
 
-    public SubscribeController(UnsubscribeTokens tokens, IUsersService usersService, ISearchQueriesService searchQueriesService, ILogger<SubscribeController> logger)
+    public SubscriptionsController(UnsubscribeTokens tokens, IUsersService usersService, ISearchQueriesService searchQueriesService, ILogger<SubscriptionsController> logger)
     {
         _tokens = tokens;
         _usersService = usersService;

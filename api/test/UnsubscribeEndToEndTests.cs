@@ -67,11 +67,11 @@ public class UnsubscribeEndToEndTests : IClassFixture<PubTrackerWebApplicationFa
         var anonymous = _factory.CreateClient();
         var token = Tokens.CreateStopAll(user.Id);
 
-        var get = await anonymous.GetAsync($"/api/v1/subscribe/unsubscribe/{token}");
+        var get = await anonymous.GetAsync($"/api/v1/subscriptions/unsubscribe/{token}");
         Assert.Equal(HttpStatusCode.OK, get.StatusCode);
         Assert.False((await client.GetFromJsonAsync<UserResponseDto>("/api/v1/Users/me"))!.DigestsStopped); // GET must not change state
 
-        var post = await anonymous.PostAsync($"/api/v1/subscribe/unsubscribe/{token}", new FormUrlEncodedContent([new("List-Unsubscribe", "One-Click")]));
+        var post = await anonymous.PostAsync($"/api/v1/subscriptions/unsubscribe/{token}", new FormUrlEncodedContent([new("List-Unsubscribe", "One-Click")]));
         Assert.Equal(HttpStatusCode.OK, post.StatusCode);
         Assert.True((await client.GetFromJsonAsync<UserResponseDto>("/api/v1/Users/me"))!.DigestsStopped);
 
@@ -90,7 +90,7 @@ public class UnsubscribeEndToEndTests : IClassFixture<PubTrackerWebApplicationFa
     {
         var (user, queryId, client) = await CreateSubscribedUserAsync("unsub-one", FakeLiteratureSourceProvider.TestUrl + "&unsub=one");
 
-        var post = await _factory.CreateClient().PostAsync($"/api/v1/subscribe/unsubscribe/{Tokens.CreateForSubscription(user.Id, queryId)}", null);
+        var post = await _factory.CreateClient().PostAsync($"/api/v1/subscriptions/unsubscribe/{Tokens.CreateForSubscription(user.Id, queryId)}", null);
         Assert.Equal(HttpStatusCode.OK, post.StatusCode);
 
         Assert.False((await client.GetFromJsonAsync<UserResponseDto>("/api/v1/Users/me"))!.DigestsStopped);
@@ -105,8 +105,8 @@ public class UnsubscribeEndToEndTests : IClassFixture<PubTrackerWebApplicationFa
         var anonymous = _factory.CreateClient();
         var forged = Tokens.CreateStopAll(user.Id + 1000).Split('.')[0] + "." + Tokens.CreateStopAll(user.Id).Split('.')[1];
 
-        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsync($"/api/v1/subscribe/unsubscribe/{forged}", null)).StatusCode);
-        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.GetAsync("/api/v1/subscribe/unsubscribe/nonsense")).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.PostAsync($"/api/v1/subscriptions/unsubscribe/{forged}", null)).StatusCode);
+        Assert.Equal(HttpStatusCode.BadRequest, (await anonymous.GetAsync("/api/v1/subscriptions/unsubscribe/nonsense")).StatusCode);
         Assert.False((await client.GetFromJsonAsync<UserResponseDto>("/api/v1/Users/me"))!.DigestsStopped);
     }
 
