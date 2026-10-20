@@ -145,6 +145,35 @@ public class UserDeletionGracePeriodTests : IClassFixture<PubTrackerWebApplicati
         Assert.Contains("Fake Record 1", email.HtmlBody);
     }
 
+    [Fact]
+    public async Task UserMarkedForDeletionBeforeFirstPoll_DoesNotGetTheBaselineBacklogAfterSigningBackIn()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var usersDataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
+        var pollingService = scope.ServiceProvider.GetRequiredService<IRecordPollingService>();
+        var connectionString = scope.ServiceProvider.GetRequiredService<IConfiguration>().GetConnectionString("DefaultConnection")!;
+
+        var user = await usersDataAccess.CreateUserAsync(new User
+        {
+            Name = "Early Leaver", Username = "early-leaver", Email = "early-leaver@example.com"
+        });
+        var client = _factory.CreateClient();
+        client.DefaultRequestHeaders.Add("X-Debug-User-Id", user.Id.ToString());
+        (await client.PostAsJsonAsync("/api/v1/SearchQueries", new CreateSearchQueryDto
+        {
+            TargetUrl = $"{FakeLiteratureSourceProvider.TestUrl}?case=deleted-before-baseline"
+        })).EnsureSuccessStatusCode();
+        await MarkDeletedAsync(connectionString, user.Id, "sub-early-leaver", DateTime.UtcNow.AddDays(-1));
+
+        // First poll of the query is the baseline: its backlog is not news, even to a returning user.
+        await pollingService.PollAllSearchQueriesAsync();
+        await usersDataAccess.GetOrProvisionByKeycloakSubAsync("sub-early-leaver", user.Email, user.Name, user.Username);
+        await pollingService.PollAllSearchQueriesAsync();
+        await _factory.DrainOutboxAsync();
+
+        Assert.DoesNotContain(_factory.EmailSender.SentEmails, e => e.ToEmail == user.Email);
+    }
+
     private static async Task<DateTime?> DigestWatermarkAsync(string connectionString, int userId)
     {
         using var connection = new NpgsqlConnection(connectionString);

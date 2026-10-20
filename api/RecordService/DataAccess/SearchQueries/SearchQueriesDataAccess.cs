@@ -196,7 +196,7 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
         return rowsAffected > 0;
     }
 
-    public async Task<List<(int UserId, DateTime? LastDigestSentAt)>> GetUserDigestWatermarksForQueryAsync(int searchQueryId)
+    public async Task<List<(int UserId, DateTime? LastDigestSentAt)>> GetUserDigestWatermarksForQueryAsync(int searchQueryId, bool includePendingDeletion = false)
     {
         var rows = await (
             from usq in _dbContext.UserSearchQueries
@@ -204,7 +204,7 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
             // Users pending deletion are skipped: their watermark stays put, so signing back in
             // within the grace period still delivers what was held back.
             join u in _dbContext.Users on usq.UserId equals u.Id
-            where !u.IsMarkedForDeletion
+            where includePendingDeletion || !u.IsMarkedForDeletion
             join d in _dbContext.UserSearchQueryDigests
                 on new { usq.UserId, SearchQueryId = searchQueryId } equals new { d.UserId, d.SearchQueryId }
                 into digestJoin
