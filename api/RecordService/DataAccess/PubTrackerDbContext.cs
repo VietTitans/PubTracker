@@ -113,6 +113,7 @@ public class PubTrackerDbContext : DbContext
             entity.Property(e => e.ClaimsJson).HasColumnName("claims").HasColumnType("jsonb");
             entity.Property(e => e.Attempts).HasColumnName("attempts").HasDefaultValue(0);
             entity.Property(e => e.NextAttemptAt).HasColumnName("next_attempt_at");
+            entity.Property(e => e.IsSkipped).HasColumnName("is_skipped").HasDefaultValue(false);
             entity.Property(e => e.SentAt).HasColumnName("sent_at");
             entity.Property(e => e.FailedAt).HasColumnName("failed_at");
             entity.Property(e => e.LastError).HasColumnName("last_error");

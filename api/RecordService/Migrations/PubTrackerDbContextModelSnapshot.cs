@@ -116,6 +116,12 @@ namespace RecordService.Migrations
                         .HasColumnType("text")
                         .HasColumnName("html_body");
 
+                    b.Property<bool>("IsSkipped")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("is_skipped");
+
                     b.Property<string>("LastError")
                         .HasColumnType("text")
                         .HasColumnName("last_error");

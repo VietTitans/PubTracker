@@ -28,7 +28,10 @@ public interface IDigestOutboxDataAccess
     /// </summary>
     Task<List<DueDigest>> LeaseDueAsync(int batchSize, TimeSpan lease, DateTime now);
 
-    /// <summary>Number of rows marked sent at or after <paramref name="since"/> (used for the daily send limit).</summary>
+    /// <summary>Marks the row done without sending (recipient gone or stopped Digests); excluded from <see cref="CountSentSinceAsync"/>.</summary>
+    Task MarkSkippedAsync(int id, DateTime now);
+
+    /// <summary>Number of rows actually sent at or after <paramref name="since"/>, skipped rows excluded (used for the daily send limit).</summary>
     Task<int> CountSentSinceAsync(DateTime since);
 
     Task MarkSentAsync(int id, DateTime now);

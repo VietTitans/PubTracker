@@ -76,7 +76,7 @@ public class DigestOutboxService : IDigestOutboxService
             var user = await _usersDataAccess.GetUserByIdAsync(digest.UserId);
             if (user == null || user.IsMarkedForDeletion || user.DigestsStopped)
             {
-                await _outboxDataAccess.MarkSentAsync(digest.Id, now); // no one to send to; not a failure
+                await _outboxDataAccess.MarkSkippedAsync(digest.Id, now); // no one to send to; not a failure
                 return false;
             }
 

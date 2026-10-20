@@ -95,6 +95,11 @@ builder.Services.AddScoped<IFeedbackDataAccess, FeedbackDataAccess>();
 builder.Services.AddScoped<IDatabaseSuggestionsDataAccess, DatabaseSuggestionsDataAccess>();
 
 // Send Email provider
+if (builder.Configuration.GetValue("Email:DailySendLimit", 250) < 1)
+{
+    throw new Exception("Email:DailySendLimit must be a whole number of at least 1");
+}
+
 var emailApiKey = builder.Configuration["Email:ApiKey"];
 var emailFromAddress = builder.Configuration["Email:FromAddress"];
 var emailFromName = builder.Configuration["Email:FromName"];

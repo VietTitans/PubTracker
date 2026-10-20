@@ -45,6 +45,13 @@ public class DigestOutboxDailyLimitTests : IClassFixture<PubTrackerWebApplicatio
         return user.Id;
     }
 
+    // Tests in this class share one database; start each from an empty day's budget.
+    private async Task ClearSentRowsAsync()
+    {
+        using var scope = _factory.Services.CreateScope();
+        await scope.ServiceProvider.GetRequiredService<PubTrackerDbContext>().DigestOutbox.Where(o => o.SentAt != null).ExecuteDeleteAsync();
+    }
+
     private async Task<int> DrainAsync(DateTime utcNow)
     {
         using var scope = _factory.Services.CreateScope();
@@ -54,6 +61,7 @@ public class DigestOutboxDailyLimitTests : IClassFixture<PubTrackerWebApplicatio
     [Fact]
     public async Task Burst_SendsOnlyDailyLimitToday_AndTheRestAfterUtcMidnight_WithoutConsumingAttempts()
     {
+        await ClearSentRowsAsync();
         var config = _factory.Services.GetRequiredService<IConfiguration>();
         Assert.Null(config["Email:DailySendLimit"]); // default (250) applies unless a test sets it
         config["Email:DailySendLimit"] = "2";
@@ -87,5 +95,41 @@ public class DigestOutboxDailyLimitTests : IClassFixture<PubTrackerWebApplicatio
         {
             config["Email:DailySendLimit"] = null;
         }
+    }
+
+    [Fact]
+    public async Task SkippedRows_DoNotConsumeDailyBudget()
+    {
+        await ClearSentRowsAsync();
+        var config = _factory.Services.GetRequiredService<IConfiguration>();
+        config["Email:DailySendLimit"] = "1";
+        try
+        {
+            var stoppedUserId = await QueueDigestAsync("skip-stopped");
+            await QueueDigestAsync("skip-real");
+
+            // Stopped after the digest was queued: its row is skipped, not sent.
+            using (var scope = _factory.Services.CreateScope())
+            {
+                await scope.ServiceProvider.GetRequiredService<IUsersDataAccess>().SetDigestsStoppedAsync(stoppedUserId, true);
+            }
+
+            Assert.Equal(1, await DrainAsync(DateTime.UtcNow));
+            Assert.Single(_factory.EmailSender.SentEmails, e => e.ToEmail == "skip-real@example.com");
+        }
+        finally
+        {
+            config["Email:DailySendLimit"] = null;
+        }
+    }
+
+    [Theory]
+    [InlineData("0")]
+    [InlineData("-5")]
+    [InlineData("many")]
+    public void InvalidDailySendLimit_FailsStartup(string value)
+    {
+        using var factory = _factory.WithWebHostBuilder(b => b.UseSetting("Email:DailySendLimit", value));
+        Assert.ThrowsAny<Exception>(() => factory.CreateClient());
     }
 }

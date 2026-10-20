@@ -97,7 +97,16 @@ public class DigestOutboxDataAccess : IDigestOutboxDataAccess
 
     public async Task<int> CountSentSinceAsync(DateTime since)
     {
-        return await _dbContext.DigestOutbox.CountAsync(o => o.SentAt >= since);
+        return await _dbContext.DigestOutbox.CountAsync(o => o.SentAt >= since && !o.IsSkipped);
+    }
+
+    public async Task MarkSkippedAsync(int id, DateTime now)
+    {
+        await _dbContext.DigestOutbox
+            .Where(o => o.Id == id)
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(o => o.SentAt, now)
+                .SetProperty(o => o.IsSkipped, true));
     }
 
     public async Task MarkSentAsync(int id, DateTime now)
