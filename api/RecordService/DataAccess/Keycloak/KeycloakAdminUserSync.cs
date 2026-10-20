@@ -7,7 +7,7 @@ using RecordService.Exceptions;
 namespace RecordService.DataAccess.Keycloak;
 
 /// <summary>
-/// Updates a user's email through Keycloak's Admin REST API, authenticated as a service account
+/// Updates a user's email and deletes users through Keycloak's Admin REST API, authenticated as a service account
 /// (client-credentials grant) that holds the realm-management roles view-users and manage-users.
 /// </summary>
 public class KeycloakAdminUserSync : IKeycloakUserSync
@@ -65,6 +65,20 @@ public class KeycloakAdminUserSync : IKeycloakUserSync
             throw new EmailAlreadyInUseException("That email is already used by another account.");
         }
         await EnsureSuccessAsync(putResponse, "update user");
+    }
+
+    public async Task DeleteUserAsync(string keycloakSub)
+    {
+        var token = await GetAdminTokenAsync();
+
+        using var request = new HttpRequestMessage(HttpMethod.Delete, $"{_adminRealmUrl}/users/{Uri.EscapeDataString(keycloakSub)}");
+        request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+        using var response = await _httpClient.SendAsync(request);
+
+        if (response.StatusCode != HttpStatusCode.NotFound)
+        {
+            await EnsureSuccessAsync(response, "delete user");
+        }
     }
 
     private async Task<string> GetAdminTokenAsync()

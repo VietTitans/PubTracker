@@ -225,9 +225,21 @@ public class UsersDataAccess : IUsersDataAccess
                 .SetProperty(u => u.DeletionRequestedAt, deletionTime));
     }
 
-    public async Task<int> PurgeExpiredDeletedUsersAsync()
+    public async Task<List<(int Id, string? KeycloakSub)>> GetUsersDuePurgeAsync()
     {
         var cutoff = DateTime.UtcNow.AddDays(-DeletionGracePeriodDays);
+        var due = await _dbContext.Users
+            .Where(u => (u.IsMarkedForDeletion && u.DeletionRequestedAt < cutoff) || u.InactivityNoticeSentAt < cutoff)
+            .OrderBy(u => u.Id)
+            .Select(u => new { u.Id, u.KeycloakSub })
+            .ToListAsync();
+        return due.Select(u => (u.Id, u.KeycloakSub)).ToList();
+    }
+
+    public async Task<int> PurgeUsersAsync(IReadOnlyList<int> userIds)
+    {
+        var cutoff = DateTime.UtcNow.AddDays(-DeletionGracePeriodDays);
+        var ids = userIds.ToArray();
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
@@ -235,7 +247,7 @@ public class UsersDataAccess : IUsersDataAccess
             $"""
              DELETE FROM user_search_query_digests
              WHERE user_id IN (
-                 SELECT id FROM users WHERE (is_marked_for_deletion = true AND deletion_requested_at < {cutoff}) OR inactivity_notice_sent_at < {cutoff}
+                 SELECT id FROM users WHERE id = ANY({ids}) AND ((is_marked_for_deletion = true AND deletion_requested_at < {cutoff}) OR inactivity_notice_sent_at < {cutoff})
              )
              """);
 
@@ -243,14 +255,15 @@ public class UsersDataAccess : IUsersDataAccess
             $"""
              DELETE FROM user_search_queries
              WHERE user_id IN (
-                 SELECT id FROM users WHERE (is_marked_for_deletion = true AND deletion_requested_at < {cutoff}) OR inactivity_notice_sent_at < {cutoff}
+                 SELECT id FROM users WHERE id = ANY({ids}) AND ((is_marked_for_deletion = true AND deletion_requested_at < {cutoff}) OR inactivity_notice_sent_at < {cutoff})
              )
              """);
 
+        // digest_outbox rows go with the user through their ON DELETE CASCADE.
         var purgedCount = await _dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"""
              DELETE FROM users
-             WHERE (is_marked_for_deletion = true AND deletion_requested_at < {cutoff}) OR inactivity_notice_sent_at < {cutoff}
+             WHERE id = ANY({ids}) AND ((is_marked_for_deletion = true AND deletion_requested_at < {cutoff}) OR inactivity_notice_sent_at < {cutoff})
              """);
 
         await transaction.CommitAsync();

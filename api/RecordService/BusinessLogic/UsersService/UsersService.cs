@@ -99,7 +99,27 @@ public class UsersService : IUsersService
 
     public async Task<int> PurgeExpiredDeletedUsersAsync()
     {
-        var purgedCount = await _dataAccess.PurgeExpiredDeletedUsersAsync();
+        // Keycloak first: it holds the user's email and identity, and a user whose account is still
+        // there must not lose their database row, or a later login would silently re-provision them.
+        // A failure leaves that user in place for the next purge cycle.
+        var deletable = new List<int>();
+        foreach (var (userId, keycloakSub) in await _dataAccess.GetUsersDuePurgeAsync())
+        {
+            try
+            {
+                if (!string.IsNullOrEmpty(keycloakSub))
+                {
+                    await _keycloakSync.DeleteUserAsync(keycloakSub);
+                }
+                deletable.Add(userId);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Could not delete the Keycloak account of user {UserId}; keeping the user to retry on the next purge cycle", userId);
+            }
+        }
+
+        var purgedCount = deletable.Count == 0 ? 0 : await _dataAccess.PurgeUsersAsync(deletable);
         if (purgedCount > 0)
         {
             _logger.LogInformation("Purged {PurgedCount} user(s) past their deletion grace period", purgedCount);

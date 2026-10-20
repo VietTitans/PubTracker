@@ -149,6 +149,8 @@ public class KeycloakEmailSyncTests : IClassFixture<PubTrackerWebApplicationFact
             Calls.Add((keycloakSub, newEmail));
             return Task.CompletedTask;
         }
+
+        public Task DeleteUserAsync(string keycloakSub) => Task.CompletedTask;
     }
 
     private sealed class StubKeycloakHandler : HttpMessageHandler

@@ -331,6 +331,13 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
+if (string.IsNullOrEmpty(keycloakAdminClientSecret))
+{
+    app.Logger.LogWarning(
+        "Keycloak:AdminClientSecret is not set: email changes are not pushed to Keycloak, and the user purge " +
+        "deletes database rows without deleting the Keycloak accounts (their email and identity remain).");
+}
+
 // Apply pending EF Core migrations before anything else touches the database. Runs on every
 // app start, not just first boot, so it's the single place schema changes reach any environment.
 using (var migrationScope = app.Services.CreateScope())

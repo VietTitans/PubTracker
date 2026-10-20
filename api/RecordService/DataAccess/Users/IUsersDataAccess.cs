@@ -26,10 +26,15 @@ public interface IUsersDataAccess
     Task MarkInactivityNoticeSentAsync(int userId);
 
     /// <summary>
-    /// Hard-deletes users whose soft-delete grace period has expired, or who were warned of inactivity
-    /// more than that long ago without signing in (see
-    /// UsersDataAccess.DeletionGracePeriodDays), along with their search query subscriptions.
+    /// Users to purge: soft-delete grace period expired, or warned of inactivity more than that long
+    /// ago without signing in (see UsersDataAccess.DeletionGracePeriodDays).
+    /// </summary>
+    Task<List<(int Id, string? KeycloakSub)>> GetUsersDuePurgeAsync();
+
+    /// <summary>
+    /// Hard-deletes the given users (still re-checked against the purge rule, so one who signed back
+    /// in meanwhile is kept) along with their subscriptions, watermarks and outbox rows.
     /// Returns the number of users purged.
     /// </summary>
-    Task<int> PurgeExpiredDeletedUsersAsync();
+    Task<int> PurgeUsersAsync(IReadOnlyList<int> userIds);
 }
