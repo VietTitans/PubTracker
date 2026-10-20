@@ -135,11 +135,12 @@ builder.Services.AddScoped<IEmailSender>(serviceProvider =>
 var llmBaseUrl = builder.Configuration["Llm:BaseUrl"];
 var llmApiKey = builder.Configuration["Llm:ApiKey"];
 var llmModel = builder.Configuration["Llm:Model"];
+builder.Services.AddLlmHttpClient(LlmHttpClientExtensions.DefaultAttemptTimeout, LlmHttpClientExtensions.DefaultRetryDelay);
 builder.Services.AddScoped<ISummaryGenerator>(serviceProvider =>
     string.IsNullOrEmpty(llmApiKey)
         ? new NullSummaryGenerator()
         : new ChatCompletionsSummaryGenerator(
-            serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(),
+            serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(LlmHttpClientExtensions.HttpClientName),
             llmBaseUrl!, llmApiKey, llmModel!,
             builder.Configuration.GetValue("Llm:SummaryChunkSize", 40),
             builder.Configuration.GetValue("Llm:SummaryAbstractChars", 1000)));
