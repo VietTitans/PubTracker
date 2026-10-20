@@ -9,4 +9,6 @@ public class UserEntity
     public string? KeycloakSub { get; set; }
     public bool IsMarkedForDeletion { get; set; }
     public DateTime? DeletionRequestedAt { get; set; }
+    public DateTime LastActiveAt { get; set; } = DateTime.UtcNow;
+    public DateTime? InactivityNoticeSentAt { get; set; }
 }

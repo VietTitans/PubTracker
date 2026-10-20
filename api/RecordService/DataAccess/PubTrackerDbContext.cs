@@ -37,6 +37,8 @@ public class PubTrackerDbContext : DbContext
             entity.Property(e => e.KeycloakSub).HasColumnName("keycloak_sub");
             entity.Property(e => e.IsMarkedForDeletion).HasColumnName("is_marked_for_deletion").HasDefaultValue(false);
             entity.Property(e => e.DeletionRequestedAt).HasColumnName("deletion_requested_at");
+            entity.Property(e => e.LastActiveAt).HasColumnName("last_active_at").HasDefaultValueSql("now()");
+            entity.Property(e => e.InactivityNoticeSentAt).HasColumnName("inactivity_notice_sent_at");
             entity.HasIndex(e => e.KeycloakSub).IsUnique();
         });
 

@@ -364,6 +364,10 @@ namespace RecordService.Migrations
                         .HasColumnType("character varying(254)")
                         .HasColumnName("email");
 
+                    b.Property<DateTime?>("InactivityNoticeSentAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("inactivity_notice_sent_at");
+
                     b.Property<bool>("IsMarkedForDeletion")
                         .ValueGeneratedOnAdd()
                         .HasColumnType("boolean")
@@ -373,6 +377,12 @@ namespace RecordService.Migrations
                     b.Property<string>("KeycloakSub")
                         .HasColumnType("text")
                         .HasColumnName("keycloak_sub");
+
+                    b.Property<DateTime>("LastActiveAt")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_active_at")
+                        .HasDefaultValueSql("now()");
 
                     b.Property<string>("Name")
                         .IsRequired()

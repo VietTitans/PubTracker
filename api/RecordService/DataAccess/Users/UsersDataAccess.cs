@@ -9,6 +9,8 @@ public class UsersDataAccess : IUsersDataAccess
     // How long a soft-deleted account can be revived by signing back in before the purge
     // worker (see UserPurgeBackgroundService) hard-deletes it for good.
     private const int DeletionGracePeriodDays = 30;
+    // An account nobody has signed in to for this long is warned, then purged after DeletionGracePeriodDays.
+    private const int InactivityYears = 5;
 
     private readonly PubTrackerDbContext _dbContext;
     private readonly IHttpContextAccessor _httpContextAccessor;
@@ -101,6 +103,7 @@ public class UsersDataAccess : IUsersDataAccess
             .FirstOrDefaultAsync();
         if (existing != null)
         {
+            await RecordActivityAsync(existing.Id);
             return await ReactivateIfWithinGraceAsync(existing);
         }
 
@@ -113,6 +116,7 @@ public class UsersDataAccess : IUsersDataAccess
             .ToListAsync();
         if (linkedRows.Count > 0)
         {
+            await RecordActivityAsync(linkedRows[0]);
             return await ReactivateIfWithinGraceAsync(await GetUserByIdAsync(linkedRows[0]));
         }
 
@@ -128,6 +132,37 @@ public class UsersDataAccess : IUsersDataAccess
             IsMarkedForDeletion = entity.IsMarkedForDeletion,
             DeletionRequestedAt = entity.DeletionRequestedAt
         };
+    }
+
+    // Every authenticated request lands here, so the write is throttled to once a day; it also
+    // cancels a pending inactivity warning (the user came back).
+    private async Task RecordActivityAsync(int userId)
+    {
+        var now = DateTime.UtcNow;
+        var staleBefore = now.AddDays(-1);
+        await _dbContext.Users
+            .Where(u => u.Id == userId && (u.LastActiveAt < staleBefore || u.InactivityNoticeSentAt != null))
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(u => u.LastActiveAt, now)
+                .SetProperty(u => u.InactivityNoticeSentAt, (DateTime?)null));
+    }
+
+    public async Task<List<User>> GetUsersDueInactivityNoticeAsync()
+    {
+        var cutoff = DateTime.UtcNow.AddYears(-InactivityYears);
+        return await _dbContext.Users
+            .Where(u => !u.IsMarkedForDeletion && u.InactivityNoticeSentAt == null && u.LastActiveAt < cutoff)
+            .OrderBy(u => u.Id)
+            .Select(ToUser)
+            .ToListAsync();
+    }
+
+    public async Task MarkInactivityNoticeSentAsync(int userId)
+    {
+        var now = DateTime.UtcNow;
+        await _dbContext.Users
+            .Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.InactivityNoticeSentAt, now));
     }
 
     // Signing back in within the grace period undoes the soft delete; after it the account stays
@@ -191,7 +226,7 @@ public class UsersDataAccess : IUsersDataAccess
             $"""
              DELETE FROM user_search_query_digests
              WHERE user_id IN (
-                 SELECT id FROM users WHERE is_marked_for_deletion = true AND deletion_requested_at < {cutoff}
+                 SELECT id FROM users WHERE (is_marked_for_deletion = true AND deletion_requested_at < {cutoff}) OR inactivity_notice_sent_at < {cutoff}
              )
              """);
 
@@ -199,14 +234,14 @@ public class UsersDataAccess : IUsersDataAccess
             $"""
              DELETE FROM user_search_queries
              WHERE user_id IN (
-                 SELECT id FROM users WHERE is_marked_for_deletion = true AND deletion_requested_at < {cutoff}
+                 SELECT id FROM users WHERE (is_marked_for_deletion = true AND deletion_requested_at < {cutoff}) OR inactivity_notice_sent_at < {cutoff}
              )
              """);
 
         var purgedCount = await _dbContext.Database.ExecuteSqlInterpolatedAsync(
             $"""
              DELETE FROM users
-             WHERE is_marked_for_deletion = true AND deletion_requested_at < {cutoff}
+             WHERE (is_marked_for_deletion = true AND deletion_requested_at < {cutoff}) OR inactivity_notice_sent_at < {cutoff}
              """);
 
         await transaction.CommitAsync();
