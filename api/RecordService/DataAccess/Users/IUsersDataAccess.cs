@@ -21,8 +21,13 @@ public interface IUsersDataAccess
     Task SetDigestsStoppedAsync(int userId, bool stopped);
     Task SoftDeleteUserAsync(int userId);
 
+    /// <summary>Users inactive for 5 years who have not been warned yet (and are not already being deleted).</summary>
+    Task<List<User>> GetUsersDueInactivityNoticeAsync();
+    Task MarkInactivityNoticeSentAsync(int userId);
+
     /// <summary>
-    /// Hard-deletes users whose soft-delete grace period has expired (see
+    /// Hard-deletes users whose soft-delete grace period has expired, or who were warned of inactivity
+    /// more than that long ago without signing in (see
     /// UsersDataAccess.DeletionGracePeriodDays), along with their search query subscriptions.
     /// Returns the number of users purged.
     /// </summary>

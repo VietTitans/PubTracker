@@ -3,7 +3,8 @@ using RecordService.BusinessLogic.UsersService;
 namespace RecordService.Workers;
 
 /// <summary>
-/// Periodically hard-deletes users whose soft-delete grace period has expired (see
+/// Periodically hard-deletes users whose soft-delete (or inactivity-warning) grace period has expired, and
+/// warns users inactive for 5 years (see
 /// UsersDataAccess.DeletionGracePeriodDays). Runs a cycle immediately at startup, then again
 /// every <see cref="_purgeInterval"/>.
 /// </summary>
@@ -34,6 +35,7 @@ public class UserPurgeBackgroundService : BackgroundService
                 using var scope = _scopeFactory.CreateScope();
                 var usersService = scope.ServiceProvider.GetRequiredService<IUsersService>();
                 await usersService.PurgeExpiredDeletedUsersAsync();
+                await usersService.SendInactivityNoticesAsync();
             }
             catch (Exception ex)
             {

@@ -5,23 +5,36 @@ name: pubtracker
 # Run from this directory next to a hand-made `.env` (see .env.prod.example):
 #   TAG=<build number> docker compose -f docker-compose.prod.yml pull
 #   TAG=<build number> docker compose -f docker-compose.prod.yml up -d
+
+# Every service uses this, so no container log can fill the disk (docker/test-hygiene.sh checks it).
+x-logging: &default-logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
 services:
   proxy:
     image: caddy:2-alpine
     container_name: caddy
     restart: unless-stopped
+    logging: *default-logging
     ports:
       - "127.0.0.1:80:80"
     volumes:
-      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/Caddyfile.prod:/etc/caddy/Caddyfile:ro
     depends_on:
-      - web
-      - api
-      - keycloak
+      web:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+      keycloak:
+        condition: service_healthy
   db:
     image: postgres:16-alpine
     container_name: postgres_db
     restart: unless-stopped
+    logging: *default-logging
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
       POSTGRES_USER: ${POSTGRES_USER}
@@ -35,10 +48,33 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+  # Nightly encrypted dumps of the app and Keycloak databases to R2 (docs/runbooks/backup-restore.md).
+  # Built on the VM (tiny alpine image) because it ships from this repo, not from GHCR.
+  backup:
+    build: ./backup
+    container_name: backup
+    restart: unless-stopped
+    logging: *default-logging
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PGHOST: db
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      BACKUP_AGE_RECIPIENT: ${BACKUP_AGE_RECIPIENT:-}
+      BACKUP_S3_ENDPOINT: ${BACKUP_S3_ENDPOINT:-}
+      BACKUP_S3_ACCESS_KEY_ID: ${BACKUP_S3_ACCESS_KEY_ID:-}
+      BACKUP_S3_SECRET_ACCESS_KEY: ${BACKUP_S3_SECRET_ACCESS_KEY:-}
+      BACKUP_S3_BUCKET: ${BACKUP_S3_BUCKET:-}
+      BACKUP_RETENTION: ${BACKUP_RETENTION:-14d}
+      BACKUP_HEARTBEAT_URL: ${BACKUP_HEARTBEAT_URL:-}
   keycloak:
     image: quay.io/keycloak/keycloak:26.0
     container_name: keycloak
     restart: unless-stopped
+    logging: *default-logging
     command: start --import-realm
     depends_on:
       db:
@@ -55,20 +91,41 @@ services:
       KC_HTTP_ENABLED: "true"
       KC_HOSTNAME: ${PUBLIC_ORIGIN}/auth
       KC_PROXY_HEADERS: xforwarded
+      # The admin console is not served on the public hostname (caddy/Caddyfile.prod refuses it). It
+      # is reached through an SSH tunnel to the loopback port below (docs/runbooks/keycloak-admin.md).
+      KC_HOSTNAME_ADMIN: http://localhost:8080/auth
       KC_HTTP_RELATIVE_PATH: /auth
+      # Serves /auth/health/* (it follows KC_HTTP_RELATIVE_PATH) on the management port 9000, which is
+      # not published. Used by the healthcheck below.
+      KC_HEALTH_ENABLED: "true"
       # Substituted into realm-export.prod.json when the realm is first imported.
       KEYCLOAK_ADMIN_CLIENT_SECRET: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
+      # Verification and password-reset mail goes through Brevo SMTP (not the API key the app uses).
+      KEYCLOAK_SMTP_USER: ${KEYCLOAK_SMTP_USER:?set the Brevo SMTP login in .env}
+      KEYCLOAK_SMTP_PASSWORD: ${KEYCLOAK_SMTP_PASSWORD:?set the Brevo SMTP key in .env}
+      KEYCLOAK_SMTP_FROM: ${EMAIL_FROM_ADDRESS}
+      KEYCLOAK_SMTP_FROM_NAME: ${EMAIL_FROM_NAME:-PubTracker}
+    ports:
+      - "127.0.0.1:8080:8080"
     volumes:
       - ./keycloak/realm-export.prod.json:/opt/keycloak/data/import/realm-export.json:ro
+    # The image has no curl, so probe the readiness endpoint over a bash socket (from the Keycloak docs).
+    healthcheck:
+      test: ["CMD", "bash", "-c", "{ printf 'HEAD /auth/health/ready HTTP/1.0\\r\\n\\r\\n' >&0; grep -q 'HTTP/1.0 200'; } 0<>/dev/tcp/localhost/9000"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 90s
   api:
     image: ghcr.io/${GHCR_OWNER}/pubtracker-api:${TAG}
     container_name: api
     restart: unless-stopped
+    logging: *default-logging
     depends_on:
       db:
         condition: service_healthy
       keycloak:
-        condition: service_started
+        condition: service_healthy
     environment:
       ConnectionStrings__DefaultConnection: Host=db;Port=5432;Database=${POSTGRES_DB};Username=${POSTGRES_USER};Password=${POSTGRES_PASSWORD}
       ASPNETCORE_ENVIRONMENT: Production
@@ -78,7 +135,9 @@ services:
       Email__FromName: ${EMAIL_FROM_NAME:-PubTracker}
       Unsubscribe__SigningKey: ${UNSUBSCRIBE_SIGNING_KEY}
       Sources__PubMed__Enabled: ${SOURCES_PUBMED_ENABLED:-}
-      Sources__Pedro__Enabled: ${SOURCES_PEDRO_ENABLED:-}
+      # Pinned off: the production image is built without Chromium (INSTALL_PLAYWRIGHT=false), so PEDro
+      # cannot work here. Not configurable from .env on purpose.
+      Sources__Pedro__Enabled: "false"
       Ncbi__ApiKey: ${NCBI_API_KEY:-}
       Ncbi__ContactEmail: ${NCBI_CONTACT_EMAIL:-}
       Llm__BaseUrl: ${LLM_BASE_URL:-}
@@ -90,12 +149,28 @@ services:
       Keycloak__Audience: science-alerts-api
       Keycloak__AdminClientSecret: ${KEYCLOAK_ADMIN_CLIENT_SECRET}
       Cors__WebAppOrigin: ${PUBLIC_ORIGIN}
+    # The aspnet image has no curl or wget; bash is there. /api/health also checks the database.
+    # start_period covers EF migrations, which run on every start.
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /api/health HTTP/1.0\\r\\n\\r\\n' >&3 && head -n 1 <&3 | grep -q ' 200 '"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 45s
   web:
     image: ghcr.io/${GHCR_OWNER}/pubtracker-web:${TAG}
     container_name: web
     restart: unless-stopped
+    logging: *default-logging
     depends_on:
-      - api
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:80/"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
 
 volumes:
   postgres_data:

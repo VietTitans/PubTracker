@@ -40,7 +40,7 @@ public interface ISearchQueriesDataAccess
     /// Called once per query during the fetch phase so the caller can compute a single floor
     /// timestamp to read records with, then filter per-subscriber in memory.
     /// </summary>
-    Task<List<(int UserId, DateTime? LastDigestSentAt)>> GetUserDigestWatermarksForQueryAsync(int searchQueryId);
+    Task<List<(int UserId, DateTime? LastDigestSentAt)>> GetUserDigestWatermarksForQueryAsync(int searchQueryId, bool includePendingDeletion = false);
 
     /// <summary>
     /// Advances one subscriber's digest watermark for one search query (upsert). A failed send

@@ -186,7 +186,9 @@ public class RecordPollingService : IRecordPollingService
                 // news, and subscribe seeded each watermark to NOW() before these records got
                 // their first_seen_at, so without this the backlog would be emailed as a digest
                 // right after subscribing. Move every watermark past it instead.
-                foreach (var (userId, _) in subscriberWatermarks)
+                // Including users pending deletion: they must not get this backlog as news on returning.
+                var baselineSubscribers = await _searchQueriesDataAccess.GetUserDigestWatermarksForQueryAsync(searchQuery.Id, includePendingDeletion: true);
+                foreach (var (userId, _) in baselineSubscribers)
                 {
                     await _searchQueriesDataAccess.UpdateUserDigestWatermarkAsync(userId, searchQuery.Id, fetchReadAt);
                 }

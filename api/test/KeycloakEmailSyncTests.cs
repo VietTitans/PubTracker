@@ -1,6 +1,7 @@
 using System.Net;
 using System.Text;
 using System.Text.Json.Nodes;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging.Abstractions;
 using RecordData;
@@ -131,7 +132,7 @@ public class KeycloakEmailSyncTests : IClassFixture<PubTrackerWebApplicationFact
         var scope = _factory.Services.CreateScope();
         var dataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
         var sync = new FakeKeycloakUserSync();
-        return (new UsersService(dataAccess, sync, NullLogger<UsersService>.Instance), dataAccess, sync);
+        return (new UsersService(dataAccess, sync, new FakeEmailSender(), new ConfigurationBuilder().Build(), NullLogger<UsersService>.Instance), dataAccess, sync);
     }
 
     private sealed class FakeKeycloakUserSync : IKeycloakUserSync

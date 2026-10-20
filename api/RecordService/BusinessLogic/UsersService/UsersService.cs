@@ -1,5 +1,6 @@
 ﻿using RecordData;
 using RecordService.DataAccess;
+using RecordService.DataAccess.Email;
 using RecordService.DataAccess.Keycloak;
 using RecordService.DTOs.UserDto;
 
@@ -9,10 +10,14 @@ public class UsersService : IUsersService
 {
     private readonly IUsersDataAccess _dataAccess;
     private readonly IKeycloakUserSync _keycloakSync;
+    private readonly IEmailSender _emailSender;
+    private readonly string _webAppOrigin;
     private readonly ILogger<UsersService> _logger;
 
-    public UsersService(IUsersDataAccess dataAccess, IKeycloakUserSync keycloakSync, ILogger<UsersService> logger)
+    public UsersService(IUsersDataAccess dataAccess, IKeycloakUserSync keycloakSync, IEmailSender emailSender, IConfiguration configuration, ILogger<UsersService> logger)
     {
+        _emailSender = emailSender;
+        _webAppOrigin = configuration["Cors:WebAppOrigin"] ?? "http://localhost:5173";
         _dataAccess = dataAccess;
         _keycloakSync = keycloakSync;
         _logger = logger;
@@ -102,4 +107,35 @@ public class UsersService : IUsersService
         return purgedCount;
     }
 
+    public async Task<int> SendInactivityNoticesAsync()
+    {
+        var sent = 0;
+        foreach (var user in await _dataAccess.GetUsersDueInactivityNoticeAsync())
+        {
+            try
+            {
+                await _emailSender.SendAsync(user.Email, "Your PubTracker account will be deleted unless you sign in", BuildInactivityNoticeBody(user));
+                // Recorded only after a successful send, so a failed send is retried on the next cycle.
+                await _dataAccess.MarkInactivityNoticeSentAsync(user.Id);
+                sent++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to send inactivity notice to user {UserId}", user.Id);
+            }
+        }
+        if (sent > 0)
+        {
+            _logger.LogInformation("Sent {SentCount} inactivity notice(s)", sent);
+        }
+        return sent;
+    }
+
+    private string BuildInactivityNoticeBody(User user) =>
+        $"""
+         <p>Hello {System.Net.WebUtility.HtmlEncode(user.Name)},</p>
+         <p>You have not signed in to PubTracker for 5 years. To protect your privacy we delete inactive accounts:
+         your account and all your subscriptions will be permanently deleted in <strong>30 days</strong> unless you sign in before then.</p>
+         <p><a href="{_webAppOrigin}">Sign in to keep your account</a></p>
+         """;
 }
