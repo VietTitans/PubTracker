@@ -75,14 +75,27 @@ public class KeycloakAdminUserSync : IKeycloakUserSync
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         using var response = await _httpClient.SendAsync(request);
 
-        if (response.StatusCode != HttpStatusCode.NotFound)
+        // Only Keycloak's own "user does not exist" answer counts as already deleted. Any other 404
+        // (wrong realm, wrong admin path) is a misconfiguration and must not look like success.
+        if (response.StatusCode == HttpStatusCode.NotFound
+            && (await response.Content.ReadAsStringAsync()).Contains("User not found", StringComparison.OrdinalIgnoreCase))
         {
-            await EnsureSuccessAsync(response, "delete user");
+            return;
         }
+        await EnsureSuccessAsync(response, "delete user");
     }
+
+    // One token serves a whole purge cycle: this class is scoped, so the cache lives as long as one cycle or request.
+    private string? _cachedToken;
+    private DateTime _cachedTokenExpiresAt;
 
     private async Task<string> GetAdminTokenAsync()
     {
+        if (_cachedToken != null && DateTime.UtcNow < _cachedTokenExpiresAt)
+        {
+            return _cachedToken;
+        }
+
         using var response = await _httpClient.PostAsync(
             $"{_realmUrl}/protocol/openid-connect/token",
             new FormUrlEncodedContent(new Dictionary<string, string>
@@ -94,8 +107,12 @@ public class KeycloakAdminUserSync : IKeycloakUserSync
         await EnsureSuccessAsync(response, "get admin token");
 
         var body = await response.Content.ReadFromJsonAsync<JsonObject>();
-        return body?["access_token"]?.GetValue<string>()
+        var token = body?["access_token"]?.GetValue<string>()
             ?? throw new HttpRequestException("Keycloak token response had no access_token.");
+        var lifetimeSeconds = body?["expires_in"]?.GetValue<int>() ?? 0;
+        _cachedToken = token;
+        _cachedTokenExpiresAt = DateTime.UtcNow.AddSeconds(Math.Max(0, lifetimeSeconds - 30));
+        return token;
     }
 
     private static async Task EnsureSuccessAsync(HttpResponseMessage response, string action)

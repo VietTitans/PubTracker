@@ -12,6 +12,8 @@ public class UsersService : IUsersService
     private readonly IKeycloakUserSync _keycloakSync;
     private readonly IEmailSender _emailSender;
     private readonly string _webAppOrigin;
+    private const int MaxConsecutivePurgeFailures = 3;
+
     private readonly ILogger<UsersService> _logger;
 
     public UsersService(IUsersDataAccess dataAccess, IKeycloakUserSync keycloakSync, IEmailSender emailSender, IConfiguration configuration, ILogger<UsersService> logger)
@@ -99,27 +101,35 @@ public class UsersService : IUsersService
 
     public async Task<int> PurgeExpiredDeletedUsersAsync()
     {
-        // Keycloak first: it holds the user's email and identity, and a user whose account is still
-        // there must not lose their database row, or a later login would silently re-provision them.
-        // A failure leaves that user in place for the next purge cycle.
-        var deletable = new List<int>();
-        foreach (var (userId, keycloakSub) in await _dataAccess.GetUsersDuePurgeAsync())
+        // Per user, inside one database transaction (see PurgeUserAsync): the Keycloak account (email and
+        // identity) is deleted first, so a user can never lose their row while their identity remains and
+        // a later login silently re-provision them. A failure keeps that user for the next cycle.
+        // Several failures in a row mean Keycloak itself is unavailable: stop instead of trying everyone.
+        var purgedCount = 0;
+        var consecutiveFailures = 0;
+        foreach (var userId in await _dataAccess.GetUserIdsDuePurgeAsync())
         {
             try
             {
-                if (!string.IsNullOrEmpty(keycloakSub))
+                var purged = await _dataAccess.PurgeUserAsync(userId, keycloakSub =>
+                    string.IsNullOrEmpty(keycloakSub) ? Task.CompletedTask : _keycloakSync.DeleteUserAsync(keycloakSub));
+                if (purged)
                 {
-                    await _keycloakSync.DeleteUserAsync(keycloakSub);
+                    purgedCount++;
                 }
-                deletable.Add(userId);
+                consecutiveFailures = 0;
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Could not delete the Keycloak account of user {UserId}; keeping the user to retry on the next purge cycle", userId);
+                _logger.LogError(ex, "Could not purge user {UserId}; keeping the user to retry on the next purge cycle", userId);
+                if (++consecutiveFailures >= MaxConsecutivePurgeFailures)
+                {
+                    _logger.LogError("{Failures} purge failures in a row; stopping this purge cycle", consecutiveFailures);
+                    break;
+                }
             }
         }
 
-        var purgedCount = deletable.Count == 0 ? 0 : await _dataAccess.PurgeUsersAsync(deletable);
         if (purgedCount > 0)
         {
             _logger.LogInformation("Purged {PurgedCount} user(s) past their deletion grace period", purgedCount);

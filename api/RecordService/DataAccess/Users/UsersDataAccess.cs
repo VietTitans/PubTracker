@@ -225,48 +225,49 @@ public class UsersDataAccess : IUsersDataAccess
                 .SetProperty(u => u.DeletionRequestedAt, deletionTime));
     }
 
-    public async Task<List<(int Id, string? KeycloakSub)>> GetUsersDuePurgeAsync()
+    // The one definition of "due for purge", used to pick users and to re-check under the row lock.
+    private static System.Linq.Expressions.Expression<Func<UserEntity, bool>> DueForPurge(DateTime cutoff) =>
+        u => (u.IsMarkedForDeletion && u.DeletionRequestedAt < cutoff) || u.InactivityNoticeSentAt < cutoff;
+
+    public async Task<List<int>> GetUserIdsDuePurgeAsync()
     {
         var cutoff = DateTime.UtcNow.AddDays(-DeletionGracePeriodDays);
-        var due = await _dbContext.Users
-            .Where(u => (u.IsMarkedForDeletion && u.DeletionRequestedAt < cutoff) || u.InactivityNoticeSentAt < cutoff)
+        return await _dbContext.Users
+            .Where(DueForPurge(cutoff))
             .OrderBy(u => u.Id)
-            .Select(u => new { u.Id, u.KeycloakSub })
+            .Select(u => u.Id)
             .ToListAsync();
-        return due.Select(u => (u.Id, u.KeycloakSub)).ToList();
     }
 
-    public async Task<int> PurgeUsersAsync(IReadOnlyList<int> userIds)
+    public async Task<bool> PurgeUserAsync(int userId, Func<string?, Task> deleteExternalAccount)
     {
         var cutoff = DateTime.UtcNow.AddDays(-DeletionGracePeriodDays);
-        var ids = userIds.ToArray();
 
         await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
-        await _dbContext.Database.ExecuteSqlInterpolatedAsync(
-            $"""
-             DELETE FROM user_search_query_digests
-             WHERE user_id IN (
-                 SELECT id FROM users WHERE id = ANY({ids}) AND ((is_marked_for_deletion = true AND deletion_requested_at < {cutoff}) OR inactivity_notice_sent_at < {cutoff})
-             )
-             """);
+        await _dbContext.Database.SqlQuery<int>($"""SELECT id AS "Value" FROM users WHERE id = {userId} FOR UPDATE""").ToListAsync();
+        var keycloakSub = await _dbContext.Users
+            .AsNoTracking()
+            .Where(u => u.Id == userId)
+            .Where(DueForPurge(cutoff))
+            .Select(u => new { u.KeycloakSub })
+            .FirstOrDefaultAsync();
+        if (keycloakSub == null)
+        {
+            return false;
+        }
 
-        await _dbContext.Database.ExecuteSqlInterpolatedAsync(
-            $"""
-             DELETE FROM user_search_queries
-             WHERE user_id IN (
-                 SELECT id FROM users WHERE id = ANY({ids}) AND ((is_marked_for_deletion = true AND deletion_requested_at < {cutoff}) OR inactivity_notice_sent_at < {cutoff})
-             )
-             """);
+        // If this throws, the transaction is rolled back on dispose and the user stays. If the
+        // commit below fails after it succeeded, the next cycle repeats it (a deleted account is
+        // a no-op) and finishes the purge.
+        await deleteExternalAccount(keycloakSub.KeycloakSub);
 
+        await _dbContext.UserSearchQueryDigests.Where(d => d.UserId == userId).ExecuteDeleteAsync();
+        await _dbContext.UserSearchQueries.Where(q => q.UserId == userId).ExecuteDeleteAsync();
         // digest_outbox rows go with the user through their ON DELETE CASCADE.
-        var purgedCount = await _dbContext.Database.ExecuteSqlInterpolatedAsync(
-            $"""
-             DELETE FROM users
-             WHERE id = ANY({ids}) AND ((is_marked_for_deletion = true AND deletion_requested_at < {cutoff}) OR inactivity_notice_sent_at < {cutoff})
-             """);
+        await _dbContext.Users.Where(u => u.Id == userId).ExecuteDeleteAsync();
 
         await transaction.CommitAsync();
-        return purgedCount;
+        return true;
     }
 }

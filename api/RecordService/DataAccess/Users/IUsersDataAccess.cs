@@ -26,15 +26,18 @@ public interface IUsersDataAccess
     Task MarkInactivityNoticeSentAsync(int userId);
 
     /// <summary>
-    /// Users to purge: soft-delete grace period expired, or warned of inactivity more than that long
-    /// ago without signing in (see UsersDataAccess.DeletionGracePeriodDays).
+    /// Ids of users to purge: soft-delete grace period expired, or warned of inactivity more than that
+    /// long ago without signing in (see UsersDataAccess.DeletionGracePeriodDays).
     /// </summary>
-    Task<List<(int Id, string? KeycloakSub)>> GetUsersDuePurgeAsync();
+    Task<List<int>> GetUserIdsDuePurgeAsync();
 
     /// <summary>
-    /// Hard-deletes the given users (still re-checked against the purge rule, so one who signed back
-    /// in meanwhile is kept) along with their subscriptions, watermarks and outbox rows.
-    /// Returns the number of users purged.
+    /// Purges one user in a single transaction: locks the row, re-checks that the user is still due
+    /// (one who signed back in meanwhile is kept), runs <paramref name="deleteExternalAccount"/> with
+    /// the user's Keycloak sub (null if none), then deletes their subscriptions, watermarks, outbox
+    /// rows and the user row. If the callback throws, nothing is deleted. A sign-in for this user
+    /// waits on the row lock, so it cannot slip in between the external delete and the row delete.
     /// </summary>
-    Task<int> PurgeUsersAsync(IReadOnlyList<int> userIds);
+    /// <returns>False if the user was not (or no longer) due.</returns>
+    Task<bool> PurgeUserAsync(int userId, Func<string?, Task> deleteExternalAccount);
 }

@@ -26,11 +26,11 @@ public class AccountPurgeKeycloakTests : IClassFixture<PubTrackerWebApplicationF
     }
 
     [Theory]
-    [InlineData(HttpStatusCode.NoContent)]
-    [InlineData(HttpStatusCode.NotFound)]
-    public async Task KeycloakDelete_SuccessAnd404_BothCountAsDeleted(HttpStatusCode deleteStatus)
+    [InlineData(HttpStatusCode.NoContent, "")]
+    [InlineData(HttpStatusCode.NotFound, """{"error":"User not found"}""")]
+    public async Task KeycloakDelete_SuccessAndUserNotFound_BothCountAsDeleted(HttpStatusCode deleteStatus, string body)
     {
-        var handler = new StubHandler(deleteStatus);
+        var handler = new StubHandler(deleteStatus, body);
         var sync = new KeycloakAdminUserSync(new HttpClient(handler), RealmUrl, "pubtracker-api-admin", "secret");
 
         await sync.DeleteUserAsync("sub-1");
@@ -39,10 +39,34 @@ public class AccountPurgeKeycloakTests : IClassFixture<PubTrackerWebApplicationF
             (handler.Requests[^1].Method, handler.Requests[^1].Url, handler.Requests[^1].Authorization));
     }
 
+    [Theory]
+    [InlineData("""{"error":"Realm not found."}""")]
+    [InlineData("")]
+    public async Task KeycloakDelete_A404ThatIsNotUserNotFound_Throws(string body)
+    {
+        var sync = new KeycloakAdminUserSync(new HttpClient(new StubHandler(HttpStatusCode.NotFound, body)), RealmUrl, "pubtracker-api-admin", "secret");
+
+        await Assert.ThrowsAsync<HttpRequestException>(() => sync.DeleteUserAsync("sub-1"));
+    }
+
+    [Fact]
+    public async Task KeycloakDelete_ReusesOneAdminTokenForManyUsers()
+    {
+        var handler = new StubHandler(HttpStatusCode.NoContent, "");
+        var sync = new KeycloakAdminUserSync(new HttpClient(handler), RealmUrl, "pubtracker-api-admin", "secret");
+
+        await sync.DeleteUserAsync("sub-1");
+        await sync.DeleteUserAsync("sub-2");
+        await sync.DeleteUserAsync("sub-3");
+
+        Assert.Equal(1, handler.Requests.Count(r => r.Url.EndsWith("/protocol/openid-connect/token")));
+        Assert.Equal(3, handler.Requests.Count(r => r.Method == "DELETE"));
+    }
+
     [Fact]
     public async Task KeycloakDelete_OtherErrors_Throw()
     {
-        var sync = new KeycloakAdminUserSync(new HttpClient(new StubHandler(HttpStatusCode.InternalServerError)), RealmUrl, "pubtracker-api-admin", "secret");
+        var sync = new KeycloakAdminUserSync(new HttpClient(new StubHandler(HttpStatusCode.InternalServerError, "")), RealmUrl, "pubtracker-api-admin", "secret");
 
         await Assert.ThrowsAsync<HttpRequestException>(() => sync.DeleteUserAsync("sub-1"));
     }
@@ -105,6 +129,74 @@ public class AccountPurgeKeycloakTests : IClassFixture<PubTrackerWebApplicationF
         }
     }
 
+    [Fact]
+    public async Task PurgeUser_ReChecksUnderTheLock_SoAUserWhoSignedBackInIsKeptAndKeycloakIsNotCalled()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var dataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
+        var connectionString = scope.ServiceProvider.GetRequiredService<IConfiguration>().GetConnectionString("DefaultConnection")!;
+        var user = await SeedDueUserAsync(dataAccess, connectionString, "purge-signed-back-in", "sub-signed-back-in");
+        // The user signs in after the purge listed them: sign-in clears the deletion mark.
+        await using (var connection = new NpgsqlConnection(connectionString))
+        {
+            await connection.OpenAsync();
+            await ExecuteAsync(connection, $"UPDATE users SET is_marked_for_deletion = false, deletion_requested_at = NULL WHERE id = {user.Id}");
+        }
+
+        var called = false;
+        var purged = await dataAccess.PurgeUserAsync(user.Id, _ => { called = true; return Task.CompletedTask; });
+
+        Assert.False(purged);
+        Assert.False(called);
+        Assert.NotNull(await dataAccess.GetUserByIdAsync(user.Id));
+    }
+
+    [Fact]
+    public async Task PurgeUser_WhenTheExternalDeleteThrows_NothingIsDeleted()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var dataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
+        var connectionString = scope.ServiceProvider.GetRequiredService<IConfiguration>().GetConnectionString("DefaultConnection")!;
+        var user = await SeedDueUserAsync(dataAccess, connectionString, "purge-rollback", "sub-rollback");
+
+        await Assert.ThrowsAsync<HttpRequestException>(() =>
+            dataAccess.PurgeUserAsync(user.Id, _ => throw new HttpRequestException("down")));
+
+        Assert.NotNull(await dataAccess.GetUserByIdAsync(user.Id));
+        await dataAccess.PurgeUserAsync(user.Id, _ => Task.CompletedTask); // leave this class's shared database clean
+    }
+
+    [Fact]
+    public async Task Purge_StopsTheCycleAfterThreeFailuresInARow()
+    {
+        using var scope = _factory.Services.CreateScope();
+        var dataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
+        var connectionString = scope.ServiceProvider.GetRequiredService<IConfiguration>().GetConnectionString("DefaultConnection")!;
+        var sync = new RecordingKeycloakSync { FailForAll = true };
+        var service = new UsersService(dataAccess, sync, new FakeEmailSender(), new ConfigurationBuilder().Build(), NullLogger<UsersService>.Instance);
+        var seeded = new List<User>();
+        for (var i = 0; i < 5; i++)
+        {
+            seeded.Add(await SeedDueUserAsync(dataAccess, connectionString, $"purge-outage-{i}", $"sub-outage-{i}"));
+        }
+
+        try
+        {
+            var purged = await service.PurgeExpiredDeletedUsersAsync();
+
+            Assert.Equal(0, purged);
+            Assert.Equal(3, sync.Attempted.Count(s => s.StartsWith("sub-outage-")));
+        }
+        finally
+        {
+            // They share this class's database with the other tests, which count Keycloak calls.
+            foreach (var user in seeded)
+            {
+                await dataAccess.PurgeUserAsync(user.Id, _ => Task.CompletedTask);
+            }
+        }
+    }
+
     private static async Task<User> SeedDueUserAsync(IUsersDataAccess dataAccess, string connectionString, string name, string? keycloakSub)
     {
         var user = await dataAccess.CreateUserAsync(new User { Name = name, Username = name, Email = $"{name}@example.com" });
@@ -128,6 +220,7 @@ public class AccountPurgeKeycloakTests : IClassFixture<PubTrackerWebApplicationF
     private sealed class RecordingKeycloakSync : IKeycloakUserSync
     {
         public string? FailFor { get; set; }
+        public bool FailForAll { get; set; }
         public List<string> Attempted { get; } = new();
         public List<string> Deleted { get; } = new();
 
@@ -136,7 +229,7 @@ public class AccountPurgeKeycloakTests : IClassFixture<PubTrackerWebApplicationF
         public Task DeleteUserAsync(string keycloakSub)
         {
             Attempted.Add(keycloakSub);
-            if (keycloakSub == FailFor)
+            if (FailForAll || keycloakSub == FailFor)
             {
                 throw new HttpRequestException("Keycloak delete user failed (500)");
             }
@@ -145,7 +238,7 @@ public class AccountPurgeKeycloakTests : IClassFixture<PubTrackerWebApplicationF
         }
     }
 
-    private sealed class StubHandler(HttpStatusCode deleteStatus) : HttpMessageHandler
+    private sealed class StubHandler(HttpStatusCode deleteStatus, string deleteBody) : HttpMessageHandler
     {
         public readonly List<(string Method, string Url, string? Authorization)> Requests = new();
 
@@ -156,10 +249,10 @@ public class AccountPurgeKeycloakTests : IClassFixture<PubTrackerWebApplicationF
             {
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 {
-                    Content = new StringContent("""{"access_token":"admin-token"}""", System.Text.Encoding.UTF8, "application/json")
+                    Content = new StringContent("""{"access_token":"admin-token","expires_in":300}""", System.Text.Encoding.UTF8, "application/json")
                 });
             }
-            return Task.FromResult(new HttpResponseMessage(deleteStatus));
+            return Task.FromResult(new HttpResponseMessage(deleteStatus) { Content = new StringContent(deleteBody) });
         }
     }
 }
