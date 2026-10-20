@@ -8,11 +8,15 @@ namespace RecordService.DataAccess;
 
 public class SearchQueriesDataAccess : ISearchQueriesDataAccess
 {
+    public const int DefaultMaxSubscriptionsPerUser = 20;
+
     private readonly PubTrackerDbContext _dbContext;
     private readonly LiteratureSourceFactory _sourceFactory;
+    private readonly int _maxSubscriptionsPerUser;
 
-    public SearchQueriesDataAccess(PubTrackerDbContext dbContext, LiteratureSourceFactory sourceFactory)
+    public SearchQueriesDataAccess(PubTrackerDbContext dbContext, LiteratureSourceFactory sourceFactory, IConfiguration configuration)
     {
+        _maxSubscriptionsPerUser = configuration.GetValue("Subscriptions:MaxPerUser", DefaultMaxSubscriptionsPerUser);
         _dbContext = dbContext ?? throw new ArgumentNullException(nameof(dbContext));
         _sourceFactory = sourceFactory ?? throw new ArgumentNullException(nameof(sourceFactory));
     }
@@ -130,6 +134,9 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
         {
             try
             {
+                // Serializes this user's concurrent subscribes so the cap check below cannot be raced past.
+                await _dbContext.Database.ExecuteSqlInterpolatedAsync($"SELECT 1 FROM users WHERE id = {userId} FOR UPDATE");
+
                 var sourceId = (await _dbContext.Database.SqlQuery<int>(
                     $"""
                      INSERT INTO sources (name, base_url)
@@ -158,6 +165,14 @@ public class SearchQueriesDataAccess : ISearchQueriesDataAccess
                 {
                     throw new AlreadySubscribedException(
                         $"User {userId} is already subscribed to search query {searchQueryId}.");
+                }
+
+                // After the insert so re-subscribing to an existing query hits AlreadySubscribed above
+                // instead of this check; the throw rolls the new row back.
+                var subscriptionCount = await _dbContext.UserSearchQueries.CountAsync(usq => usq.UserId == userId);
+                if (subscriptionCount > _maxSubscriptionsPerUser)
+                {
+                    throw new SubscriptionLimitExceededException(_maxSubscriptionsPerUser);
                 }
 
                 // Seeded to NOW() (not left null) so a brand new subscriber only gets records

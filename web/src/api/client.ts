@@ -62,7 +62,15 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
   if (!response.ok) {
     const body = await response.text();
-    throw new Error(`${response.status} ${response.statusText}: ${body}`);
+    // The API's errors are { message }; show just the message when there is one.
+    const message = (() => {
+      try {
+        return (JSON.parse(body) as { message?: string }).message;
+      } catch {
+        return undefined;
+      }
+    })();
+    throw new Error(message ?? `${response.status} ${response.statusText}: ${body}`);
   }
 
   if (response.status === 204) {

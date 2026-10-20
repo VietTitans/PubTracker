@@ -68,7 +68,7 @@ public class DigestPollEndToEndManualTest
             .Options;
         var dbContext = new PubTrackerDbContext(dbContextOptions);
 
-        var searchQueriesDataAccess = new SearchQueriesDataAccess(dbContext, sourceFactory);
+        var searchQueriesDataAccess = new SearchQueriesDataAccess(dbContext, sourceFactory, new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
         var recordsDataAccess = new RecordsDataAccess(dbContext);
         var usersDataAccess = new UsersDataAccess(dbContext, new HttpContextAccessor());
         var emailSender = new BrevoEmailSender(new HttpClient(), emailApiKey!, emailFromAddress!, emailFromName);

@@ -26,6 +26,7 @@ public interface ISearchQueriesDataAccess
     /// <param name="userId">The ID of the subscribing user</param>
     /// <param name="targetUrl">The literature search URL to subscribe to</param>
     /// <exception cref="InvalidOperationException">Thrown if the URL doesn't match a supported literature source</exception>
+    /// <exception cref="Exceptions.SubscriptionLimitExceededException">Thrown if the user already holds <c>Subscriptions:MaxPerUser</c> subscriptions</exception>
     Task<SearchQuery> SubscribeAsync(int userId, string targetUrl);
 
     /// <summary>

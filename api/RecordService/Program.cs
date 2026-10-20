@@ -94,12 +94,17 @@ builder.Services.AddScoped<IRecordsDataAccess, RecordsDataAccess>();
 builder.Services.AddScoped<IFeedbackDataAccess, FeedbackDataAccess>();
 builder.Services.AddScoped<IDatabaseSuggestionsDataAccess, DatabaseSuggestionsDataAccess>();
 
-// Send Email provider
+if (builder.Configuration.GetValue("Subscriptions:MaxPerUser", SearchQueriesDataAccess.DefaultMaxSubscriptionsPerUser) < 1)
+{
+    throw new Exception("Subscriptions:MaxPerUser must be a whole number of at least 1");
+}
+
 if (builder.Configuration.GetValue("Email:DailySendLimit", 250) < 1)
 {
     throw new Exception("Email:DailySendLimit must be a whole number of at least 1");
 }
 
+// Send Email provider
 var emailApiKey = builder.Configuration["Email:ApiKey"];
 var emailFromAddress = builder.Configuration["Email:FromAddress"];
 var emailFromName = builder.Configuration["Email:FromName"];

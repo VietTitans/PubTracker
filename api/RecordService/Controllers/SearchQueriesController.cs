@@ -96,6 +96,10 @@ public class SearchQueriesController : ControllerBase
         {
             return Conflict(new { message = "Already subscribed to this search query." });
         }
+        catch (SubscriptionLimitExceededException ex)
+        {
+            return UnprocessableEntity(new { message = ex.Message });
+        }
         catch (Exception ex) when (ex is InvalidOperationException or UriFormatException or ArgumentException)
         {
             return BadRequest(new { message = "Unsupported or unrecognized search URL." });

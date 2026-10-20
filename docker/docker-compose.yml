@@ -72,6 +72,7 @@ services:
       Email__FromAddress: ${EMAIL_FROM_ADDRESS}
       Email__FromName: ${EMAIL_FROM_NAME}
       Email__DailySendLimit: ${EMAIL_DAILY_SEND_LIMIT:-250}
+      Subscriptions__MaxPerUser: ${SUBSCRIPTIONS_MAX_PER_USER:-20}
       Unsubscribe__SigningKey: ${UNSUBSCRIBE_SIGNING_KEY}
       # Literature sources: true/false overrides the default in SourceCatalog (blank = default).
       # Enable a scraped source only with its owner's permission (see README).
