@@ -35,6 +35,7 @@ public class PubTrackerDbContext : DbContext
             entity.Property(e => e.Username).HasColumnName("username").HasMaxLength(UserFieldLimits.Username);
             entity.Property(e => e.Email).HasColumnName("email").HasMaxLength(UserFieldLimits.Email);
             entity.Property(e => e.KeycloakSub).HasColumnName("keycloak_sub");
+            entity.Property(e => e.DigestsStopped).HasColumnName("digests_stopped").HasDefaultValue(false);
             entity.Property(e => e.IsMarkedForDeletion).HasColumnName("is_marked_for_deletion").HasDefaultValue(false);
             entity.Property(e => e.DeletionRequestedAt).HasColumnName("deletion_requested_at");
             entity.HasIndex(e => e.KeycloakSub).IsUnique();

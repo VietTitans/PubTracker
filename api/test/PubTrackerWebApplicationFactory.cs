@@ -69,6 +69,7 @@ public class PubTrackerWebApplicationFactory : WebApplicationFactory<Program>, I
         Environment.SetEnvironmentVariable("Email__ApiKey", "test-api-key");
         Environment.SetEnvironmentVariable("Email__FromAddress", "digest@example.com");
         Environment.SetEnvironmentVariable("Email__FromName", "PubTracker");
+        Environment.SetEnvironmentVariable("Unsubscribe__SigningKey", "test-signing-key");
         // Tests drain the digest outbox explicitly (DrainOutboxAsync); keep the background worker from racing them.
         Environment.SetEnvironmentVariable("Scheduler__DigestOutboxIntervalSeconds", "86400");
         // Likewise park the automatic post-subscribe poll; tests poll explicitly.

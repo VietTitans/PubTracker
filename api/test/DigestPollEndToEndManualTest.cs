@@ -75,12 +75,12 @@ public class DigestPollEndToEndManualTest
         ISummaryGenerator summaryGenerator = string.IsNullOrEmpty(llmApiKey)
             ? new NullSummaryGenerator()
             : new ChatCompletionsSummaryGenerator(new HttpClient(), llmBaseUrl!, llmApiKey, llmModel!);
-        var digestService = new DigestService(usersDataAccess);
+        var digestService = new DigestService(usersDataAccess, new RecordService.BusinessLogic.DigestService.UnsubscribeTokens("test", "http://localhost"));
         var outboxDataAccess = new DigestOutboxDataAccess(dbContext, searchQueriesDataAccess);
         var pollingService = new RecordPollingService(searchQueriesDataAccess, recordsDataAccess, digestService, outboxDataAccess, summaryGenerator, new PollCycleAdvisoryLock(connectionString), NullLogger<RecordPollingService>.Instance, new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
 
         var results = await pollingService.PollSearchQueriesAsync(SearchQueryIds);
-        await new DigestOutboxService(outboxDataAccess, usersDataAccess, emailSender, NullLogger<DigestOutboxService>.Instance).ProcessDueAsync();
+        await new DigestOutboxService(outboxDataAccess, usersDataAccess, emailSender, new RecordService.BusinessLogic.DigestService.UnsubscribeTokens("test", "http://localhost"), NullLogger<DigestOutboxService>.Instance).ProcessDueAsync();
 
         foreach (var result in results)
         {

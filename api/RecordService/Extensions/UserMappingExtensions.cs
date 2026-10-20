@@ -18,7 +18,8 @@ public static class UserMappingExtensions
             Id = user.Id,
             Name = user.Name,
             Username = user.Username,
-            Email = user.Email
+            Email = user.Email,
+            DigestsStopped = user.DigestsStopped
         };
     }
 

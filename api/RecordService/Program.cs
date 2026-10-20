@@ -89,6 +89,14 @@ if (string.IsNullOrEmpty(emailApiKey) || string.IsNullOrEmpty(emailFromAddress) 
     throw new Exception("Email configuration is missing");
 }
 
+var unsubscribeSigningKey = builder.Configuration["Unsubscribe:SigningKey"];
+if (string.IsNullOrEmpty(unsubscribeSigningKey))
+{
+    throw new Exception("Unsubscribe:SigningKey is missing");
+}
+// Links point at the same public origin the web app is served from (the proxy forwards /api/*).
+builder.Services.AddSingleton(new UnsubscribeTokens(unsubscribeSigningKey, webAppOrigin));
+
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IEmailSender>(serviceProvider =>
     new BrevoEmailSender(

@@ -358,6 +358,12 @@ namespace RecordService.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("deletion_requested_at");
 
+                    b.Property<bool>("DigestsStopped")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("boolean")
+                        .HasDefaultValue(false)
+                        .HasColumnName("digests_stopped");
+
                     b.Property<string>("Email")
                         .IsRequired()
                         .HasMaxLength(254)

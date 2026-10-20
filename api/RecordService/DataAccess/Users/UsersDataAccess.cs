@@ -125,6 +125,7 @@ public class UsersDataAccess : IUsersDataAccess
             Name = entity.Name,
             Username = entity.Username,
             Email = entity.Email,
+            DigestsStopped = entity.DigestsStopped,
             IsMarkedForDeletion = entity.IsMarkedForDeletion,
             DeletionRequestedAt = entity.DeletionRequestedAt
         };
@@ -157,6 +158,7 @@ public class UsersDataAccess : IUsersDataAccess
         Name = u.Name,
         Username = u.Username,
         Email = u.Email,
+        DigestsStopped = u.DigestsStopped,
         IsMarkedForDeletion = u.IsMarkedForDeletion,
         DeletionRequestedAt = u.DeletionRequestedAt
     };
@@ -169,6 +171,13 @@ public class UsersDataAccess : IUsersDataAccess
                 .SetProperty(u => u.Name, user.Name)
                 .SetProperty(u => u.Username, user.Username)
                 .SetProperty(u => u.Email, user.Email));
+    }
+
+    public async Task SetDigestsStoppedAsync(int userId, bool stopped)
+    {
+        await _dbContext.Users
+            .Where(u => u.Id == userId)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(u => u.DigestsStopped, stopped));
     }
 
     public async Task SoftDeleteUserAsync(int userId)

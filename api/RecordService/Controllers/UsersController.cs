@@ -54,6 +54,28 @@ public class UsersController : ControllerBase
     }
 
     [Authorize]
+    [HttpPut("me/digests-stopped")]
+    public async Task<IActionResult> SetDigestsStopped([FromBody] SetDigestsStoppedDto dto)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null)
+        {
+            return Unauthorized(new { message = "User ID not found in claims." });
+        }
+
+        try
+        {
+            await _userService.SetDigestsStoppedAsync(int.Parse(userId), dto.Stopped);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating digest setting for user {UserId}", userId);
+            return StatusCode(500, new { message = "Error updating digest setting" });
+        }
+    }
+
+    [Authorize]
     [HttpGet("{id}")]
     public async Task<IActionResult> GetUserById(int id)
     {

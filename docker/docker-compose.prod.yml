@@ -76,6 +76,7 @@ services:
       Email__ApiKey: ${EMAIL_API_KEY}
       Email__FromAddress: ${EMAIL_FROM_ADDRESS}
       Email__FromName: ${EMAIL_FROM_NAME:-PubTracker}
+      Unsubscribe__SigningKey: ${UNSUBSCRIBE_SIGNING_KEY}
       Sources__PubMed__Enabled: ${SOURCES_PUBMED_ENABLED:-}
       Sources__Pedro__Enabled: ${SOURCES_PEDRO_ENABLED:-}
       Ncbi__ApiKey: ${NCBI_API_KEY:-}

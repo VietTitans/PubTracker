@@ -9,16 +9,18 @@ namespace RecordService.BusinessLogic.DigestService;
 public class DigestService : IDigestService
 {
     private readonly IUsersDataAccess _usersDataAccess;
+    private readonly UnsubscribeTokens _unsubscribeTokens;
 
-    public DigestService(IUsersDataAccess usersDataAccess)
+    public DigestService(IUsersDataAccess usersDataAccess, UnsubscribeTokens unsubscribeTokens)
     {
         _usersDataAccess = usersDataAccess;
+        _unsubscribeTokens = unsubscribeTokens;
     }
 
     public async Task<(string Subject, string HtmlBody)?> BuildCombinedDigestAsync(int userId, IReadOnlyList<PendingUserDigest> userQueries)
     {
         var user = await _usersDataAccess.GetUserByIdAsync(userId);
-        if (user == null || user.IsMarkedForDeletion)
+        if (user == null || user.IsMarkedForDeletion || user.DigestsStopped)
         {
             return null;
         }
@@ -29,10 +31,16 @@ public class DigestService : IDigestService
             ? $"{totalRecords} new record{(totalRecords == 1 ? "" : "s")} for your search"
             : $"{totalRecords} new record{(totalRecords == 1 ? "" : "s")} across {userQueries.Count} of your searches";
 
-        return (subject, BuildCombinedHtmlBody(userQueries));
+        return (subject, BuildCombinedHtmlBody(
+            userQueries,
+            q => _unsubscribeTokens.SubscriptionUrl(userId, q.SearchQueryId),
+            _unsubscribeTokens.StopAllUrl(userId)));
     }
 
-    public static string BuildCombinedHtmlBody(IReadOnlyList<PendingUserDigest> pendingQueries)
+    public static string BuildCombinedHtmlBody(
+        IReadOnlyList<PendingUserDigest> pendingQueries,
+        Func<PendingUserDigest, string>? subscriptionUnsubscribeUrl = null,
+        string? stopAllUrl = null)
     {
         var sb = new StringBuilder();
         foreach (var q in pendingQueries)
@@ -40,7 +48,16 @@ public class DigestService : IDigestService
             var section = SourceCatalog.Detect(q.TargetUrl) is { } source
                 ? source.BuildDigest(q.TargetUrl, q.Records, q.Summary)
                 : BuildHtmlBody(q.TargetUrl, q.Records, q.Summary);
-            sb.Append("<div style=\"margin:0 0 32px;\">").Append(section).Append("</div>");
+            sb.Append("<div style=\"margin:0 0 32px;\">").Append(section);
+            if (subscriptionUnsubscribeUrl != null)
+            {
+                sb.Append(DigestMessageFormatter.BuildUnsubscribeLine("Unsubscribe from this search", subscriptionUnsubscribeUrl(q)));
+            }
+            sb.Append("</div>");
+        }
+        if (stopAllUrl != null && pendingQueries.Count > 0)
+        {
+            sb.Append(DigestMessageFormatter.BuildUnsubscribeLine("Stop all Digests", stopAllUrl));
         }
         return sb.ToString();
     }

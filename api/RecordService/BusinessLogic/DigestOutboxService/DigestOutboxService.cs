@@ -1,3 +1,4 @@
+using RecordService.BusinessLogic.DigestService;
 using RecordService.DataAccess;
 using RecordService.DataAccess.DigestOutbox;
 using RecordService.DataAccess.Email;
@@ -14,17 +15,20 @@ public class DigestOutboxService : IDigestOutboxService
     private readonly IDigestOutboxDataAccess _outboxDataAccess;
     private readonly IUsersDataAccess _usersDataAccess;
     private readonly IEmailSender _emailSender;
+    private readonly UnsubscribeTokens _unsubscribeTokens;
     private readonly ILogger<DigestOutboxService> _logger;
 
     public DigestOutboxService(
         IDigestOutboxDataAccess outboxDataAccess,
         IUsersDataAccess usersDataAccess,
         IEmailSender emailSender,
+        UnsubscribeTokens unsubscribeTokens,
         ILogger<DigestOutboxService> logger)
     {
         _outboxDataAccess = outboxDataAccess;
         _usersDataAccess = usersDataAccess;
         _emailSender = emailSender;
+        _unsubscribeTokens = unsubscribeTokens;
         _logger = logger;
     }
 
@@ -57,13 +61,13 @@ public class DigestOutboxService : IDigestOutboxService
         try
         {
             var user = await _usersDataAccess.GetUserByIdAsync(digest.UserId);
-            if (user == null || user.IsMarkedForDeletion)
+            if (user == null || user.IsMarkedForDeletion || user.DigestsStopped)
             {
                 await _outboxDataAccess.MarkSentAsync(digest.Id, DateTime.UtcNow); // no one to send to; not a failure
                 return false;
             }
 
-            await _emailSender.SendAsync(user.Email, digest.Subject, digest.HtmlBody);
+            await _emailSender.SendAsync(user.Email, digest.Subject, digest.HtmlBody, _unsubscribeTokens.StopAllUrl(user.Id));
             await _outboxDataAccess.MarkSentAsync(digest.Id, DateTime.UtcNow);
             return true;
         }

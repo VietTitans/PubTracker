@@ -28,6 +28,11 @@ public class UsersService : IUsersService
         return await _dataAccess.GetUsersPageAsync(page, pageSize);
     }
 
+    public async Task SetDigestsStoppedAsync(int userId, bool stopped)
+    {
+        await _dataAccess.SetDigestsStoppedAsync(userId, stopped);
+    }
+
     public async Task<List<SearchQuery>> GetSearchQueriesByUserAsync(int userId)
     {
         return await _dataAccess.GetSearchQueriesByUserAsync(userId);

@@ -71,6 +71,7 @@ services:
       Email__ApiKey: ${EMAIL_API_KEY}
       Email__FromAddress: ${EMAIL_FROM_ADDRESS}
       Email__FromName: ${EMAIL_FROM_NAME}
+      Unsubscribe__SigningKey: ${UNSUBSCRIBE_SIGNING_KEY}
       # Literature sources: true/false overrides the default in SourceCatalog (blank = default).
       # Enable a scraped source only with its owner's permission (see README).
       Sources__PubMed__Enabled: ${SOURCES_PUBMED_ENABLED:-}

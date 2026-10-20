@@ -78,6 +78,10 @@ internal static class DigestMessageFormatter
         + "<p style=\"margin:0;\">" + WebUtility.HtmlEncode(summary) + "</p>"
         + "</div>";
 
+    internal static string BuildUnsubscribeLine(string label, string url) =>
+        "<p style=\"margin:0 0 16px;font-size:12px;color:#5b645d;\"><a href=\"" + WebUtility.HtmlEncode(url)
+        + "\" style=\"color:#5b645d;\">" + WebUtility.HtmlEncode(label) + "</a></p>";
+
     internal static void AppendOverflowNotice(StringBuilder sb, int hiddenCount)
     {
         if (hiddenCount <= 0)

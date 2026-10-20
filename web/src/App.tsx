@@ -3,6 +3,7 @@ import { Link, NavLink, Route, Routes } from "react-router-dom";
 import {
   deleteCurrentUser,
   getCurrentUser,
+  setDigestsStopped,
   getSearchQueriesForUser,
   getSearchQueryById,
   subscribeToSearchQuery,
@@ -498,9 +499,13 @@ function ProfileDialog({
 }
 
 function SettingsDialog({
+  digestsStopped,
+  onToggleDigests,
   onClose,
   onRequestDeleteAccount,
 }: {
+  digestsStopped: boolean;
+  onToggleDigests: () => void;
   onClose: () => void;
   onRequestDeleteAccount: () => void;
 }) {
@@ -525,6 +530,15 @@ function SettingsDialog({
       >
         <h3 id="settings-title">Settings</h3>
         <p className="modal-subtitle">Manage your account.</p>
+
+        <p className="modal-message">
+          {digestsStopped
+            ? "Digest emails are off. Your searches are kept."
+            : "Digest emails are on."}
+        </p>
+        <button className="btn btn-ghost" onClick={onToggleDigests}>
+          {digestsStopped ? "Turn Digests back on" : "Stop all Digests"}
+        </button>
 
         <div className="danger-zone">
           <p className="danger-zone-title">Delete account</p>
@@ -968,6 +982,17 @@ function App() {
 
       {isSettingsOpen && (
         <SettingsDialog
+          digestsStopped={user?.digestsStopped ?? false}
+          onToggleDigests={async () => {
+            if (!user) return;
+            try {
+              const stopped = !user.digestsStopped;
+              await setDigestsStopped(stopped);
+              setUser((u) => (u ? { ...u, digestsStopped: stopped } : u));
+            } catch (err) {
+              setError(err instanceof Error ? err.message : String(err));
+            }
+          }}
           onClose={() => setIsSettingsOpen(false)}
           onRequestDeleteAccount={() => setIsDeleteAccountConfirmOpen(true)}
         />

@@ -7,6 +7,7 @@ export interface User {
   name: string;
   username: string;
   email: string;
+  digestsStopped: boolean;
 }
 
 export interface SearchQuery {
@@ -81,6 +82,13 @@ export function updateCurrentUser(dto: { name: string; username: string; email: 
   return request<User>(`${API_PREFIX}/Users/me`, {
     method: "PUT",
     body: JSON.stringify(dto),
+  });
+}
+
+export function setDigestsStopped(stopped: boolean): Promise<void> {
+  return request<void>(`${API_PREFIX}/Users/me/digests-stopped`, {
+    method: "PUT",
+    body: JSON.stringify({ stopped }),
   });
 }
 

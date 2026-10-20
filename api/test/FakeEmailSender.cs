@@ -9,7 +9,9 @@ public class FakeEmailSender : IEmailSender
     /// <summary>Addresses to simulate a send failure for, so tests can prove per-user isolation.</summary>
     public HashSet<string> FailForAddresses { get; } = new();
 
-    public Task SendAsync(string toEmail, string subject, string htmlBody)
+    public List<string?> UnsubscribeUrls { get; } = new();
+
+    public Task SendAsync(string toEmail, string subject, string htmlBody, string? unsubscribeUrl = null)
     {
         if (FailForAddresses.Contains(toEmail))
         {
@@ -17,6 +19,7 @@ public class FakeEmailSender : IEmailSender
         }
 
         SentEmails.Add((toEmail, subject, htmlBody));
+        UnsubscribeUrls.Add(unsubscribeUrl);
         return Task.CompletedTask;
     }
 }

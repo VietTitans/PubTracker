@@ -7,6 +7,7 @@ public class UserEntity
     public string Username { get; set; } = string.Empty;
     public string Email { get; set; } = string.Empty;
     public string? KeycloakSub { get; set; }
+    public bool DigestsStopped { get; set; }
     public bool IsMarkedForDeletion { get; set; }
     public DateTime? DeletionRequestedAt { get; set; }
 }
