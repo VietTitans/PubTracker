@@ -30,6 +30,8 @@ pipeline {
         // Docker Desktop's own DNS name for the host, resolves automatically in any container,
         // and is where published ports actually are reachable from.
         TESTCONTAINERS_HOST_OVERRIDE = 'host.docker.internal'
+        // Same reason as NUGET_PACKAGES: the node container's home is not writable and is thrown away.
+        npm_config_cache = "${WORKSPACE}/.npm-cache"
     }
 
     stages { 
@@ -89,6 +91,20 @@ pipeline {
             }
         }
 
+        stage('Web Install and Build') {
+            steps {
+                script {
+                    // `npm run build` is `tsc -b && vite build`, so a type error fails the build here
+                    // instead of inside the image build. VITE_* are only baked into the images below.
+                    docker.image('node:22-alpine').inside {
+                        sh 'cd web && npm ci && npm run build'
+                    }
+                }
+            }
+        }
+
+        // Every branch's images are pushed (tagged with the build number) so a branch can be
+        // pulled and tried; only main is deployed.
         stage('Build and Push Images') {
             steps {
                 // Prod VM is linux/arm64; buildx emulates it via QEMU (one-time on the Jenkins host:

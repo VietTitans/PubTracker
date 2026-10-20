@@ -21,7 +21,7 @@ cd ~/pubtracker
 docker compose -f docker-compose.prod.yml run --rm backup backup.sh
 ```
 
-The planned safe-deploy work (issue #11) will reuse this command for a pre-deploy dump.
+`deploy/deploy.sh` runs this same command before every deploy (see `rollback.md`).
 
 ## Restore drill
 
