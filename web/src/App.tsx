@@ -1011,7 +1011,7 @@ function App() {
           onCancel={() => setIsDeleteAccountConfirmOpen(false)}
         />
       )}
-      <footer className="nav-links">
+      <footer className="app-footer">
         <Link to="/privacy">Privacy policy</Link>
         <Link to="/terms">Terms</Link>
       </footer>
