@@ -28,6 +28,9 @@ public interface IDigestOutboxDataAccess
     /// </summary>
     Task<List<DueDigest>> LeaseDueAsync(int batchSize, TimeSpan lease, DateTime now);
 
+    /// <summary>Number of rows marked sent at or after <paramref name="since"/> (used for the daily send limit).</summary>
+    Task<int> CountSentSinceAsync(DateTime since);
+
     Task MarkSentAsync(int id, DateTime now);
 
     Task MarkRetryAsync(int id, DateTime nextAttemptAt, string error);

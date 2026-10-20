@@ -80,7 +80,7 @@ public class DigestPollEndToEndManualTest
         var pollingService = new RecordPollingService(searchQueriesDataAccess, recordsDataAccess, digestService, outboxDataAccess, summaryGenerator, new PollCycleAdvisoryLock(connectionString), NullLogger<RecordPollingService>.Instance, new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build());
 
         var results = await pollingService.PollSearchQueriesAsync(SearchQueryIds);
-        await new DigestOutboxService(outboxDataAccess, usersDataAccess, emailSender, new RecordService.BusinessLogic.DigestService.UnsubscribeTokens("test", "http://localhost"), NullLogger<DigestOutboxService>.Instance).ProcessDueAsync();
+        await new DigestOutboxService(outboxDataAccess, usersDataAccess, emailSender, new RecordService.BusinessLogic.DigestService.UnsubscribeTokens("test", "http://localhost"), new Microsoft.Extensions.Configuration.ConfigurationBuilder().Build(), NullLogger<DigestOutboxService>.Instance).ProcessDueAsync();
 
         foreach (var result in results)
         {

@@ -95,6 +95,11 @@ public class DigestOutboxDataAccess : IDigestOutboxDataAccess
         return due;
     }
 
+    public async Task<int> CountSentSinceAsync(DateTime since)
+    {
+        return await _dbContext.DigestOutbox.CountAsync(o => o.SentAt >= since);
+    }
+
     public async Task MarkSentAsync(int id, DateTime now)
     {
         await _dbContext.DigestOutbox
