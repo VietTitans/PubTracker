@@ -1,8 +1,7 @@
 using RecordData;
-using RecordService.BusinessLogic.DigestService;
-using RecordService.DataAccess.ExternalSources;
+using RecordService.Sources;
+using RecordService.DTOs;
 using RecordService.DTOs.SearchQueryDto;
-using RecordService.Models;
 
 namespace RecordService.Extensions;
 
@@ -17,36 +16,26 @@ public static class SearchQueryMappingExtensions
             TargetUrl = searchQuery.TargetUrl,
             Subscribers = searchQuery.Subscribers,
             LastDigestSentAt = searchQuery.LastDigestSentAt,
-            RecordCount = searchQuery.RecordCount,
+            StoredRecordCount = searchQuery.StoredRecordCount,
             LastFetchedAt = searchQuery.LastFetchedAt,
             SourceRecordCount = searchQuery.SourceRecordCount,
-            Tags = GetKeywordTags(searchQuery.TargetUrl)
+            Tags = GetKeywordTags(searchQuery.TargetUrl),
+            LastPollFailedAt = searchQuery.LastPollFailedAt
         };
     }
 
     private static List<string> GetKeywordTags(string targetUrl)
     {
-        return SourceDetector.DetectSource(targetUrl) switch
-        {
-            SourceDetector.SourceType.PubMed => PubMedDigestMessageBuilder.GetKeywordTags(targetUrl),
-            SourceDetector.SourceType.Pedro => PedroDigestMessageBuilder.GetKeywordTags(targetUrl),
-            _ => new List<string>()
-        };
+        return SourceCatalog.Detect(targetUrl)?.GetKeywordTags(targetUrl) ?? new List<string>();
+    }
+
+    public static PagedResponseDto<SearchQueryResponseDto> ToPagedResponseDto(this Paged<SearchQuery> searchQueries, PageRequest pageRequest)
+    {
+        return searchQueries.ToPagedResponseDto(pageRequest, s => s.ToResponseDto());
     }
 
     public static List<SearchQueryResponseDto> ToResponseDtoList(this List<SearchQuery> searchQueries)
     {
         return searchQueries.Select(s => s.ToResponseDto()).ToList();
-    }
-
-    public static PollResultResponseDto ToResponseDto(this PollResult pollResult)
-    {
-        return new PollResultResponseDto
-        {
-            SearchQueryId = pollResult.SearchQueryId,
-            IsSuccessful = pollResult.IsSuccessful,
-            NewRecordCount = pollResult.NewRecordCount,
-            ErrorMessage = pollResult.ErrorMessage
-        };
     }
 }

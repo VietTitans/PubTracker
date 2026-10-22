@@ -9,7 +9,7 @@ namespace test;
 
 /// <summary>
 /// End-to-end coverage of the full journey: create a search query over HTTP, persist it,
-/// then poll it and persist discovered records - and specifically that the digest watermark
+/// then poll it and persist discovered records; and specifically that the digest watermark
 /// (see RecordPollingService.PollAllSearchQueriesAsync) prevents a second poll from
 /// re-counting already-seen records as new.
 ///
@@ -44,7 +44,7 @@ public class SearchQueryPollingEndToEndTests : IClassFixture<PubTrackerWebApplic
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Debug-User-Id", user.Id.ToString());
 
-        var createResponse = await client.PostAsJsonAsync("/api/SearchQueries", new CreateSearchQueryDto
+        var createResponse = await client.PostAsJsonAsync("/api/v1/SearchQueries", new CreateSearchQueryDto
         {
             TargetUrl = FakeLiteratureSourceProvider.TestUrl
         });
@@ -53,18 +53,20 @@ public class SearchQueryPollingEndToEndTests : IClassFixture<PubTrackerWebApplic
         var pollingService = scope.ServiceProvider.GetRequiredService<IRecordPollingService>();
 
         var firstPollResults = await pollingService.PollAllSearchQueriesAsync();
+        await _factory.DrainOutboxAsync();
         var firstResult = Assert.Single(firstPollResults);
         Assert.True(firstResult.IsSuccessful);
         Assert.Equal(2, firstResult.NewRecordCount);
 
-        var sentEmail = Assert.Single(_factory.EmailSender.SentEmails);
-        Assert.Equal(user.Email, sentEmail.ToEmail);
+        // First poll of a new query is a baseline: the backlog is recorded, never emailed.
+        Assert.Empty(_factory.EmailSender.SentEmails);
 
         var secondPollResults = await pollingService.PollAllSearchQueriesAsync();
+        await _factory.DrainOutboxAsync();
         var secondResult = Assert.Single(secondPollResults);
         Assert.True(secondResult.IsSuccessful);
         Assert.Equal(0, secondResult.NewRecordCount);
 
-        Assert.Single(_factory.EmailSender.SentEmails);
+        Assert.Empty(_factory.EmailSender.SentEmails);
     }
 }

@@ -1,3 +1,5 @@
+using RecordService.Sources;
+
 namespace RecordService.DataAccess.ExternalSources;
 
 /// <summary>
@@ -29,9 +31,12 @@ public class LiteratureSourceFactory
 
         if (provider == null)
         {
-            var sourceType = SourceDetector.DetectSource(url);
+            var detected = SourceCatalog.Detect(url);
+            var detectedText = detected == null ? "Unknown"
+                : _providers.Any(p => p.GetType() == detected.Provider) ? detected.Name
+                : $"{detected.Name} (disabled: set Sources:{detected.Name}:Enabled=true)";
             throw new InvalidOperationException(
-                $"No provider found for URL: {url}. Detected source: {SourceDetector.GetProviderName(sourceType)}. " +
+                $"No provider found for URL: {url}. Detected source: {detectedText}. " +
                 $"Available providers: {string.Join(", ", _providers.Select(p => p.ProviderName))}"
             );
         }

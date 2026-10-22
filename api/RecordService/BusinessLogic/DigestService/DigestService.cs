@@ -1,8 +1,7 @@
 using System.Net;
 using System.Text;
 using RecordService.DataAccess;
-using RecordService.DataAccess.Email;
-using RecordService.DataAccess.ExternalSources;
+using RecordService.Sources;
 using RecordService.Models;
 
 namespace RecordService.BusinessLogic.DigestService;
@@ -10,87 +9,80 @@ namespace RecordService.BusinessLogic.DigestService;
 public class DigestService : IDigestService
 {
     private readonly IUsersDataAccess _usersDataAccess;
-    private readonly IEmailSender _emailSender;
-    private readonly ILogger<DigestService> _logger;
+    private readonly UnsubscribeTokens _unsubscribeTokens;
 
-    public DigestService(
-        IUsersDataAccess usersDataAccess,
-        IEmailSender emailSender,
-        ILogger<DigestService> logger)
+    public DigestService(IUsersDataAccess usersDataAccess, UnsubscribeTokens unsubscribeTokens)
     {
         _usersDataAccess = usersDataAccess;
-        _emailSender = emailSender;
-        _logger = logger;
+        _unsubscribeTokens = unsubscribeTokens;
     }
 
-    public async Task<IReadOnlyDictionary<(int UserId, int SearchQueryId), bool>> SendCombinedDigestsAsync(IReadOnlyList<PendingUserDigest> pendingDigests)
+    public async Task<(string Subject, string HtmlBody)?> BuildCombinedDigestAsync(int userId, IReadOnlyList<PendingUserDigest> userQueries)
     {
-        var successByKey = pendingDigests.ToDictionary(p => (p.UserId, p.SearchQueryId), _ => true);
-        if (pendingDigests.Count == 0)
+        var user = await _usersDataAccess.GetUserByIdAsync(userId);
+        if (user == null || user.IsMarkedForDeletion || user.DigestsStopped)
         {
-            return successByKey;
+            return null;
         }
 
-        foreach (var group in pendingDigests.GroupBy(p => p.UserId))
-        {
-            var userId = group.Key;
-            var userQueries = group.ToList();
+        var totalRecords = userQueries.Sum(q => q.Records.Count);
 
-            var user = await _usersDataAccess.GetUserByIdAsync(userId);
-            if (user == null || user.IsMarkedForDeletion)
-            {
-                continue; // not a failure - no one to send to
-            }
+        var subject = userQueries.Count == 1
+            ? $"{totalRecords} new record{(totalRecords == 1 ? "" : "s")} for your search"
+            : $"{totalRecords} new record{(totalRecords == 1 ? "" : "s")} across {userQueries.Count} of your searches";
 
-            var htmlBody = BuildCombinedHtmlBody(userQueries);
-            var totalRecords = userQueries.Sum(q => q.Records.Count);
-            var subject = userQueries.Count == 1
-                ? $"{totalRecords} new record{(totalRecords == 1 ? "" : "s")} for your search"
-                : $"{totalRecords} new record{(totalRecords == 1 ? "" : "s")} across {userQueries.Count} of your searches";
-
-            try
-            {
-                await _emailSender.SendAsync(user.Email, subject, htmlBody);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex,
-                    "Failed to send combined digest to user {UserId} ({QueryCount} quer(ies))",
-                    userId, userQueries.Count);
-                foreach (var q in userQueries)
-                {
-                    successByKey[(userId, q.SearchQueryId)] = false;
-                }
-            }
-        }
-
-        return successByKey;
+        return (subject, BuildCombinedHtmlBody(
+            userQueries,
+            q => _unsubscribeTokens.SubscriptionUrl(userId, q.SearchQueryId),
+            _unsubscribeTokens.StopAllUrl(userId),
+            _unsubscribeTokens.PrivacyUrl));
     }
 
-    public static string BuildCombinedHtmlBody(IReadOnlyList<PendingUserDigest> pendingQueries)
+    public static string BuildCombinedHtmlBody(
+        IReadOnlyList<PendingUserDigest> pendingQueries,
+        Func<PendingUserDigest, string>? subscriptionUnsubscribeUrl = null,
+        string? stopAllUrl = null,
+        string? privacyUrl = null)
     {
         var sb = new StringBuilder();
         foreach (var q in pendingQueries)
         {
-            var section = SourceDetector.DetectSource(q.TargetUrl) switch
+            var section = SourceCatalog.Detect(q.TargetUrl) is { } source
+                ? source.BuildDigest(q.TargetUrl, q.Records, q.Summary)
+                : BuildHtmlBody(q.TargetUrl, q.Records, q.Summary);
+            sb.Append("<div style=\"margin:0 0 32px;\">").Append(section);
+            if (subscriptionUnsubscribeUrl != null)
             {
-                SourceDetector.SourceType.Pedro => PedroDigestMessageBuilder.BuildHtmlBody(q.TargetUrl, q.Records),
-                SourceDetector.SourceType.PubMed => PubMedDigestMessageBuilder.BuildHtmlBody(q.TargetUrl, q.Records),
-                _ => BuildHtmlBody(q.TargetUrl, q.Records)
-            };
-            sb.Append("<div style=\"margin:0 0 32px;\">").Append(section).Append("</div>");
+                sb.Append(DigestMessageFormatter.BuildUnsubscribeLine("Unsubscribe from this search", subscriptionUnsubscribeUrl(q)));
+            }
+            sb.Append("</div>");
+        }
+        if (stopAllUrl != null && pendingQueries.Count > 0)
+        {
+            sb.Append(DigestMessageFormatter.BuildUnsubscribeLine("Stop all Digests", stopAllUrl));
+        }
+        if (privacyUrl != null && pendingQueries.Count > 0)
+        {
+            sb.Append(DigestMessageFormatter.BuildUnsubscribeLine("Privacy policy", privacyUrl));
         }
         return sb.ToString();
     }
 
-    public static string BuildHtmlBody(string targetUrl, IReadOnlyList<LiteratureRecord> newRecords)
+    public static string BuildHtmlBody(string targetUrl, IReadOnlyList<LiteratureRecord> newRecords, string? summary = null)
     {
         var sb = new StringBuilder();
         sb.Append("<p>New records found for your search: ");
         sb.Append(WebUtility.HtmlEncode(targetUrl));
-        sb.Append("</p><ul>");
+        sb.Append("</p>");
 
-        foreach (var record in newRecords)
+        if (!string.IsNullOrWhiteSpace(summary))
+        {
+            sb.Append(DigestMessageFormatter.BuildSummaryBlock(summary));
+        }
+
+        sb.Append("<ul>");
+
+        foreach (var record in newRecords.Take(DigestMessageFormatter.MaxRecordsPerQuery))
         {
             sb.Append("<li><strong>");
 
@@ -115,10 +107,16 @@ public class DigestService : IDigestService
                 sb.Append(WebUtility.HtmlEncode(record.Abstract));
             }
 
+            if (!string.IsNullOrWhiteSpace(record.AuthorIntention))
+            {
+                sb.Append("<br/>Author Intention: ").Append(WebUtility.HtmlEncode(record.AuthorIntention));
+            }
+
             sb.Append("</li>");
         }
 
         sb.Append("</ul>");
+        DigestMessageFormatter.AppendOverflowNotice(sb, newRecords.Count - DigestMessageFormatter.MaxRecordsPerQuery);
         return sb.ToString();
     }
 }

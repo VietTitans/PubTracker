@@ -12,9 +12,9 @@ public class SourcesService : ISourcesService
         _dataAccess = dataAccess;
     }
 
-    public async Task<List<Source>> GetAllSourcesAsync()
+    public async Task<Paged<Source>> GetSourcesPageAsync(int page, int pageSize)
     {
-        return await _dataAccess.GetAllSourcesAsync();
+        return await _dataAccess.GetSourcesPageAsync(page, pageSize);
     }
 
     public async Task<Source?> GetSourceByIdAsync(int sourceId)

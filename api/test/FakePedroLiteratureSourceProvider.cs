@@ -6,7 +6,7 @@ namespace test;
 /// <summary>
 /// Second test-only ILiteratureSourceProvider stand-in, alongside FakeLiteratureSourceProvider,
 /// so E2E tests can exercise a user subscribed to two distinct sources at once without hitting
-/// live PubMed/PEDro. CanHandle matches a URL containing "pedro" so SourceDetector routes its
+/// live PubMed/PEDro. CanHandle matches a URL containing "pedro" so SourceCatalog routes its
 /// digest content through PedroDigestMessageBuilder, distinguishing it from
 /// FakeLiteratureSourceProvider's Unknown-source fallback path.
 /// </summary>
@@ -22,8 +22,8 @@ public class FakePedroLiteratureSourceProvider : ILiteratureSourceProvider
     {
         var allRecords = new List<LiteratureRecord>
         {
-            new() { ExternalId = "fakepedro:1", Title = "Fake Pedro Record 1", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-2) },
-            new() { ExternalId = "fakepedro:2", Title = "Fake Pedro Record 2", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-1) }
+            new() { ExternalId = "fakepedro:1", Title = "Fake Pedro Record 1", Abstract = "Fake abstract.", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-2) },
+            new() { ExternalId = "fakepedro:2", Title = "Fake Pedro Record 2", Abstract = "Fake abstract.", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-1) }
         };
 
         var newRecords = lastRunDate.HasValue

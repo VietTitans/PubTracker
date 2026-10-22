@@ -6,8 +6,8 @@ namespace test;
 /// <summary>
 /// Covers DigestMessageFormatter's clustering behavior (via PubMedDigestMessageBuilder's
 /// public entry point, since DigestMessageFormatter itself is internal): records are grouped
-/// by RecordTopicClassifier under a heading with a count, every record in a cluster is listed
-/// in full (nothing capped or linked out), and anything no rule matches lands in its own
+/// by RecordTopicClassifier under a heading with a count, records are listed in full up to the
+/// per-query cap (50), with a "+ N more, see the app" line for the rest, and anything no rule matches lands in its own
 /// "Other / uncategorized" cluster, also listed in full.
 /// </summary>
 public class DigestMessageClusteringTests
@@ -34,6 +34,33 @@ public class DigestMessageClusteringTests
 
         Assert.Contains("Systematic reviews &amp; meta-analyses (1)", html);
         Assert.Contains("Exercise &amp; movement-based therapy (1)", html);
+    }
+
+    [Fact]
+    public void BuildHtmlBody_MoreThanCap_ListsFirstFiftyAndCollapsesTheRest()
+    {
+        var records = Enumerable.Range(1, 280)
+            .Select(i => MakeRecord($"Study protocol for a randomized controlled trial #{i}.", i.ToString()))
+            .ToList();
+
+        var html = PubMedDigestMessageBuilder.BuildHtmlBody(TestUrl, records);
+
+        Assert.Contains("RCT protocols (280)", html);
+        Assert.Contains("trial #50.", html);
+        Assert.DoesNotContain("trial #51.", html);
+        Assert.Contains("+ 230 more, see the app", html);
+    }
+
+    [Fact]
+    public void BuildHtmlBody_AtOrUnderCap_HasNoOverflowNotice()
+    {
+        var records = Enumerable.Range(1, 50)
+            .Select(i => MakeRecord($"Study protocol for a randomized controlled trial #{i}.", i.ToString()))
+            .ToList();
+
+        var html = PubMedDigestMessageBuilder.BuildHtmlBody(TestUrl, records);
+
+        Assert.DoesNotContain("see the app", html);
     }
 
     [Fact]

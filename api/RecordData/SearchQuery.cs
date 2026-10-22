@@ -14,20 +14,20 @@ public class SearchQuery
     /// other fetch paths (e.g. GetAllSearchQueriesAsync, used by the polling worker) leave
     /// this at its default 0 since they don't need it.
     /// </summary>
-    public int RecordCount { get; set; }
+    public int StoredRecordCount { get; set; }
 
     /// <summary>
     /// When this search query's source was last successfully fetched, derived from
-    /// MAX(search_query_records.first_seen_at) - distinct from LastDigestSentAt, which only
+    /// MAX(search_query_records.first_seen_at); distinct from LastDigestSentAt, which only
     /// advances once an email has actually been sent. A fetch can succeed (and this can be
     /// set) even while the digest send keeps failing. Populated by the same data access
-    /// methods as RecordCount; null if never fetched.
+    /// methods as StoredRecordCount; null if never fetched.
     /// </summary>
     public DateTime? LastFetchedAt { get; set; }
 
     /// <summary>
     /// When this search query's source was last successfully polled, regardless of whether
-    /// that poll found or persisted anything - fed back into ExecuteSourceSearchAsync as the
+    /// that poll found or persisted anything; fed back into ExecuteSourceSearchAsync as the
     /// next poll's lastRunDate. Deliberately separate from LastDigestSentAt: a provider like
     /// PEDro (which returns nothing but a baseline total on its very first poll, to avoid
     /// pulling full details for a potentially huge backlog) still needs its "fetch new records
@@ -37,9 +37,19 @@ public class SearchQuery
 
     /// <summary>
     /// The source's current total match count for this search (e.g. PEDro's "Found X
-    /// records"), as of the most recent successful poll - distinct from RecordCount, which is
+    /// records"), as of the most recent successful poll; distinct from StoredRecordCount, which is
     /// only how many of those have actually been fetched and linked so far. Null until the
     /// first successful poll.
     /// </summary>
     public int? SourceRecordCount { get; set; }
+
+    /// <summary>
+    /// When this search query's source was last found unreachable (timeout, connection
+    /// failure, or its circuit breaker open, see PubMedHttpClientExtensions/PedroProvider's
+    /// CircuitBreakerPipeline), so the frontend can show a quiet "retrying automatically"
+    /// status instead of leaving a failed source looking identical to "nothing new yet". Set
+    /// on a failed poll, cleared on the next successful one, see RecordPollingService and
+    /// RecordPollFailedAsync/RecordPollCompletedAsync.
+    /// </summary>
+    public DateTime? LastPollFailedAt { get; set; }
 }

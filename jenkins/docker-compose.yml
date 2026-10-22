@@ -12,7 +12,7 @@ services:
     # more sensitive.
     user: root
     ports:
-      - "8090:8080"   # Jenkins UI — 8080/8081/5173 are already used by docker/docker-compose.yml
+      - "8090:8080"   # Jenkins UI; 8080/8081/5173 are already used by docker/docker-compose.yml
       - "50000:50000" # inbound agent port; unused for now (single built-in node), harmless to expose
     volumes:
       - jenkins_home:/var/jenkins_home

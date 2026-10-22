@@ -7,5 +7,6 @@ namespace RecordService.DataAccess.Email;
 /// </summary>
 public interface IEmailSender
 {
-    Task SendAsync(string toEmail, string subject, string htmlBody);
+    /// <param name="unsubscribeUrl">When set, sent as List-Unsubscribe / List-Unsubscribe-Post (RFC 8058 one-click) headers.</param>
+    Task SendAsync(string toEmail, string subject, string htmlBody, string? unsubscribeUrl = null);
 }

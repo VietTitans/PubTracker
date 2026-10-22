@@ -4,7 +4,7 @@ using RecordService.Models;
 namespace test;
 
 /// <summary>
-/// Pure unit tests of DigestService.BuildCombinedHtmlBody - no DB, no DI, no email sending.
+/// Pure unit tests of DigestService.BuildCombinedHtmlBody; no DB, no DI, no email sending.
 /// Confirms multiple queries/sources combine into one body, a single-query input matches what
 /// the direct per-source builder would produce (no behavior change for the single-query
 /// case), and an empty input produces an empty body.
@@ -71,5 +71,24 @@ public class DigestServiceCombinedBuilderTests
         var html = DigestService.BuildCombinedHtmlBody(new List<PendingUserDigest>());
 
         Assert.Equal(string.Empty, html);
+    }
+
+    [Fact]
+    public void BuildCombinedHtmlBody_WithPrivacyUrl_LinksPrivacyPolicyInFooter()
+    {
+        var pending = new List<PendingUserDigest>
+        {
+            new()
+            {
+                UserId = 1,
+                SearchQueryId = 10,
+                TargetUrl = "https://pubmed.ncbi.nlm.nih.gov/?term=exercise",
+                Records = new List<LiteratureRecord> { MakeRecord("A PubMed exercise trial.", "1") }
+            }
+        };
+
+        var html = DigestService.BuildCombinedHtmlBody(pending, privacyUrl: "https://example.org/privacy");
+
+        Assert.Contains("href=\"https://example.org/privacy\"", html);
     }
 }

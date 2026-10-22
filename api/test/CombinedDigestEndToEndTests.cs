@@ -1,3 +1,4 @@
+using Microsoft.EntityFrameworkCore;
 using System.Net.Http.Json;
 using Microsoft.Extensions.DependencyInjection;
 using RecordData;
@@ -22,7 +23,7 @@ namespace test;
 ///
 /// [Collection] groups this with every other test class that uses PubTrackerWebApplicationFactory
 /// (see SearchQueryPollingEndToEndTests's doc comment) so xunit never initializes two factory
-/// instances concurrently - they'd race on the process-wide environment variables
+/// instances concurrently; they'd race on the process-wide environment variables
 /// PubTrackerWebApplicationFactory configures itself through.
 /// </summary>
 [Collection("PubTrackerWebApplicationFactory")]
@@ -53,7 +54,7 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
         var createdSearchQueryIds = new List<int>();
         foreach (var targetUrl in new[] { FakeLiteratureSourceProvider.TestUrl, FakePedroLiteratureSourceProvider.TestUrl })
         {
-            var createResponse = await client.PostAsJsonAsync("/api/SearchQueries", new CreateSearchQueryDto { TargetUrl = targetUrl });
+            var createResponse = await client.PostAsJsonAsync("/api/v1/SearchQueries", new CreateSearchQueryDto { TargetUrl = targetUrl });
             createResponse.EnsureSuccessStatusCode();
             var created = await createResponse.Content.ReadFromJsonAsync<SearchQueryResponseDto>();
             createdSearchQueryIds.Add(created!.Id);
@@ -63,9 +64,11 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
 
         // PollAllSearchQueriesAsync polls every query in this class's shared database, which by
         // now may include the isolation test's own query too (test methods within a class share
-        // one Postgres container/class fixture) - filter to just the two this test created.
+        // one Postgres container/class fixture); filter to just the two this test created.
+        await _factory.SkipBaselinePollAsync();
         var allResults = await pollingService.PollAllSearchQueriesAsync();
         var results = allResults.Where(r => createdSearchQueryIds.Contains(r.SearchQueryId)).ToList();
+        await _factory.DrainOutboxAsync();
 
         Assert.Equal(2, results.Count);
         Assert.All(results, r => Assert.True(r.IsSuccessful, r.ErrorMessage));
@@ -77,7 +80,7 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
     }
 
     [Fact]
-    public async Task TwoSubscribers_OneEmailFails_OnlyThatSubscriberIsRetried()
+    public async Task TwoSubscribers_OneEmailFails_OnlyThatSubscriberIsRetriedFromOutbox()
     {
         using var scope = _factory.Services.CreateScope();
         var usersDataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
@@ -103,12 +106,12 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
         {
             client.DefaultRequestHeaders.Add("X-Debug-User-Id", userId.ToString());
             // Distinct URL variant, not FakeLiteratureSourceProvider.TestUrl or
-            // FakePedroLiteratureSourceProvider.TestUrl directly - OneUser_SubscribedToTwoQueries
+            // FakePedroLiteratureSourceProvider.TestUrl directly; OneUser_SubscribedToTwoQueries
             // already subscribes a user to both of those in this same class (same shared
             // Postgres container/class fixture), and reusing either would mean this test's poll
             // finds zero "new" records (the fake's records are fixed at "2 days ago"/"1 day
             // ago", already older than that other test's already-advanced last_polled_at).
-            var createResponse = await client.PostAsJsonAsync("/api/SearchQueries",
+            var createResponse = await client.PostAsJsonAsync("/api/v1/SearchQueries",
                 new CreateSearchQueryDto { TargetUrl = $"{FakeLiteratureSourceProvider.TestUrl}?case=isolation" });
             createResponse.EnsureSuccessStatusCode();
             var created = await createResponse.Content.ReadFromJsonAsync<SearchQueryResponseDto>();
@@ -119,20 +122,24 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
 
         // PollAllSearchQueriesAsync polls every query in this class's shared database, which by
         // now may include OneUser_SubscribedToTwoQueries's own queries too (test methods within
-        // a class share one Postgres container/class fixture) - filter to just this test's query.
+        // a class share one Postgres container/class fixture); filter to just this test's query.
         _factory.EmailSender.FailForAddresses.Add(userB.Email);
+        await _factory.SkipBaselinePollAsync();
         var firstResult = (await pollingService.PollAllSearchQueriesAsync()).Single(r => r.SearchQueryId == searchQueryId);
-        Assert.False(firstResult.IsSuccessful); // one of the two subscribers' sends failed
+        Assert.True(firstResult.IsSuccessful); // both digests were queued; sending is the outbox's job
+        await _factory.DrainOutboxAsync();
 
         Assert.Single(_factory.EmailSender.SentEmails, e => e.ToEmail == userA.Email);
         Assert.DoesNotContain(_factory.EmailSender.SentEmails, e => e.ToEmail == userB.Email);
 
+        // userB's failed send is backed off, not lost; make it due again and let it succeed.
         _factory.EmailSender.FailForAddresses.Remove(userB.Email);
-        var secondResult = (await pollingService.PollAllSearchQueriesAsync()).Single(r => r.SearchQueryId == searchQueryId);
-        Assert.True(secondResult.IsSuccessful);
+        var dbContext = scope.ServiceProvider.GetRequiredService<PubTrackerDbContext>();
+        await dbContext.Database.ExecuteSqlRawAsync("UPDATE digest_outbox SET next_attempt_at = now() - interval '1 hour' WHERE sent_at IS NULL AND failed_at IS NULL");
+        await _factory.DrainOutboxAsync();
 
-        // userA already received their email on the first poll and must not get a duplicate;
-        // userB's failed send from the first poll is retried and now succeeds.
+        // userA already received their email and must not get a duplicate;
+        // userB's failed send is retried and now succeeds.
         Assert.Single(_factory.EmailSender.SentEmails, e => e.ToEmail == userA.Email);
         Assert.Single(_factory.EmailSender.SentEmails, e => e.ToEmail == userB.Email);
     }

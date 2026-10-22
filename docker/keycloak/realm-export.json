@@ -1,12 +1,61 @@
 {
   "realm": "science-alerts-saas",
+  "displayName": "PubTracker",
+  "displayNameHtml": "PubTracker",
   "enabled": true,
   "registrationAllowed": true,
-  "registrationEmailAsUsername": true,
+  "registrationEmailAsUsername": false,
   "loginWithEmailAllowed": true,
   "duplicateEmailsAllowed": false,
   "verifyEmail": false,
   "resetPasswordAllowed": true,
+  "defaultRole": {
+    "name": "default-roles-science-alerts-saas",
+    "description": "${role_default-roles}",
+    "composite": true,
+    "clientRole": false
+  },
+  "roles": {
+    "realm": [
+      { "name": "User", "description": "Standard PubTracker user" },
+      { "name": "Admin", "description": "PubTracker administrator" },
+      {
+        "name": "default-roles-science-alerts-saas",
+        "description": "${role_default-roles}",
+        "composite": true,
+        "composites": {
+          "realm": ["User"]
+        },
+        "clientRole": false
+      }
+    ]
+  },
+  "users": [
+    {
+      "username": "test@test.com",
+      "email": "pubtracker@protonmail.com",
+      "firstName": "Test",
+      "lastName": "User",
+      "enabled": true,
+      "emailVerified": true,
+      "credentials": [
+        {
+          "type": "password",
+          "value": "test",
+          "temporary": false
+        }
+      ],
+      "realmRoles": ["User"]
+    },
+    {
+      "username": "service-account-pubtracker-api-admin",
+      "enabled": true,
+      "serviceAccountClientId": "pubtracker-api-admin",
+      "clientRoles": {
+        "realm-management": ["view-users", "manage-users"]
+      }
+    }
+  ],
   "clients": [
     {
       "clientId": "science-alerts-web",
@@ -18,8 +67,8 @@
       "implicitFlowEnabled": false,
       "directAccessGrantsEnabled": false,
       "serviceAccountsEnabled": false,
-      "redirectUris": ["http://localhost/*"],
-      "webOrigins": ["http://localhost"],
+      "redirectUris": ["http://localhost/*", "http://localhost:5173/*"],
+      "webOrigins": ["http://localhost", "http://localhost:5173"],
       "attributes": {
         "pkce.code.challenge.method": "S256"
       },
@@ -34,8 +83,36 @@
             "id.token.claim": "false",
             "access.token.claim": "true"
           }
+        },
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
         }
       ]
+    },
+    {
+      "clientId": "pubtracker-api-admin",
+      "name": "PubTracker API (admin)",
+      "description": "Lets the API update users' emails in Keycloak. Dev secret: replace it outside local development.",
+      "enabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "secret": "dev-admin-client-secret",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true
     }
   ]
 }

@@ -13,6 +13,7 @@ namespace RecordService.DataAccess.ExternalSources;
 /// </summary>
 public class PubMedProvider : ILiteratureSourceProvider
 {
+    private const string AllowedHost = "pubmed.ncbi.nlm.nih.gov";
     private const string EutilsBaseUrl = "https://eutils.ncbi.nlm.nih.gov/entrez/eutils/";
     private const int EsearchPageSize = 9999; // NCBI's per-request ceiling for a plain (non-history) ESearch
     private const int EfetchBatchSize = 200; // keep individual EFetch responses to a reasonable size
@@ -33,7 +34,9 @@ public class PubMedProvider : ILiteratureSourceProvider
 
     public bool CanHandle(string url)
     {
-        return !string.IsNullOrWhiteSpace(url) && url.ToLowerInvariant().Contains("pubmed");
+        return Uri.TryCreate(url, UriKind.Absolute, out var uri)
+            && uri.Scheme == Uri.UriSchemeHttps
+            && string.Equals(uri.Host, AllowedHost, StringComparison.OrdinalIgnoreCase);
     }
 
     public async Task<SourceSearchResult> SearchAsync(string url, DateTime? lastRunDate = null)
@@ -88,10 +91,63 @@ public class PubMedProvider : ILiteratureSourceProvider
             return (0, new());
 
         var (totalCount, pmids) = await SearchPmidsAsync(term);
+
+        // The PubMed website silently spell-corrects a zero-result search ("Showing results for ...");
+        // ESearch does not, so mirror that via ESpell and retry once with the corrected term.
+        if (totalCount == 0)
+        {
+            var corrected = await GetSpellCorrectedTermAsync(term);
+            if (corrected != null)
+                (totalCount, pmids) = await SearchPmidsAsync(corrected);
+        }
+
         if (pmids.Count == 0)
             return (totalCount, new());
 
         return (totalCount, await FetchArticlesAsync(pmids));
+    }
+
+    // Stores a zero-result search under its spell-corrected term, so it dedupes against the
+    // correctly spelled URL and the digest category sees the real keyword. Any failure keeps the URL.
+    public async Task<string> NormalizeUrlAsync(string url)
+    {
+        try
+        {
+            var term = ExtractSearchTerm(url);
+            if (string.IsNullOrWhiteSpace(term))
+                return url;
+
+            var query = BuildQuery(new Dictionary<string, string?>
+            {
+                ["db"] = "pubmed", ["term"] = term, ["retmax"] = "0", ["retmode"] = "xml"
+            });
+            var response = await _httpClient.GetAsync($"esearch.fcgi?{query}");
+            response.EnsureSuccessStatusCode();
+            var count = XDocument.Parse(await response.Content.ReadAsStringAsync()).Root?.Element("Count")?.Value;
+            if (count != "0")
+                return url;
+
+            var corrected = await GetSpellCorrectedTermAsync(term);
+            return corrected is null
+                ? url
+                : Regex.Replace(url, @"(?<=[?&]term=)[^&]*", System.Net.WebUtility.UrlEncode(corrected));
+        }
+        catch
+        {
+            return url;
+        }
+    }
+
+    private async Task<string?> GetSpellCorrectedTermAsync(string term)
+    {
+        await Task.Delay(RequestDelay);
+        var query = BuildQuery(new Dictionary<string, string?> { ["db"] = "pubmed", ["term"] = term });
+        var response = await _httpClient.GetAsync($"espell.fcgi?{query}");
+        response.EnsureSuccessStatusCode();
+
+        var xml = XDocument.Parse(await response.Content.ReadAsStringAsync());
+        var corrected = xml.Root?.Element("CorrectedQuery")?.Value;
+        return string.IsNullOrWhiteSpace(corrected) || corrected == term ? null : corrected;
     }
 
     private static string ExtractSearchTerm(string url)
@@ -124,7 +180,7 @@ public class PubMedProvider : ILiteratureSourceProvider
             var xml = XDocument.Parse(await response.Content.ReadAsStringAsync());
             // NCBI's non-history ESearch mode caps out at 9,999 records: a page requested past
             // that ceiling returns an <ERROR> element instead of <Count>, so only overwrite the
-            // total when this page actually reports one - otherwise the real total from an
+            // total when this page actually reports one; otherwise the real total from an
             // earlier page would get clobbered back to 0.
             if (int.TryParse(xml.Root?.Element("Count")?.Value, out var count))
             {
@@ -196,7 +252,7 @@ public class PubMedProvider : ILiteratureSourceProvider
     }
 
     // PubmedBookArticle (book chapters, e.g. StatPearls) has a differently-shaped XML tree
-    // than PubmedArticle - title/authors/abstract live directly under BookDocument rather
+    // than PubmedArticle; title/authors/abstract live directly under BookDocument rather
     // than under Article, and the pub date is under Book instead of Journal/JournalIssue.
     private LiteratureRecord ParseBookArticle(XElement bookArticle)
     {

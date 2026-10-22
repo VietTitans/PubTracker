@@ -10,10 +10,11 @@ public class User
 
     public string Email { get; set; }
 
-    public string? KeycloakSub { get; set; }
+    public bool DigestsStopped { get; set; } = false;
 
     public bool IsMarkedForDeletion { get; set; } = false;
 
     public DateTime? DeletionRequestedAt { get; set; } = null;
 
 }
+    

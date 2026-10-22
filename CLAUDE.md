@@ -8,7 +8,7 @@ These bias toward caution over speed. For trivial tasks, use judgment.
 
 **1. Think before coding.** Don't assume. Don't hide confusion. Surface tradeoffs.
 - State assumptions explicitly. If uncertain, ask.
-- If multiple interpretations exist, present them — don't pick silently.
+- If multiple interpretations exist, present them; don't pick silently.
 - If a simpler approach exists, say so. Push back when warranted.
 - If something is unclear, stop. Name what's confusing. Ask.
 
@@ -24,7 +24,7 @@ These bias toward caution over speed. For trivial tasks, use judgment.
 - Don't "improve" adjacent code, comments, or formatting.
 - Don't refactor things that aren't broken.
 - Match existing style, even if you'd do it differently.
-- If you notice unrelated dead code, mention it — don't delete it.
+- If you notice unrelated dead code, mention it; don't delete it.
 - Remove imports/variables/functions that YOUR changes made unused; don't remove pre-existing dead code unless asked.
 - Test: every changed line should trace directly to the user's request.
 
@@ -37,50 +37,115 @@ These are working if: fewer unnecessary changes in diffs, fewer rewrites due to 
 
 ## Project overview
 
-PubTracker is a literature-monitoring SaaS: users paste a search URL from a scientific database (PubMed, PEDro, later IEEE/Scopus), the system polls it on a schedule, deduplicates new records, and emails a digest of what's new. Full target architecture (Keycloak auth, Quartz/Hangfire scheduler, Playwright scraping, email digest pipeline) is documented in `ai/system-architecture-net10.md` — read it when working on anything beyond basic CRUD, since large parts of that design (background worker, scheduling, email dispatch, auth) are not implemented yet.
+PubTracker is a literature-monitoring SaaS: users paste a search URL from a scientific database (PubMed, PEDro, later IEEE/Scopus), the system polls it on a schedule, deduplicates new records, and emails a digest of what's new, optionally with an AI-generated summary. Full target architecture is documented in `ai/system-architecture-net10.md`. It's aspirational in places (e.g. Quartz/Hangfire, Playwright scraping), so check the actual code before trusting a design detail from it; the core loop (auth, scheduled polling, email digest, AI summaries) described below is implemented and running.
 
-The backend lives in `api/` — **.NET 10 / ASP.NET Core** Web API. (An earlier Python/FastAPI prototype previously lived at `app/`; it has been removed.)
+The backend lives in `api/` (**.NET 10 / ASP.NET Core** Web API). The frontend lives in `web/` (**React 19 / TypeScript / Vite**). (An earlier Python/FastAPI prototype previously lived at `app/`; it has been removed.)
 
 ## Commands
+
+### Web app (`web/`)
+```bash
+cd web
+npm install       # install deps
+npm run dev       # Vite dev server (localhost:5173 by default)
+npm run build     # production build
+```
+Auth in the browser is handled by `oidc-client-ts` against Keycloak (`src/auth/`); the API's CORS policy (`Cors:WebAppOrigin`, see `Program.cs`) must match whatever origin the dev server runs on.
 
 ### .NET API (`api/`)
 ```bash
 dotnet restore api/RecordService/RecordService.csproj   # restore deps
 dotnet build api/RecordService/RecordService.csproj      # build
-dotnet run --project api/RecordService                   # run locally (needs DefaultConnection configured, see below)
+dotnet run --project api/RecordService                   # run locally (needs config below)
 ```
+`Program.cs` throws at startup if required config is missing. Required: `ConnectionStrings__DefaultConnection` (Postgres), `Email:ApiKey`/`Email:FromAddress`/`Email:FromName` (Brevo, digest emails). Optional, with fallbacks: `Keycloak:Authority`/`Keycloak:MetadataAddress`/`Keycloak:Audience` (defaults point at a local Keycloak on `:8081`; in `Development` a `DebugAuthenticationHandler` also lets unauthenticated requests through as a fake user when no `Authorization` header is sent), `Llm:BaseUrl`/`Llm:ApiKey`/`Llm:Model` (AI digest summaries: any OpenAI-compatible chat-completions endpoint; missing key falls back to `NullSummaryGenerator`, i.e. no summaries, not a startup failure), `Cors:WebAppOrigin` (default `http://localhost:5173`), `Scheduler:PollIntervalHours` (default 168), `Scheduler:UserPurgeIntervalHours` (default 24), `Ncbi:ApiKey`/`Ncbi:ContactEmail` (PubMed rate limits), `Sentry:Dsn` (error reports, EU region, personal data scrubbed by `SentryScrubber`; blank = off), `Heartbeat:PollUrl`/`Heartbeat:OutboxUrl` (worker dead-man's-switch pings after each good cycle; see `docs/runbooks/observability.md`), `Subscriptions:MaxPerUser` (max Subscriptions per user, default 20, must be >= 1 or startup fails; subscribing past it returns 422 `{ message }`), `Email:DailySendLimit` (max digests the outbox sends per UTC day, default 250, must be >= 1 or startup fails; the rest wait for the next day without consuming retry attempts).
+
 Tests live in `api/test/Test.csproj` (xunit; `Testcontainers.PostgreSql`-based end-to-end tests):
 ```bash
 dotnet test api/test/Test.csproj
 ```
 
+EF Core migrations (from `api/RecordService/`, requires the `dotnet-ef` global tool):
+```bash
+dotnet ef migrations add <Name>   # add a migration after changing DataAccess/Entities or PubTrackerDbContext
+dotnet ef database update         # apply pending migrations to ConnectionStrings__DefaultConnection (env var; must be set and reachable)
+```
+`Program.cs` also applies pending migrations automatically at API startup (`Database.Migrate()`), same as any other environment.
+
 ### Full stack via Docker
 ```bash
 cd docker
-docker compose up --build     # builds api/ (via api/Dockerfile) + postgres, applies database/schema/init.sql on first boot
+docker compose up --build     # proxy (Caddy) + db (postgres) + keycloak + api + web
 ```
-Requires `docker/.env` (copy from `docker/.env.example.example`) with `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB`, `POSTGRES_PORT`, `ASPNETCORE_ENVIRONMENT`. The API reads its connection string from `ConnectionStrings__DefaultConnection`, which `docker-compose.yml` assembles from those same Postgres env vars. `Program.cs` throws at startup if this connection string is missing.
+Five services, all behind the `proxy` (Caddy, port 80): `web` (React build), `api` (.NET, builds from `api/Dockerfile`, applies pending EF migrations on startup), `db` (Postgres), and `keycloak` (dev-mode, realm auto-imported from `docker/keycloak/realm-export.json`, served under `/auth` so Caddy can forward `/auth/*` to it unmodified). Requires `docker/.env` (copy from `docker/.env.example.example`): Postgres creds plus `EMAIL_*`, `NCBI_*`, `LLM_*`, `SCHEDULER_POLL_INTERVAL_HOURS`, and the `WEB_*`/`KEYCLOAK_*` origin vars `docker-compose.yml` uses to wire CORS, Keycloak's browser-facing vs. in-network URLs, and the web build's `VITE_*` args. See `docker-compose.yml` for the full mapping.
 
 ## Architecture (`api/`)
 
 Two-project .NET solution:
-- **`RecordData`** — plain domain model classes (`User`, `Source`, `SearchQuery`, `LiteratureRecord`, `SourceSearchResult`), namespace `RecordData`. No dependencies on the web project.
-- **`RecordService`** — the ASP.NET Core Web API, referencing `RecordData`.
+- **`RecordData`**: plain domain model classes (`User`, `Source`, `SearchQuery`, `LiteratureRecord`, `SourceSearchResult`), namespace `RecordData`. No dependencies on the web project.
+- **`RecordService`**: the ASP.NET Core Web API, referencing `RecordData`.
 
 `RecordService` follows a strict layered flow: **Controller → BusinessLogic (Service) → DataAccess**, each layer defined by an interface (`I*Service`, `I*DataAccess`) with a single implementation, wired up manually in `Program.cs` (no assembly scanning). When adding a new resource, add all three layers plus register them in `Program.cs`.
 
 - **Controllers** (`Controllers/`) are thin: call the service, catch exceptions, return DTOs via mapping extensions. They don't touch `DataAccess` or `RecordData` models directly.
 - **BusinessLogic** (`BusinessLogic/`) holds orchestration/business rules and calls `DataAccess`.
-- **DataAccess** (`DataAccess/`) talks to Postgres directly via raw `Npgsql` `NpgsqlCommand`/parameterized SQL (no ORM/EF Core). Table/column names in SQL are `snake_case` (see `database/schema/init.sql`); C# model properties are `PascalCase` — data access classes are responsible for that mapping manually. Connection strings are injected as plain strings into constructors, not via `DbContext`.
-- **DTOs** (`DTOs/`) + **Extensions** (`Extensions/`, e.g. `UserMappingExtensions.cs`) — API request/response shapes are always DTOs, never raw `RecordData` models. Mapping between DTOs and domain models is hand-written extension methods (`ToResponseDto()`, `ToUserModel()`, `UpdateFromDto()`), not AutoMapper. See `api/DTO_IMPLEMENTATION.md` for the full convention when adding DTOs for a new entity.
-- **ErrorHandling** (`ErrorHandling/IErrorHandler.cs`) — a `DefaultErrorHandler` provides consistent `{ message }`-shaped JSON error responses (`BadRequest`, `NotFound`, `InternalServerError`, etc.); prefer it over ad hoc `StatusCode(...)` results in new controller code.
-- **External literature sources** (`DataAccess/ExternalSources/`) — a strategy/factory pattern for pluggable source providers:
-  - `ILiteratureSourceProvider` — `CanHandle(url)`, `SearchAsync(url, lastRunDate)`, `RefreshAsync(url)`.
-  - `LiteratureSourceFactory` — picks the right provider for a URL from the registered set.
-  - `SourceDetector` — a separate, simpler URL→`SourceType` sniffer used for factory error messages (currently substring-matches `"pubmed"`/`"pedro"` in the URL; note this logic is duplicated, not shared, with each provider's own `CanHandle`).
-  - `PubMedProvider`, `PedroProvider` — one per source. New sources are added by implementing this interface and registering the provider as a singleton in `Program.cs`'s `LiteratureSourceFactory` setup. Current provider implementations are scaffolded/placeholder (the actual NCBI/PEDro fetch-and-parse logic is not yet implemented) — check current state in the file before assuming a source is functional.
-- Auth is scaffolded but mostly inactive: `Program.cs` defines `AdminOnly` / `UserOrAdmin` authorization policies (role-based), but most `[Authorize]` attributes on controller actions are currently commented out. The target design uses Keycloak/OIDC JWTs (see `ai/system-architecture-net10.md` §4) — this is not yet wired up.
+- **DataAccess** (`DataAccess/`) talks to Postgres via **EF Core** (`Npgsql.EntityFrameworkCore.PostgreSQL`), through the single `PubTrackerDbContext` (`DataAccess/PubTrackerDbContext.cs`), injected into each `I*DataAccess` implementation's constructor and registered per-request via `AddDbContext` in `Program.cs`. EF entity classes live in `DataAccess/Entities/` (`UserEntity`, `SourceEntity`, `SearchQueryEntity`, `RecordEntity`, and the join-table entities `UserSearchQueryEntity`, `UserSearchQueryDigestEntity`, `SourceRecordEntity`, `SearchQueryRecordEntity`); these are separate from the `RecordData` model classes (`User`, `Source`, `SearchQuery`, `LiteratureRecord`) returned by the DataAccess layer, since the entities mirror raw column nullability/shape 1:1 while the `RecordData` models carry computed/derived fields (e.g. `SearchQuery.StoredRecordCount`, `LastFetchedAt`) that aren't columns. Data access classes map between the two by hand (no AutoMapper), same convention as DTO↔model mapping. Table/column names are configured `snake_case` via Fluent API in `PubTrackerDbContext.OnModelCreating` (including `id`, to match raw SQL used elsewhere); there are no `[Column]`/`[Table]` attributes on the entities. Plain CRUD goes through LINQ (`ExecuteUpdateAsync`/`ExecuteDeleteAsync` for updates/deletes); Postgres-specific upserts (`ON CONFLICT ... RETURNING`) and other statements EF's LINQ provider can't express go through `Database.SqlQuery<T>`/`ExecuteSqlInterpolatedAsync` raw SQL inside an explicit `Database.BeginTransactionAsync()` transaction: never `.SingleAsync()`/`.FirstAsync()` etc. directly on a `SqlQuery<T>` built from non-SELECT SQL (EF must compose those with a `LIMIT`, which fails on `INSERT ... RETURNING`; materialize with `.ToListAsync()` first and take the single element in memory instead).
+- **DTOs** (`DTOs/`) + **Extensions** (`Extensions/`, e.g. `UserMappingExtensions.cs`): API request/response shapes are always DTOs, never raw `RecordData` models. Mapping between DTOs and domain models is hand-written extension methods (`ToResponseDto()`, `ToUserModel()`, `UpdateFromDto()`), not AutoMapper. See `api/DTO_IMPLEMENTATION.md` for the full convention when adding DTOs for a new entity.
+- **ErrorHandling** (`ErrorHandling/IErrorHandler.cs`): a `DefaultErrorHandler` provides consistent `{ message }`-shaped JSON error responses (`BadRequest`, `NotFound`, `InternalServerError`, etc.); prefer it over ad hoc `StatusCode(...)` results in new controller code.
+- **Pagination**: every collection endpoint is paged (`?page=` 1-based, `?pageSize=` default 20, clamped to 100) and returns `{ items, page, pageSize, totalCount }` (`PagedResponseDto<T>`). Controllers take a `[FromQuery] PageRequest` (range-validated there). DataAccess methods take `page`/`pageSize`, order by `Id` (always a deterministic order), and return `Paged<T>` (`RecordData`), never an `IQueryable`. Map with `PagedMappingExtensions.ToPagedResponseDto`. A bad `page`/`pageSize` is rejected by `[ApiController]` before the action runs; `Program.cs`'s `InvalidModelStateResponseFactory` turns every such rejection, on any controller, into the `{ message }` shape. A new list endpoint follows this pattern; the web client's `getSearchQueriesForUser` walks all pages because the UI has no paging controls.
+- **External literature sources** (`DataAccess/ExternalSources/`): a strategy/factory pattern for pluggable source providers:
+  - `ILiteratureSourceProvider`: `CanHandle(url)`, `SearchAsync(url, lastRunDate)`, `RefreshAsync(url)`.
+  - `LiteratureSourceFactory`: picks the right provider for a URL from the registered set.
+  - `SourceCatalog` (`Sources/SourceCatalog.cs`): one row per source (name, URL marker, default-enabled flag, provider type, DI registration, digest builder, keyword-tag builder). It registers only enabled sources (`Sources:<Name>:Enabled` overrides the row's default; scraped sources must default to off) and replaces the old `SourceDetector`/per-source `switch`es. Note each provider's own `CanHandle` is still the stricter URL gate.
+  - `PubMedProvider`, `PedroProvider`: one per source, both implemented (real NCBI/PEDro fetch-and-parse, not placeholders). New sources are added by implementing this interface and adding a row to `SourceCatalog`. A new provider needs its own per-call timeout and circuit breaker (see `PubMedHttpClientExtensions.AddPubMedHttpClient` for an HTTP-based source, `PedroProvider.CircuitBreakerPipeline` for a non-HTTP one); without one, a hung/dead source can hold `RecordPollingService`'s global poll-cycle lock for a long time on every poll cycle.
+- **Auth** is wired up and enforced (most controller actions carry `[Authorize]`, some `[Authorize(Policy = "AdminOnly")]`): real Keycloak/OIDC JWTs are validated by `ConfigureKeycloakBearer` in `Program.cs`, resolving the JWT's `sub` (a Keycloak UUID) to an internal `users` row via `UsersService.GetOrProvisionByKeycloakSubAsync` (auto-provisions on first login). In `Development` only, a `Smart` policy scheme (`Authentication/DebugAuthenticationHandler.cs`) falls back to a fake debug identity for requests with no `Authorization` header, so Swagger/Postman testing doesn't need a live Keycloak login; a request that does carry a bearer token is always routed to real JWT validation, even in `Development`.
+- **Background workers** (`Workers/`, `IHostedService`s registered in `Program.cs`): `RecordPollingBackgroundService` runs `RecordPollingService` (`BusinessLogic/RecordPollingService/`) on an interval (`Scheduler:PollIntervalHours`, default weekly). It polls every search query via the source providers, dedupes new records, and queues digests in the `digest_outbox` table through `IDigestService` + `IDigestOutboxDataAccess` (watermark claim and queued row commit in one transaction). `DigestOutboxBackgroundService` (`Scheduler:DigestOutboxIntervalSeconds`, default 30) sends queued rows via `IEmailSender` with retry/backoff; after `DigestOutboxService.MaxAttempts` the row is failed and its watermarks released so the next poll re-includes the records. `UserPurgeBackgroundService` runs on `Scheduler:UserPurgeIntervalHours` (default daily) and hard-deletes users past their 30-day soft-delete grace period (`UsersDataAccess.DeletionGracePeriodDays`). During the grace period a user gets no digests and is skipped when polling (`GetUserDigestWatermarksForQueryAsync` excludes them, so their watermarks hold), and signing back in reactivates the account. The same worker emails users with no sign-in for 5 years (`users.last_active_at`, refreshed at most daily in `GetOrProvisionByKeycloakSubAsync`; `UsersService.SendInactivityNoticesAsync`), and the purge deletes them 30 days after that notice (`inactivity_notice_sent_at`) unless they signed in, which clears it.
+- **Digest & email** (`BusinessLogic/DigestService/`, `DataAccess/Email/`): `DigestService` builds per-user digest content from new records: `RecordTopicClassifier`/`CategoryKeywordMatcher`/`DigestCategories` group records by topic, `PubMedDigestMessageBuilder`/`PedroDigestMessageBuilder` format the per-source sections, `DigestMessageFormatter` assembles the final message. `IEmailSender` is implemented by `BrevoEmailSender` (`DataAccess/Email/`, uses the Brevo transactional email API): swap providers by implementing `IEmailSender`, not by touching `DigestService`.
+- **AI summaries** (`DataAccess/Summarization/`): `ISummaryGenerator` is implemented by `ChatCompletionsSummaryGenerator`, which speaks the OpenAI-compatible chat-completions wire format (works against OpenAI, Azure OpenAI, Groq, local Ollama, OpenRouter, etc.; vendor is a config change via `Llm:BaseUrl`/`Llm:Model`, not a code change). Calls go through the named `Llm` HttpClient (`LlmHttpClientExtensions`): 30 s per attempt, at most one retry. Endpoint choice and provider data terms are in `docs/adr/0002-keep-openai-compatible-endpoint-for-anthropic-summaries.md`. This is additive: if `Llm:ApiKey` isn't configured, `Program.cs` wires up `NullSummaryGenerator` instead (digests still send, just without AI summaries) rather than failing startup.
 
 ## Database
 
-Single source of truth for schema is `database/schema/init.sql`, auto-applied to Postgres on container first-boot via the `docker-entrypoint-initdb.d` mount in `docker-compose.yml`. Current schema is the *old* flatter design (`source_records` table, no `search_query_records` junction, no `last_digest_sent_at`-driven delta computation). `ai/system-architecture-net10.md` §5 documents a revised schema (adds `SearchQueryRecord` junction table with `firstSeenAt`, drops raw record-count counters) that has **not** been migrated into `init.sql` yet — when doing schema-dependent work, check which shape is actually live rather than trusting the architecture doc.
+Single source of truth for schema is the EF Core migrations in `api/RecordService/Migrations/` (generated `.cs` files via `dotnet ef migrations add`), applied via `Database.Migrate()` at API startup (see `Program.cs`). It runs on every start, against any environment, not just first boot. Adding a schema change means changing the entities in `DataAccess/Entities/` and/or the Fluent API config in `PubTrackerDbContext.OnModelCreating`, then generating a new migration: never editing an already-shipped one. (Schema was previously managed via hand-written DbUp SQL scripts; that's been fully replaced by EF Core migrations generated fresh from the current entity model, with no historical migration carried over.) **Migrations must stay backwards compatible with the previous image.** `deploy/deploy.sh` rolls a failed deploy back by restarting the previous image tag, but the new image's migrations have already run. So a migration may only add things the old image ignores (nullable or defaulted columns, new tables, new indexes). A rename, drop or type change goes in two releases: first stop using the old shape, deploy, then remove it in the next release. See `docs/runbooks/rollback.md`. `MigrationSafetyTests` enforces this for every migration after `20261015155655`: it fails on `DropColumn`/`DropTable`/`RenameColumn`/`RenameTable`/`AlterColumn`, a required column with no default, and a new unique index on an existing table. For the second release of a split change, add a `// migration-safety: allow <reason>` comment to that migration. Raw `migrationBuilder.Sql` is not checked, so review it by hand. `ai/system-architecture-net10.md` §5 documents further schema evolution (e.g. dropping raw record-count counters) not yet reflected in the migrations; when doing schema-dependent work, check the actual migration files rather than trusting the architecture doc.
+
+## Agent skills
+
+### Issue tracker
+
+Issues live in GitHub Issues for VietTitans/PubTracker (`gh` CLI). See `docs/agents/issue-tracker.md`.
+
+### Triage labels
+
+Default five-label vocabulary (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+
+### Domain docs
+
+Single-context: one `CONTEXT.md` + `docs/adr/` at repo root. See `docs/agents/domain.md`.
+
+
+# Frontend aesthetics
+
+Avoid generic AI aesthetics. Make creative, distinctive choices.
+
+## Typography
+- Never use Inter, Roboto, Open Sans, Lato, Arial, or system fonts.
+- Body: Bricolage Grotesque. Display: Fraunces. Mono: JetBrains Mono.
+- Use weight extremes: 200 vs 800, not 400 vs 600.
+- Size jumps of 3x+, not 1.5x.
+
+## Color & theme
+- Commit to a single dominant color with one sharp accent.
+- All colors live in CSS variables in `app/globals.css`.
+- Forbidden: purple-to-blue gradients on white backgrounds.
+
+## Backgrounds
+- Layered CSS gradients or geometric patterns over solid colors.
+- Hero sections must have atmospheric depth.
+
+## Motion
+- CSS-only for non-React. Motion (formerly Framer Motion) for React.
+- One well-orchestrated page-load reveal beats scattered micro-interactions.
+
+## Components
+- Always use shadcn/ui primitives where they exist (Button, Card, Dialog, Form).
+- Never hand-roll a component that exists in the shadcn registry.
+- Tailwind classes only. No inline styles. No CSS modules.

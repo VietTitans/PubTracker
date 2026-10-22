@@ -1,7 +1,9 @@
 import { useEffect, useRef, useState } from "react";
+import { Link, NavLink, Route, Routes } from "react-router-dom";
 import {
   deleteCurrentUser,
   getCurrentUser,
+  setDigestsStopped,
   getSearchQueriesForUser,
   getSearchQueryById,
   subscribeToSearchQuery,
@@ -11,8 +13,13 @@ import {
   type User,
 } from "./api/client";
 import { useAuth } from "./auth/useAuth";
-import { detectSourceLabel } from "./lib/sourceLabel"; 
+import { detectSourceLabel } from "./lib/sourceLabel";
+import { PrivacyPage, TermsPage } from "./pages/LegalPages";
+import FeedbackPage from "./pages/FeedbackPage";
+import SuggestPage from "./pages/SuggestPage";
 import "./App.css";
+
+const PENDING_URL_KEY = "pendingUrl";
 
 function ExternalLinkIcon() {
   return (
@@ -73,6 +80,59 @@ function SignOutIcon() {
       <polyline points="16 17 21 12 16 7" />
       <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
+  );
+}
+
+function SunIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="5" />
+      <line x1="12" y1="1" x2="12" y2="3" />
+      <line x1="12" y1="21" x2="12" y2="23" />
+      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
+      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
+      <line x1="1" y1="12" x2="3" y2="12" />
+      <line x1="21" y1="12" x2="23" y2="12" />
+      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
+      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
+    </svg>
+  );
+}
+
+function MoonIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
+    </svg>
+  );
+}
+
+type Theme = "light" | "dark";
+
+function getInitialTheme(): Theme {
+  return document.documentElement.dataset.theme === "dark" ? "dark" : "light";
+}
+
+function ThemeToggle() {
+  const [theme, setTheme] = useState<Theme>(getInitialTheme);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem("theme", theme);
+  }, [theme]);
+
+  const label = theme === "dark" ? "Switch to day mode" : "Switch to night mode";
+
+  return (
+    <button
+      type="button"
+      className="btn btn-icon"
+      onClick={() => setTheme((t) => (t === "dark" ? "light" : "dark"))}
+      aria-label={label}
+      title={label}
+    >
+      {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+    </button>
   );
 }
 
@@ -154,6 +214,9 @@ function DetailDialog({
   const lastFetch = detail?.lastFetchedAt
     ? new Date(detail.lastFetchedAt).toLocaleString(undefined, { hour12: false })
     : "Never";
+  const lastPollFailedAt = detail?.lastPollFailedAt
+    ? new Date(detail.lastPollFailedAt).toLocaleString(undefined, { hour12: false })
+    : null;
   const keywords = detail?.tags ?? [];
 
   return (
@@ -203,6 +266,14 @@ function DetailDialog({
             <dt>Last fetch</dt>
             <dd>{isLoading ? <Spinner /> : lastFetch}</dd>
           </div>
+          {!isLoading && lastPollFailedAt && (
+            <div>
+              <dt>Status</dt>
+              <dd className="detail-status-warning">
+                Last check failed ({lastPollFailedAt}) - will retry on the next scheduled check
+              </dd>
+            </div>
+          )}
         </dl>
 
         <a href={target.targetUrl} target="_blank" rel="noreferrer" className="detail-url">
@@ -429,9 +500,13 @@ function ProfileDialog({
 }
 
 function SettingsDialog({
+  digestsStopped,
+  onToggleDigests,
   onClose,
   onRequestDeleteAccount,
 }: {
+  digestsStopped: boolean;
+  onToggleDigests: () => void;
   onClose: () => void;
   onRequestDeleteAccount: () => void;
 }) {
@@ -455,11 +530,21 @@ function SettingsDialog({
         onClick={(e) => e.stopPropagation()}
       >
         <h3 id="settings-title">Settings</h3>
+        <p className="modal-subtitle">Manage your account.</p>
+
+        <p className="modal-message">
+          {digestsStopped
+            ? "Digest emails are off. Your searches are kept."
+            : "Digest emails are on."}
+        </p>
+        <button className="btn btn-ghost" onClick={onToggleDigests}>
+          {digestsStopped ? "Turn Digests back on" : "Stop all Digests"}
+        </button>
 
         <div className="danger-zone">
           <p className="danger-zone-title">Delete account</p>
           <p className="modal-message">
-            Permanently remove your account and all subscriptions. This can't be undone.
+            You have 30 days to recover your account by signing in again. After that, your account and all subscriptions will be permanently deleted.
           </p>
           <button className="btn btn-danger-outline" onClick={onRequestDeleteAccount}>
             Delete account
@@ -497,6 +582,14 @@ function App() {
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("notice") === "account_deleted") {
+      setError("This account has been deleted.");
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+  useEffect(() => {
     if (isAuthenticated) {
       void loadCurrentUserAndSubscriptions();
     }
@@ -507,6 +600,15 @@ function App() {
       const currentUser = await getCurrentUser();
       setUser(currentUser);
       setSearchQueries(await getSearchQueriesForUser(currentUser.id));
+
+      // A URL typed on the signed-out home page survives the Keycloak round trip here.
+      const pendingUrl = sessionStorage.getItem(PENDING_URL_KEY);
+      if (pendingUrl) {
+        sessionStorage.removeItem(PENDING_URL_KEY);
+        const newQuery = await subscribeToSearchQuery(pendingUrl);
+        setSearchQueries(await getSearchQueriesForUser(currentUser.id));
+        scheduleRecordCountRefresh(currentUser.id, newQuery.id);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
@@ -528,16 +630,20 @@ function App() {
           .then((queries) => {
             setSearchQueries(queries);
             // Matches the condition the list actually renders a spinner for (App.tsx's
-            // sourceRecordCount === null check) - not lastFetchedAt, which PEDro's baseline
+            // sourceRecordCount === null check); not lastFetchedAt, which PEDro's baseline
             // poll (no individual records linked yet) can leave null indefinitely even once
-            // sourceRecordCount is populated.
-            const stillFetching = queries.some((q) => q.id === searchQueryId && q.sourceRecordCount === null);
+            // sourceRecordCount is populated. Also stops once a poll has actually failed
+            // (lastPollFailedAt set); otherwise a down source (e.g. PubMed) leaves
+            // sourceRecordCount null forever and this polls every 4s indefinitely.
+            const stillFetching = queries.some(
+              (q) => q.id === searchQueryId && q.sourceRecordCount === null && !q.lastPollFailedAt,
+            );
             if (stillFetching) {
               poll();
             }
           })
           .catch(() => {
-            // Transient failure (e.g. a network blip) - keep trying rather than leaving the
+            // Transient failure (e.g. a network blip); keep trying rather than leaving the
             // spinner stuck forever.
             poll();
           });
@@ -654,39 +760,84 @@ function App() {
     );
   }
 
-  if (!isAuthenticated) {
-    return (
-      <div className="screen-center">
-        <div className="auth-card">
-          <h1>PubTracker</h1>
-          <p className="tagline">
-            Paste a search URL from PEDro or PubMed and get a digest whenever new results appear.
-          </p>
-          {error && (
-            <p className="alert" role="alert">
-              {error}
-            </p>
-          )}
-          <button className="btn btn-primary btn-block" onClick={handleLogin}>
-            Sign in
-          </button>
-        </div>
-      </div>
-    );
+  function handleSignedOutSearch(e: React.FormEvent) {
+    e.preventDefault();
+    if (!targetUrl.trim()) {
+      return;
+    }
+    sessionStorage.setItem(PENDING_URL_KEY, targetUrl.trim());
+    void handleLogin();
   }
+
+  const searchBox = (
+    <form onSubmit={isAuthenticated ? handleSubscribe : handleSignedOutSearch} className="search-box">
+      <input
+        id="target-url"
+        type="url"
+        placeholder="Paste a search URL"
+        aria-label="Search URL"
+        value={targetUrl}
+        onChange={(e) => setTargetUrl(e.target.value)}
+        required
+      />
+      <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
+        {isSubmitting ? <Spinner /> : "Subscribe"}
+      </button>
+    </form>
+  );
+
+  const signedOutHome = (
+    <section className="hero">
+      <h2>Track new research. Get a digest.</h2>
+      {searchBox}
+      <ol className="steps">
+        <li>
+          <strong>1</strong>Paste a search URL
+        </li>
+        <li>
+          <strong>2</strong>We check it on a schedule
+        </li>
+        <li>
+          <strong>3</strong>New results land in your inbox
+        </li>
+      </ol>
+      <p className="supported">
+        <span className="badge badge-pubmed">PubMed</span>
+        <span>
+          More databases coming. <Link to="/suggest">Suggest one</Link>.
+        </span>
+      </p>
+    </section>
+  );
 
   return (
     <main className="app">
       <header className="header-row">
-        <h1>PubTracker</h1>
-        {user && (
-          <UserMenu
-            user={user}
-            onOpenProfile={() => setIsProfileOpen(true)}
-            onOpenSettings={() => setIsSettingsOpen(true)}
-            onSignOut={() => logout()}
-          />
-        )}
+        <h1>
+          <Link to="/">PubTracker</Link>
+        </h1>
+        <nav className="nav-links">
+          <NavLink to="/" end>
+            Home
+          </NavLink>
+          <NavLink to="/feedback">Feedback</NavLink>
+          <NavLink to="/suggest">Suggest a database</NavLink>
+        </nav>
+        <div className="header-actions">
+          <ThemeToggle />
+          {user ? (
+            <UserMenu
+              user={user}
+              onOpenProfile={() => setIsProfileOpen(true)}
+              onOpenSettings={() => setIsSettingsOpen(true)}
+              onSignOut={() => logout()}
+            />
+          ) : (
+            <button className="btn btn-primary btn-sm" onClick={handleLogin}>
+              Sign in
+            </button>
+          )}
+        </div>
       </header>
 
       {error && (
@@ -695,24 +846,19 @@ function App() {
         </p>
       )}
 
-      <section className="card">
-        <label className="field-label" htmlFor="target-url">
-          Add a search
-        </label>
-        <form onSubmit={handleSubscribe} className="subscribe-form">
-          <input
-            id="target-url"
-            type="url"
-            placeholder="Paste a PEDro or PubMed search URL"
-            value={targetUrl}
-            onChange={(e) => setTargetUrl(e.target.value)}
-            required
-          />
-          <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-            {isSubmitting ? <Spinner /> : "Subscribe"}
-          </button>
-        </form>
-      </section>
+      <Routes>
+        <Route path="/feedback" element={<FeedbackPage isAuthenticated={isAuthenticated} onLogin={handleLogin} />} />
+        <Route path="/privacy" element={<PrivacyPage />} />
+        <Route path="/terms" element={<TermsPage />} />
+        <Route path="/suggest" element={<SuggestPage isAuthenticated={isAuthenticated} onLogin={handleLogin} />} />
+        <Route
+          path="*"
+          element={
+            !isAuthenticated ? (
+              signedOutHome
+            ) : (
+              <>
+      <section className="hero hero-compact">{searchBox}</section>
 
       <section>
         <div className="section-header">
@@ -753,11 +899,21 @@ function App() {
                   )}
                   <div className="record-count" title="Records registered">
                     <span className="record-count-label">Records</span>
-                    {sq.sourceRecordCount === null ? (
-                      <Spinner />
-                    ) : (
-                      <span className="record-count-value">{sq.sourceRecordCount}</span>
-                    )}
+                    <span className="record-count-row">
+                      {sq.sourceRecordCount === null && !sq.lastPollFailedAt ? (
+                        <Spinner />
+                      ) : (
+                        <span className="record-count-value">{sq.sourceRecordCount ?? "—"}</span>
+                      )}
+                      {sq.lastPollFailedAt && (
+                        <span
+                          className="record-count-status"
+                          title={`Couldn't reach ${source} on the last check - will retry on the next scheduled check`}
+                        >
+                          ⚠
+                        </span>
+                      )}
+                    </span>
                   </div>
                   <a
                     href={sq.targetUrl}
@@ -788,6 +944,11 @@ function App() {
           </ul>
         )}
       </section>
+              </>
+            )
+          }
+        />
+      </Routes>
 
       {confirmTarget && (
         <ConfirmDialog
@@ -824,6 +985,17 @@ function App() {
 
       {isSettingsOpen && (
         <SettingsDialog
+          digestsStopped={user?.digestsStopped ?? false}
+          onToggleDigests={async () => {
+            if (!user) return;
+            try {
+              const stopped = !user.digestsStopped;
+              await setDigestsStopped(stopped);
+              setUser((u) => (u ? { ...u, digestsStopped: stopped } : u));
+            } catch (err) {
+              setError(err instanceof Error ? err.message : String(err));
+            }
+          }}
           onClose={() => setIsSettingsOpen(false)}
           onRequestDeleteAccount={() => setIsDeleteAccountConfirmOpen(true)}
         />
@@ -832,13 +1004,17 @@ function App() {
       {isDeleteAccountConfirmOpen && (
         <ConfirmDialog
           title="Delete your account?"
-          message="This will permanently remove your account and all subscriptions. This can't be undone."
+          message="Are you sure you want to delete your account?"
           confirmLabel="Delete account"
           isBusy={isDeletingAccount}
           onConfirm={handleDeleteAccount}
           onCancel={() => setIsDeleteAccountConfirmOpen(false)}
         />
       )}
+      <footer className="app-footer">
+        <Link to="/privacy">Privacy policy</Link>
+        <Link to="/terms">Terms</Link>
+      </footer>
     </main>
   );
 }

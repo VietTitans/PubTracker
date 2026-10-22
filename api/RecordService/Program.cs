@@ -1,20 +1,57 @@
+using RecordService;
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using RecordService.Authentication;
 using RecordService.DataAccess;
+using RecordService.DataAccess.DigestOutbox;
 using RecordService.DataAccess.Email;
 using RecordService.DataAccess.ExternalSources;
+using RecordService.DataAccess.Keycloak;
+using RecordService.DataAccess.Summarization;
+using RecordService.Sources;
 using RecordService.ErrorHandling;
 using RecordService.Workers;
 using RecordService.BusinessLogic.UsersService;
 using RecordService.BusinessLogic.SearchQueriesService;
 using RecordService.BusinessLogic.RecordPollingService;
 using RecordService.BusinessLogic.SourcesService;
+using RecordService.BusinessLogic.FeedbackService;
+using RecordService.BusinessLogic.DatabaseSuggestionsService;
 using RecordService.BusinessLogic.DigestService;
+using RecordService.BusinessLogic.DigestOutboxService;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Error reporting to Sentry (EU region DSN). No Sentry:Dsn = disabled. Personal data is never sent:
+// SendDefaultPii is off, breadcrumbs (they record URLs, some with secrets) are off, and SentryScrubber
+// strips what is left.
+void ConfigureSentry(Sentry.SentryOptions options)
+{
+    options.Dsn = builder.Configuration["Sentry:Dsn"] ?? "";
+    options.Environment = builder.Environment.EnvironmentName;
+    options.SendDefaultPii = false;
+    options.MaxBreadcrumbs = 0;
+    options.SetBeforeSend(SentryScrubber.Scrub);
+}
+
+// CLI: `dotnet RecordService.dll sentry-test` sends one test error to Sentry and exits (production check
+// that reporting works and that the event carries no personal data). It starts the SDK itself, because
+// the web host (which normally does) is never started for a CLI command.
+if (args.Length == 1 && args[0] == "sentry-test")
+{
+    using var sentry = Sentry.SentrySdk.Init(ConfigureSentry);
+    Sentry.SentrySdk.CaptureException(new InvalidOperationException("PubTracker Sentry test error"));
+    await Sentry.SentrySdk.FlushAsync(TimeSpan.FromSeconds(10));
+    Console.WriteLine(Sentry.SentrySdk.IsEnabled
+        ? "Sent a test error to Sentry."
+        : "Sentry is not enabled: set Sentry:Dsn.");
+    return;
+}
+
+builder.WebHost.UseSentry(ConfigureSentry);
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
@@ -23,11 +60,51 @@ if (string.IsNullOrEmpty(connectionString))
     throw new Exception("Database connection string is missing");
 }
 
-builder.Services.AddControllers();
+builder.Services.AddDbContext<RecordService.DataAccess.PubTrackerDbContext>(options =>
+    options.UseNpgsql(connectionString));
+
+// The API only ever sits behind Caddy (Cloudflare tunnel -> Caddy -> api), so the TCP peer is always the proxy
+// and the real client address / scheme arrive in X-Forwarded-*. Trust them only from private addresses (the
+// Docker network); the API port is not published, and a public peer's headers are ignored.
+builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedFor
+        | Microsoft.AspNetCore.HttpOverrides.ForwardedHeaders.XForwardedProto;
+    options.KnownIPNetworks.Clear();
+    options.KnownProxies.Clear();
+    foreach (var network in new[] { "127.0.0.0/8", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16" })
+        options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
+    // X-Forwarded-For reads "client, cloudflared" by the time it reaches the api (Caddy appends its peer).
+    options.ForwardLimit = 2;
+});
+
+builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
+{
+    // [ApiController] rejects invalid input before the action runs; answer with the same
+    // { message } shape as every other error instead of the default ProblemDetails body.
+    options.InvalidModelStateResponseFactory = context =>
+    {
+        var message = context.ModelState.Values
+            .SelectMany(v => v.Errors)
+            .Select(e => e.ErrorMessage)
+            .FirstOrDefault(m => !string.IsNullOrEmpty(m)) ?? "Invalid request.";
+        return context.HttpContext.RequestServices.GetRequiredService<IErrorHandler>().BadRequest(message);
+    };
+});
+
+builder.Services.AddApiVersioning(options =>
+{
+    options.DefaultApiVersion = new Asp.Versioning.ApiVersion(1, 0);
+    options.ReportApiVersions = true;
+}).AddMvc().AddApiExplorer(options =>
+{
+    options.GroupNameFormat = "'v'V";
+    options.SubstituteApiVersionInUrl = true;
+});
 
 builder.Services.AddHttpContextAccessor();
 
-// CORS - allows the React dev server (Vite, default port 5173) to call this API.
+// CORS: allows the React dev server (Vite, default port 5173) to call this API.
 var webAppOrigin = builder.Configuration["Cors:WebAppOrigin"] ?? "http://localhost:5173";
 builder.Services.AddCors(options =>
 {
@@ -35,36 +112,28 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(webAppOrigin).AllowAnyHeader().AllowAnyMethod());
 });
 
-// External Literature Sources - Register providers for factory pattern
-var ncbiApiKey = builder.Configuration["Ncbi:ApiKey"];
-var ncbiContactEmail = builder.Configuration["Ncbi:ContactEmail"];
-builder.Services.AddSingleton<PubMedProvider>(sp =>
-    new PubMedProvider(sp.GetRequiredService<IHttpClientFactory>().CreateClient(), ncbiApiKey, ncbiContactEmail));
-builder.Services.AddSingleton<PedroProvider>();
-builder.Services.AddSingleton<LiteratureSourceFactory>(serviceProvider =>
+// External Literature Sources: Register providers for factory pattern
+builder.Services.AddLiteratureSources(builder.Configuration);
+
+// Data Access Layer: Register interfaces to implementations
+builder.Services.AddScoped<IUsersDataAccess, UsersDataAccess>();
+builder.Services.AddScoped<ISourcesDataAccess, SourcesDataAccess>();
+builder.Services.AddScoped<ISearchQueriesDataAccess, SearchQueriesDataAccess>();
+builder.Services.AddScoped<IRecordsDataAccess, RecordsDataAccess>();
+builder.Services.AddScoped<IFeedbackDataAccess, FeedbackDataAccess>();
+builder.Services.AddScoped<IDatabaseSuggestionsDataAccess, DatabaseSuggestionsDataAccess>();
+
+if (builder.Configuration.GetValue("Subscriptions:MaxPerUser", SearchQueriesDataAccess.DefaultMaxSubscriptionsPerUser) < 1)
 {
-    var providers = new ILiteratureSourceProvider[]
-    {
-        serviceProvider.GetRequiredService<PubMedProvider>(),
-        serviceProvider.GetRequiredService<PedroProvider>()
-    };
-    return new LiteratureSourceFactory(providers);
-});
+    throw new Exception("Subscriptions:MaxPerUser must be a whole number of at least 1");
+}
 
-// Data Access Layer - Register interfaces to implementations
-builder.Services.AddScoped(serviceProvider => 
-    new UsersDataAccess(connectionString, serviceProvider.GetRequiredService<IHttpContextAccessor>()));
-builder.Services.AddScoped<IUsersDataAccess>(sp => sp.GetRequiredService<UsersDataAccess>());
-builder.Services.AddScoped<ISourcesDataAccess>(serviceProvider =>
-    new SourcesDataAccess(connectionString));
+if (builder.Configuration.GetValue("Email:DailySendLimit", 250) < 1)
+{
+    throw new Exception("Email:DailySendLimit must be a whole number of at least 1");
+}
 
-builder.Services.AddScoped<ISearchQueriesDataAccess>(serviceProvider =>
-    new SearchQueriesDataAccess(connectionString, serviceProvider.GetRequiredService<LiteratureSourceFactory>()));
-
-builder.Services.AddScoped<IRecordsDataAccess>(serviceProvider =>
-    new RecordsDataAccess(connectionString));
-
-// Email - swappable behind IEmailSender; BrevoEmailSender is the only provider-specific piece
+// Send Email provider
 var emailApiKey = builder.Configuration["Email:ApiKey"];
 var emailFromAddress = builder.Configuration["Email:FromAddress"];
 var emailFromName = builder.Configuration["Email:FromName"];
@@ -74,32 +143,87 @@ if (string.IsNullOrEmpty(emailApiKey) || string.IsNullOrEmpty(emailFromAddress) 
     throw new Exception("Email configuration is missing");
 }
 
+var unsubscribeSigningKey = builder.Configuration["Unsubscribe:SigningKey"];
+if (string.IsNullOrEmpty(unsubscribeSigningKey))
+{
+    throw new Exception("Unsubscribe:SigningKey is missing");
+}
+// Links point at the same public origin the web app is served from (the proxy forwards /api/*).
+builder.Services.AddSingleton(new UnsubscribeTokens(unsubscribeSigningKey, webAppOrigin));
+
 builder.Services.AddHttpClient();
 builder.Services.AddScoped<IEmailSender>(serviceProvider =>
     new BrevoEmailSender(
         serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(),
         emailApiKey, emailFromAddress, emailFromName));
 
-// Business Logic Layer - Register interfaces to implementations
+// AI digest summary: swappable behind ISummaryGenerator via the OpenAI-compatible
+// chat-completions wire format (OpenAI, Azure OpenAI, Groq, local Ollama, OpenRouter all speak
+// it), so swapping vendors is a config change, not a code change. Additive feature; missing
+// config falls back to NullSummaryGenerator instead of failing startup like email does.
+var llmBaseUrl = builder.Configuration["Llm:BaseUrl"];
+var llmApiKey = builder.Configuration["Llm:ApiKey"];
+var llmModel = builder.Configuration["Llm:Model"];
+builder.Services.AddLlmHttpClient(LlmHttpClientExtensions.DefaultAttemptTimeout, LlmHttpClientExtensions.DefaultRetryDelay);
+builder.Services.AddScoped<ISummaryGenerator>(serviceProvider =>
+    string.IsNullOrEmpty(llmApiKey)
+        ? new NullSummaryGenerator()
+        : new ChatCompletionsSummaryGenerator(
+            serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(LlmHttpClientExtensions.HttpClientName),
+            llmBaseUrl!, llmApiKey, llmModel!,
+            builder.Configuration.GetValue("Llm:SummaryChunkSize", 40),
+            builder.Configuration.GetValue("Llm:SummaryAbstractChars", 1000)));
+
+// Business Logic Layer: Register interfaces to implementations
 builder.Services.AddScoped<IUsersService, UsersService>();
 builder.Services.AddScoped<ISearchQueriesService, SearchQueriesService>();
 builder.Services.AddScoped<ISourcesService, SourcesService>();
+builder.Services.AddScoped<IFeedbackService, FeedbackService>();
+builder.Services.AddScoped<IDatabaseSuggestionsService, DatabaseSuggestionsService>();
 builder.Services.AddScoped<IDigestService, DigestService>();
+builder.Services.AddScoped<IDigestOutboxDataAccess, DigestOutboxDataAccess>();
+builder.Services.AddScoped<IDigestOutboxService, DigestOutboxService>();
+builder.Services.AddSingleton(new PollCycleAdvisoryLock(connectionString));
 builder.Services.AddScoped<IRecordPollingService, RecordPollingService>();
 
-// Background scheduler - polls every search query for new records on an interval
+// Dead-man's-switch pings (docs/runbooks/observability.md): a worker pings its URL after each successful
+// cycle, at most once per Heartbeat:MinIntervalSeconds. Unset URL = no pings.
+var heartbeatMinInterval = TimeSpan.FromSeconds(builder.Configuration.GetValue("Heartbeat:MinIntervalSeconds", 300));
+HeartbeatPinger CreateHeartbeat(IServiceProvider serviceProvider, string urlSetting) =>
+    new(serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(),
+        serviceProvider.GetRequiredService<IConfiguration>()[urlSetting], heartbeatMinInterval,
+        serviceProvider.GetRequiredService<ILogger<HeartbeatPinger>>());
+
+// Background scheduler: polls every search query for new records on an interval
 var pollIntervalHours = builder.Configuration.GetValue<double?>("Scheduler:PollIntervalHours") ?? 168;
 builder.Services.AddHostedService(serviceProvider => new RecordPollingBackgroundService(
     serviceProvider.GetRequiredService<IServiceScopeFactory>(),
     serviceProvider.GetRequiredService<ILogger<RecordPollingBackgroundService>>(),
-    TimeSpan.FromHours(pollIntervalHours)));
+    TimeSpan.FromHours(pollIntervalHours),
+    CreateHeartbeat(serviceProvider, "Heartbeat:PollUrl")));
+
+// Background worker: sends queued digest emails from the outbox, with retry
+var digestOutboxIntervalSeconds = builder.Configuration.GetValue<double?>("Scheduler:DigestOutboxIntervalSeconds") ?? 30;
+builder.Services.AddHostedService(serviceProvider => new DigestOutboxBackgroundService(
+    serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+    serviceProvider.GetRequiredService<ILogger<DigestOutboxBackgroundService>>(),
+    TimeSpan.FromSeconds(digestOutboxIntervalSeconds),
+    CreateHeartbeat(serviceProvider, "Heartbeat:OutboxUrl")));
+
+// Background scheduler: purges users past their soft-delete grace period (see
+// UsersDataAccess.DeletionGracePeriodDays)
+var userPurgeIntervalHours = builder.Configuration.GetValue<double?>("Scheduler:UserPurgeIntervalHours") ?? 24;
+builder.Services.AddHostedService(serviceProvider => new UserPurgeBackgroundService(
+    serviceProvider.GetRequiredService<IServiceScopeFactory>(),
+    serviceProvider.GetRequiredService<ILogger<UserPurgeBackgroundService>>(),
+    TimeSpan.FromHours(userPurgeIntervalHours)));
 
 // Cross-cutting Concerns
 builder.Services.AddScoped<IErrorHandler, DefaultErrorHandler>();
 
 // Keycloak (real login). JWT `sub` is a Keycloak-generated UUID, not our internal
-// users.id - GetOrProvisionByKeycloakSubAsync resolves/creates the matching users row on
-// first successful validation, and the resulting internal id is what's written back onto
+// users.id; GetOrProvisionByKeycloakSubAsync resolves/creates the matching users row on
+// first successful validation, and the resulting internal id is what's written back onto   
 // the principal as ClaimTypes.NameIdentifier, so existing claims-reading controller code
 // (int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier))) keeps working unchanged.
 //
@@ -107,13 +231,28 @@ builder.Services.AddScoped<IErrorHandler, DefaultErrorHandler>();
 // actually stamped with as `iss` (since Keycloak derives issuer from however the browser
 // reached it), so it's what we validate the token's issuer against. Inside Docker, this API
 // container can't reach Keycloak at that same browser-facing "localhost:8081" address
-// (there's nothing listening on that port inside this container) - it needs the Docker
+// (there's nothing listening on that port inside this container); it needs the Docker
 // network's service name instead. MetadataAddress lets the two diverge: when set (only in
 // docker-compose), it's used purely for this container's own outbound signing-key fetch,
 // while ValidIssuer stays pinned to the browser-facing Authority regardless.
 var keycloakAuthority = builder.Configuration["Keycloak:Authority"] ?? "http://localhost:8081/realms/science-alerts-saas";
 var keycloakMetadataAddress = builder.Configuration["Keycloak:MetadataAddress"];
 var keycloakAudience = builder.Configuration["Keycloak:Audience"] ?? "science-alerts-api";
+
+// Profile email changes are pushed to Keycloak through its Admin API (service account). Additive,
+// like the LLM summaries: without a client secret the change stays in our database only.
+// The realm URL is taken from MetadataAddress (this process's own route to Keycloak) when set.
+var keycloakAdminClientId = builder.Configuration["Keycloak:AdminClientId"] ?? "pubtracker-api-admin";
+var keycloakAdminClientSecret = builder.Configuration["Keycloak:AdminClientSecret"];
+var keycloakRealmUrl = keycloakMetadataAddress is { Length: > 0 } && keycloakMetadataAddress.Contains("/.well-known/")
+    ? keycloakMetadataAddress[..keycloakMetadataAddress.IndexOf("/.well-known/", StringComparison.Ordinal)]
+    : keycloakAuthority;
+builder.Services.AddScoped<IKeycloakUserSync>(serviceProvider =>
+    string.IsNullOrEmpty(keycloakAdminClientSecret)
+        ? new NullKeycloakUserSync()
+        : new KeycloakAdminUserSync(
+            serviceProvider.GetRequiredService<IHttpClientFactory>().CreateClient(),
+            keycloakRealmUrl, keycloakAdminClientId, keycloakAdminClientSecret));
 
 void ConfigureKeycloakBearer(JwtBearerOptions options)
 {
@@ -130,7 +269,12 @@ void ConfigureKeycloakBearer(JwtBearerOptions options)
         ValidateAudience = true,
         ValidateIssuer = true,
         ValidIssuer = keycloakAuthority,
-        ClockSkew = TimeSpan.FromMinutes(5)
+        ClockSkew = TimeSpan.FromMinutes(5),
+        // Keycloak's realm roles normally live nested under "realm_access.roles"; the
+        // "realm-roles" protocol mapper (realm-export.json) flattens them onto a top-level
+        // "roles" claim instead, which is what RequireRole("Admin")/("User", "Admin") below
+        // actually reads from; without this, those policies would never match any real token.
+        RoleClaimType = "roles"
     };
     options.Events = new JwtBearerEvents
     {
@@ -151,7 +295,31 @@ void ConfigureKeycloakBearer(JwtBearerOptions options)
             var usersService = context.HttpContext.RequestServices.GetRequiredService<IUsersService>();
             var user = await usersService.GetOrProvisionByKeycloakSubAsync(keycloakSub, email, name, username);
 
+            if (user.IsMarkedForDeletion)
+            {
+                var lockoutLogger = context.HttpContext.RequestServices.GetRequiredService<ILogger<Program>>();
+                lockoutLogger.LogWarning("Rejected request from user {UserId}: account is marked for deletion", user.Id);
+                // A JwtBearerEvents.OnTokenValidated context.Fail(message) does NOT surface that
+                // message in the 401's WWW-Authenticate error_description (unlike a standard
+                // TokenValidationParameters failure, e.g. audience mismatch, which does); so the
+                // reason is stashed here for OnChallenge below to turn into a real response body
+                // the frontend can read.
+                context.HttpContext.Items["AuthFailureReason"] = "account_deleted";
+                context.Fail("This account has been deleted.");
+                return;
+            }
+
             ((ClaimsIdentity)principal.Identity!).AddClaim(new Claim(ClaimTypes.NameIdentifier, user.Id.ToString()));
+        },
+        OnChallenge = async context =>
+        {
+            if (context.HttpContext.Items["AuthFailureReason"] as string == "account_deleted")
+            {
+                context.HandleResponse();
+                context.Response.StatusCode = StatusCodes.Status401Unauthorized;
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync("{\"reason\":\"account_deleted\"}");
+            }
         }
     };
 }
@@ -160,7 +328,7 @@ void ConfigureKeycloakBearer(JwtBearerOptions options)
 // can be exercised via Swagger/Postman without a real Keycloak login. Never registered
 // outside Development. Requests carrying a real "Authorization: Bearer <jwt>" header are
 // still routed to the real Keycloak validation above; only requests without one fall back
-// to the debug identity - see the "Smart" policy scheme below.
+// to the debug identity, see the "Smart" policy scheme below.
 if (builder.Environment.IsDevelopment())
 {
     builder.Services.AddAuthentication(options =>
@@ -202,6 +370,44 @@ builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
+if (string.IsNullOrEmpty(keycloakAdminClientSecret))
+{
+    app.Logger.LogWarning(
+        "Keycloak:AdminClientSecret is not set: email changes are not pushed to Keycloak, and the user purge " +
+        "deletes database rows without deleting the Keycloak accounts (their email and identity remain).");
+}
+
+// Apply pending EF Core migrations before anything else touches the database. Runs on every
+// app start, not just first boot, so it's the single place schema changes reach any environment.
+using (var migrationScope = app.Services.CreateScope())
+{
+    migrationScope.ServiceProvider.GetRequiredService<RecordService.DataAccess.PubTrackerDbContext>().Database.Migrate();
+}
+
+// CLI: `dotnet run --project api/RecordService -- send-digest <userId>` emails every record already
+// registered for the user's subscribed queries as if new. Bypasses outbox/watermarks; no workers start.
+if (args.Length == 2 && args[0] == "send-digest")
+{
+    using var scope = app.Services.CreateScope();
+    var sp = scope.ServiceProvider;
+    var userId = int.Parse(args[1]);
+    var users = sp.GetRequiredService<IUsersDataAccess>();
+    var records = sp.GetRequiredService<IRecordsDataAccess>();
+    var pending = new List<RecordService.Models.PendingUserDigest>();
+    foreach (var q in await users.GetSearchQueriesByUserAsync(userId))
+    {
+        var all = await records.GetRecordsSeenSinceAsync(q.Id, null);
+        if (all.Count > 0)
+            pending.Add(new() { UserId = userId, SearchQueryId = q.Id, TargetUrl = q.TargetUrl, Records = all });
+    }
+    var digest = await sp.GetRequiredService<IDigestService>().BuildCombinedDigestAsync(userId, pending);
+    if (digest is null) { Console.WriteLine("Nothing to send."); return; }
+    var user = await users.GetUserByIdAsync(userId);
+    await sp.GetRequiredService<IEmailSender>().SendAsync(user.Email, digest.Value.Subject, digest.Value.HtmlBody);
+    Console.WriteLine($"Sent {pending.Sum(p => p.Records.Count)} record(s) to {user.Email}.");
+    return;
+}
+
 // Configure the HTTP request pipeline.
 if (app.Environment.IsDevelopment())
 {
@@ -209,6 +415,22 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+app.UseForwardedHeaders();
+
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    finally
+    {
+        if (!context.Request.Path.Equals("/api/health", StringComparison.OrdinalIgnoreCase))
+            app.Logger.LogInformation("{ClientIp} {Method} {Path} -> {StatusCode}",
+                context.Connection.RemoteIpAddress, context.Request.Method, context.Request.Path, context.Response.StatusCode);
+    }
+});
 
 app.UseHttpsRedirection();
 
@@ -218,7 +440,12 @@ app.UseAuthentication();
 
 app.UseAuthorization();
 
-app.MapControllers(); 
+app.MapControllers();
+
+// Liveness + DB reachability for the deploy pipeline's post-deploy check (see docs/adr/0001).
+app.MapGet("/api/health", async (RecordService.DataAccess.PubTrackerDbContext db) =>
+    await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ok" }) : Results.StatusCode(503))
+    .AllowAnonymous();
 
 app.Run();
 

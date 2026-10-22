@@ -18,15 +18,25 @@ public class BrevoEmailSender : IEmailSender
         _httpClient.DefaultRequestHeaders.Add("api-key", apiKey ?? throw new ArgumentNullException(nameof(apiKey)));
     }
 
-    public async Task SendAsync(string toEmail, string subject, string htmlBody)
+    public async Task SendAsync(string toEmail, string subject, string htmlBody, string? unsubscribeUrl = null)
     {
-        var response = await _httpClient.PostAsJsonAsync("v3/smtp/email", new
+        var payload = new Dictionary<string, object>
         {
-            sender = new { email = _fromAddress, name = _fromName },
-            to = new[] { new { email = toEmail } },
-            subject,
-            htmlContent = htmlBody
-        });
+            ["sender"] = new { email = _fromAddress, name = _fromName },
+            ["to"] = new[] { new { email = toEmail } },
+            ["subject"] = subject,
+            ["htmlContent"] = htmlBody
+        };
+        if (unsubscribeUrl != null)
+        {
+            payload["headers"] = new Dictionary<string, string>
+            {
+                ["List-Unsubscribe"] = $"<{unsubscribeUrl}>",
+                ["List-Unsubscribe-Post"] = "List-Unsubscribe=One-Click"
+            };
+        }
+
+        var response = await _httpClient.PostAsJsonAsync("v3/smtp/email", payload);
 
         if (!response.IsSuccessStatusCode)
         {

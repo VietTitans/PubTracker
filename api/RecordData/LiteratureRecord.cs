@@ -14,7 +14,7 @@ public class LiteratureRecord
     public required string ExternalId { get; set; }
 
     /// <summary>
-    /// The record's real DOI, when one exists. Display-only - not used for deduplication.
+    /// The record's real DOI, when one exists. Display-only; not used for deduplication.
     /// </summary>
     public string? Doi { get; set; }
 
@@ -60,4 +60,12 @@ public class LiteratureRecord
     /// the DB once per subscriber.
     /// </summary>
     public DateTime FirstSeenAt { get; set; }
+
+    /// <summary>
+    /// One-sentence AI-generated description of what the study's authors set out to
+    /// investigate or show, generated once when the record is first discovered (see
+    /// RecordPollingService). Null until generated, or if generation failed/is disabled
+    /// (no Llm:* config).
+    /// </summary>
+    public string? AuthorIntention { get; set; }
 }

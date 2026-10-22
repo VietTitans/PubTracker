@@ -1,25 +1,31 @@
-﻿using Microsoft.AspNetCore.Authorization;
+using Asp.Versioning;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using RecordData;
 using RecordService.BusinessLogic.UsersService;
+using RecordService.DTOs;
 using RecordService.DTOs.UserDto;
+using RecordService.Exceptions;
 using RecordService.Extensions;
 using System.Security.Claims;
 
 namespace RecordService.Controllers;
 
-[Route("api/[controller]")]
+[ApiVersion("1.0")]
+[Route("api/v{version:apiVersion}/[controller]")]
 [ApiController]
 public class UsersController : ControllerBase
 {
     private readonly IUsersService _userService;
+    private readonly ILogger<UsersController> _logger;
 
-    public UsersController(IUsersService userService)
+    public UsersController(IUsersService userService, ILogger<UsersController> logger)
     {
         _userService = userService;
+        _logger = logger;
     }
 
-    //[Authorize(Policy = "UserOrAdmin")]
+    [Authorize]
     [HttpGet("me")]
     public async Task<IActionResult> GetCurrentUser()
     {
@@ -42,11 +48,34 @@ public class UsersController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error retrieving user", error = ex.Message });
+            _logger.LogError(ex, "Error retrieving current user");
+            return StatusCode(500, new { message = "Error retrieving user" });
         }
     }
 
-    //[Authorize(Policy = "UserOrAdmin")]
+    [Authorize]
+    [HttpPut("me/digests-stopped")]
+    public async Task<IActionResult> SetDigestsStopped([FromBody] SetDigestsStoppedDto dto)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null)
+        {
+            return Unauthorized(new { message = "User ID not found in claims." });
+        }
+
+        try
+        {
+            await _userService.SetDigestsStoppedAsync(int.Parse(userId), dto.Stopped);
+            return NoContent();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error updating digest setting for user {UserId}", userId);
+            return StatusCode(500, new { message = "Error updating digest setting" });
+        }
+    }
+
+    [Authorize]
     [HttpGet("{id}")]
     public async Task<IActionResult> GetUserById(int id)
     {
@@ -57,6 +86,11 @@ public class UsersController : ControllerBase
             return Unauthorized(new { message = "User ID not found in claims." });
         }
 
+        if (!User.IsInRole("Admin") && int.Parse(userId) != id)
+        {
+            return Forbid();
+        }
+
         try
         {
             var user = await _userService.GetUserByIdAsync(id);
@@ -70,68 +104,28 @@ public class UsersController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error retrieving user", error = ex.Message });
+            _logger.LogError(ex, "Error retrieving user {UserId}", id);
+            return StatusCode(500, new { message = "Error retrieving user" });
         }
     }
 
-    [HttpGet("public/{id}")]
-    public async Task<IActionResult> GetUserByIdPublic(int id)
-    {
-        try
-        {
-            var user = await _userService.GetUserByIdAsync(id);
-
-            if (user == null)
-            {
-                return NotFound(new { message = "User not found." });
-            }
-
-            return Ok(user.ToResponseDto());
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { message = "Error retrieving user", error = ex.Message });
-        }
-    }
-
-    //[Authorize(Policy = "AdminOnly")]
+    [Authorize(Policy = "AdminOnly")]
     [HttpGet]
-    public async Task<IActionResult> GetUsers()
+    public async Task<IActionResult> GetUsers([FromQuery] PageRequest pageRequest)
     {
         try
         {
-            var users = await _userService.GetUsersAsync();
-            return Ok(users.ToResponseDtoList());
+            var users = await _userService.GetUsersPageAsync(pageRequest.Page, pageRequest.PageSize);
+            return Ok(users.ToPagedResponseDto(pageRequest));
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error retrieving users", error = ex.Message });
+            _logger.LogError(ex, "Error retrieving users");
+            return StatusCode(500, new { message = "Error retrieving users" });
         }
     }
 
-    //[Authorize(Policy = "AdminOnly")]
-    [HttpPost]
-    public async Task<IActionResult> CreateUser([FromBody] CreateUserDto dto)
-    {
-        try
-        {
-            var user = dto.ToUserModel();
-            var createdUser = await _userService.CreateUserAsync(user);
-
-            if (createdUser == null)
-            {
-                return StatusCode(500, new { message = "Error creating user" });
-            }
-
-            return CreatedAtAction(nameof(GetUserById), new { id = createdUser.Id }, createdUser.ToResponseDto());
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, new { message = "Error creating user", error = ex.Message });
-        }
-    }
-
-    //[Authorize(Policy = "UserOrAdmin")]
+    [Authorize]
     [HttpPut("me")]
     public async Task<IActionResult> UpdateCurrentUser([FromBody] UpdateUserDto dto)
     {
@@ -151,18 +145,23 @@ public class UsersController : ControllerBase
                 Email = dto.Email
             };
 
-            await _userService.UpdateUserAsync(int.Parse(userId), user);
+            await _userService.UpdateUserAsync(int.Parse(userId), user, User.FindFirstValue("sub"));
 
             var updatedUser = await _userService.GetUserByIdAsync(int.Parse(userId));
             return Ok(updatedUser.ToResponseDto());
         }
+        catch (EmailAlreadyInUseException ex)
+        {
+            return StatusCode(409, new { message = ex.Message });
+        }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error updating user", error = ex.Message });
+            _logger.LogError(ex, "Error updating user {UserId}", userId);
+            return StatusCode(500, new { message = "Error updating user" });
         }
     }
 
-    //[Authorize(Policy = "UserOrAdmin")]
+    [Authorize]
     [HttpDelete("me")]
     public async Task<IActionResult> DeleteCurrentUser()
     {
@@ -179,22 +178,57 @@ public class UsersController : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error deleting user", error = ex.Message });
+            _logger.LogError(ex, "Error deleting user {UserId}", userId);
+            return StatusCode(500, new { message = "Error deleting user" });
         }
     }
 
-    //[Authorize(Policy = "AdminOnly")]
+    [Authorize]
     [HttpGet("{userId}/search-queries")]
-    public async Task<IActionResult> GetUserSearchQueries(int userId)
+    public async Task<IActionResult> GetUserSearchQueries(int userId, [FromQuery] PageRequest pageRequest)
     {
+        var callerId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (callerId == null)
+        {
+            return Unauthorized(new { message = "User ID not found in claims." });
+        }
+
+        if (!User.IsInRole("Admin") && int.Parse(callerId) != userId)
+        {
+            return Forbid();
+        }
+
         try
         {
-            var queries = await _userService.GetSearchQueriesByUserAsync(userId);
-            return Ok(queries.ToResponseDtoList());
+            var queries = await _userService.GetSearchQueriesPageByUserAsync(userId, pageRequest.Page, pageRequest.PageSize);
+            return Ok(queries.ToPagedResponseDto(pageRequest));
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { message = "Error retrieving search queries", error = ex.Message });
+            _logger.LogError(ex, "Error retrieving search queries for user {UserId}", userId);
+            return StatusCode(500, new { message = "Error retrieving search queries" });
+        }
+    }
+
+    [Authorize]
+    [HttpGet("me/search-queries")]
+    public async Task<IActionResult> GetCurrentUserSearchQueries([FromQuery] PageRequest pageRequest)
+    {
+        var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userId == null)
+        {
+            return Unauthorized(new { message = "User ID not found in claims." });
+        }
+
+        try
+        {
+            var queries = await _userService.GetSearchQueriesPageByUserAsync(int.Parse(userId), pageRequest.Page, pageRequest.PageSize);
+            return Ok(queries.ToPagedResponseDto(pageRequest));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error retrieving search queries for user {UserId}", userId);
+            return StatusCode(500, new { message = "Error retrieving search queries" });
         }
     }
 }

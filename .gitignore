@@ -231,3 +231,5 @@ __marimo__/
 /api/test/obj
 /api/RecordData/obj
 /api/test/obj
+.claude/settings.local.json
+docker/.env.prod

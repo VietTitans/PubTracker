@@ -1,0 +1,135 @@
+{
+  "realm": "science-alerts-saas",
+  "displayName": "PubTracker",
+  "displayNameHtml": "PubTracker",
+  "enabled": true,
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": false,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "verifyEmail": true,
+  "bruteForceProtected": true,
+  "failureFactor": 5,
+  "permanentLockout": false,
+  "maxFailureWaitSeconds": 900,
+  "minimumQuickLoginWaitSeconds": 60,
+  "waitIncrementSeconds": 60,
+  "smtpServer": {
+    "host": "smtp-relay.brevo.com",
+    "port": "587",
+    "from": "${KEYCLOAK_SMTP_FROM}",
+    "fromDisplayName": "${KEYCLOAK_SMTP_FROM_NAME}",
+    "auth": "true",
+    "user": "${KEYCLOAK_SMTP_USER}",
+    "password": "${KEYCLOAK_SMTP_PASSWORD}",
+    "starttls": "true",
+    "ssl": "false"
+  },
+  "resetPasswordAllowed": true,
+  "defaultRole": {
+    "name": "default-roles-science-alerts-saas",
+    "description": "${role_default-roles}",
+    "composite": true,
+    "clientRole": false
+  },
+  "roles": {
+    "realm": [
+      {
+        "name": "User",
+        "description": "Standard PubTracker user"
+      },
+      {
+        "name": "Admin",
+        "description": "PubTracker administrator"
+      },
+      {
+        "name": "default-roles-science-alerts-saas",
+        "description": "${role_default-roles}",
+        "composite": true,
+        "composites": {
+          "realm": [
+            "User"
+          ]
+        },
+        "clientRole": false
+      }
+    ]
+  },
+  "users": [
+    {
+      "username": "service-account-pubtracker-api-admin",
+      "email": "pubtracker@protonmail.com",
+      "enabled": true,
+      "serviceAccountClientId": "pubtracker-api-admin",
+      "clientRoles": {
+        "realm-management": [
+          "view-users",
+          "manage-users"
+        ]
+      }
+    }
+  ],
+  "clients": [
+    {
+      "clientId": "science-alerts-web",
+      "name": "PubTracker Web",
+      "enabled": true,
+      "publicClient": true,
+      "protocol": "openid-connect",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "redirectUris": [
+        "https://pubtracker.org/*"
+      ],
+      "webOrigins": [
+        "https://pubtracker.org"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "protocolMappers": [
+        {
+          "name": "science-alerts-api-audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.custom.audience": "science-alerts-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "realm-roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "claim.name": "roles",
+            "jsonType.label": "String",
+            "multivalued": "true",
+            "id.token.claim": "false",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "false"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "pubtracker-api-admin",
+      "name": "PubTracker API (admin)",
+      "description": "Lets the API update users' emails in Keycloak. Its secret comes from KEYCLOAK_ADMIN_CLIENT_SECRET.",
+      "enabled": true,
+      "publicClient": false,
+      "protocol": "openid-connect",
+      "clientAuthenticatorType": "client-secret",
+      "secret": "${KEYCLOAK_ADMIN_CLIENT_SECRET}",
+      "standardFlowEnabled": false,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": true
+    }
+  ]
+}

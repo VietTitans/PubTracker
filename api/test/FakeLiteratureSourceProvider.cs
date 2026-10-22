@@ -15,16 +15,33 @@ public class FakeLiteratureSourceProvider : ILiteratureSourceProvider
     public string ProviderName => "Fake";
 
     // Prefix match (not exact) so tests needing their own distinct, non-colliding query URL -
-    // e.g. two tests in the same class sharing one Postgres container/class fixture - can mint
+    // e.g. two tests in the same class sharing one Postgres container/class fixture; can mint
     // variants like $"{TestUrl}?case=isolation" that still resolve to this same fake provider.
     public bool CanHandle(string url) => url.StartsWith(TestUrl, StringComparison.Ordinal);
 
+    /// <summary>Exact URLs (including query string) to simulate an unreachable source for, so
+    /// tests can prove the "source is down" path without a real outage; mirrors
+    /// FakeEmailSender.FailForAddresses.</summary>
+    public HashSet<string> FailForUrls { get; } = new();
+
     public Task<SourceSearchResult> SearchAsync(string url, DateTime? lastRunDate = null)
     {
+        if (FailForUrls.Contains(url))
+        {
+            return Task.FromResult(new SourceSearchResult
+            {
+                Source = ProviderName,
+                IsSuccessful = false,
+                ErrorMessage = "Simulated source outage",
+                NewRecordCount = 0,
+                NewRecords = new()
+            });
+        }
+
         var allRecords = new List<LiteratureRecord>
         {
-            new() { ExternalId = "fake:1", Title = "Fake Record 1", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-2) },
-            new() { ExternalId = "fake:2", Title = "Fake Record 2", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-1) }
+            new() { ExternalId = "fake:1", Title = "Fake Record 1", Abstract = "Fake abstract.", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-2) },
+            new() { ExternalId = "fake:2", Title = "Fake Record 2", Abstract = "Fake abstract.", Source = ProviderName, DiscoveredAt = DateTime.UtcNow.AddDays(-1) }
         };
 
         var newRecords = lastRunDate.HasValue
@@ -41,4 +58,7 @@ public class FakeLiteratureSourceProvider : ILiteratureSourceProvider
     }
 
     public Task<bool> RefreshAsync(string url) => Task.FromResult(true);
+
+    // Stands in for PubMed's spell correction: a URL containing "typo" canonicalizes to "fixed".
+    public Task<string> NormalizeUrlAsync(string url) => Task.FromResult(url.Replace("typo", "fixed"));
 }

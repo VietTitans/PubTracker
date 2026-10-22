@@ -6,14 +6,15 @@ namespace RecordService.BusinessLogic.SearchQueriesService;
 
 public class SearchQueriesService : ISearchQueriesService
 {
-    private static readonly TimeSpan InitialPollDelay = TimeSpan.FromSeconds(5);
-
+    private readonly TimeSpan _initialPollDelay;
     private readonly ISearchQueriesDataAccess _dataAccess;
     private readonly IServiceScopeFactory _scopeFactory;
     private readonly ILogger<SearchQueriesService> _logger;
 
-    public SearchQueriesService(ISearchQueriesDataAccess dataAccess, IServiceScopeFactory scopeFactory, ILogger<SearchQueriesService> logger)
+    public SearchQueriesService(ISearchQueriesDataAccess dataAccess, IServiceScopeFactory scopeFactory, ILogger<SearchQueriesService> logger, IConfiguration configuration)
     {
+        // Configurable so tests can park the background poll instead of racing their own polls.
+        _initialPollDelay = TimeSpan.FromSeconds(configuration.GetValue("Scheduler:InitialPollDelaySeconds", 5));
         _dataAccess = dataAccess;
         _scopeFactory = scopeFactory;
         _logger = logger;
@@ -29,15 +30,20 @@ public class SearchQueriesService : ISearchQueriesService
         return await _dataAccess.GetUserSubscribersForQueryAsync(searchQueryId);
     }
 
+    public async Task<Paged<int>> GetUserSubscribersPageForQueryAsync(int searchQueryId, int page, int pageSize)
+    {
+        return await _dataAccess.GetUserSubscribersPageForQueryAsync(searchQueryId, page, pageSize);
+    }
+
     public async Task<SearchQuery> SubscribeAsync(int userId, string targetUrl)
     {
         var searchQuery = await _dataAccess.SubscribeAsync(userId, targetUrl);
 
-        // New subscriptions start with zero records - a brand new search query's source has
+        // New subscriptions start with zero records; a brand new search query's source has
         // never been fetched. Kick off an initial poll shortly after so the UI fills in with
         // real results instead of staying at 0 until the next scheduled poll cycle (which can
         // be up to Scheduler:PollIntervalHours away). The delay isn't about the subscribe
-        // transaction (already committed by this point) - it debounces against another poll
+        // transaction (already committed by this point); it debounces against another poll
         // of the same search query landing at nearly the same moment (e.g. a caller polling
         // right after subscribing, as the end-to-end tests do), which would otherwise race
         // this one for which poll gets credit for the newly-found records.
@@ -50,7 +56,7 @@ public class SearchQueriesService : ISearchQueriesService
     {
         try
         {
-            await Task.Delay(InitialPollDelay);
+            await Task.Delay(_initialPollDelay);
 
             using var scope = _scopeFactory.CreateScope();
             var pollingService = scope.ServiceProvider.GetRequiredService<IRecordPollingService>();

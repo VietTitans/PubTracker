@@ -24,11 +24,6 @@ public class SourceSearchResult
     public List<LiteratureRecord> NewRecords { get; set; } = new();
 
     /// <summary>
-    /// Timestamp of this search result
-    /// </summary>
-    public DateTime SearchExecutedAt { get; set; } = DateTime.UtcNow;
-
-    /// <summary>
     /// Source type that generated this result (e.g., "PubMed", "PEDro")
     /// </summary>
     public string Source { get; set; } = string.Empty;

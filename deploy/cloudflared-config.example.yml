@@ -1,0 +1,10 @@
+# VM: /etc/cloudflared/config.yml (tunnel created with `cloudflared tunnel create pubtracker`).
+# Caddy listens on 127.0.0.1:80 (docker-compose.prod.yml). ssh.* must sit behind a Cloudflare Access app.
+tunnel: <TUNNEL_ID>
+credentials-file: /etc/cloudflared/<TUNNEL_ID>.json
+ingress:
+  - hostname: pubtracker.org
+    service: http://localhost:80
+  - hostname: ssh.pubtracker.org
+    service: ssh://localhost:22
+  - service: http_status:404
