@@ -144,7 +144,7 @@ pipeline {
                     sshUserPrivateKey(credentialsId: 'deploy-ssh-key', keyFileVariable: 'SSH_KEY', usernameVariable: 'DEPLOY_USER'),
                     usernamePassword(credentialsId: 'cf-access-token', usernameVariable: 'TUNNEL_SERVICE_TOKEN_ID', passwordVariable: 'TUNNEL_SERVICE_TOKEN_SECRET')
                 ]) {
-                    sh 'deploy/deploy.sh $BUILD_NUMBER'
+                    sh 'sh deploy/deploy.sh $BUILD_NUMBER'
                 }
             }
         }
