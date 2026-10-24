@@ -138,7 +138,7 @@ pipeline {
         }
 
         stage('Deploy') {
-            when { expression { env.GIT_BRANCH?.endsWith(/(.*\/)?main/) } }
+            when { expression { (env.BRANCH_NAME ?: env.GIT_BRANCH) ==~ /(.*\/)?main/ } }
             steps {
                 withCredentials([
                     sshUserPrivateKey(credentialsId: 'deploy-ssh-key', keyFileVariable: 'SSH_KEY', usernameVariable: 'DEPLOY_USER'),
