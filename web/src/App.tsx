@@ -326,7 +326,7 @@ function UserMenu({
     };
   }, []);
 
-  const initial = user.name.trim()[0]?.toUpperCase() ?? "?";
+  const initial = user.username.trim()[0]?.toUpperCase() ?? "?";
 
   return (
     <div className="user-menu" ref={menuRef}>
@@ -340,7 +340,7 @@ function UserMenu({
           {initial}
         </span>
         <span className="user-chip-text">
-          <span className="user-chip-name">{user.name}</span>
+          <span className="user-chip-name">{user.username}</span>
         </span>
         <ChevronDownIcon />
       </button>
@@ -396,7 +396,6 @@ function ProfileDialog({
   onClose: () => void;
   onSaved: (user: User) => void;
 }) {
-  const [name, setName] = useState(user.name);
   const [username, setUsername] = useState(user.username);
   const [email, setEmail] = useState(user.email);
   const [isSaving, setIsSaving] = useState(false);
@@ -417,7 +416,7 @@ function ProfileDialog({
     setIsSaving(true);
     setError(null);
     try {
-      const updated = await updateCurrentUser({ name, username, email });
+      const updated = await updateCurrentUser({ username, email });
       onSaved(updated);
       onClose();
     } catch (err) {
@@ -445,19 +444,6 @@ function ProfileDialog({
         )}
 
         <form onSubmit={handleSubmit}>
-          <div className="form-field">
-            <label className="field-label" htmlFor="profile-name">
-              Name
-            </label>
-            <input
-              id="profile-name"
-              className="text-input"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              required
-            />
-          </div>
-
           <div className="form-field">
             <label className="field-label" htmlFor="profile-username">
               Username

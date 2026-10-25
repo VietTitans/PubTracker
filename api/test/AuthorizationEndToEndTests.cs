@@ -36,13 +36,11 @@ public class AuthorizationEndToEndTests : IClassFixture<PubTrackerWebApplication
 
         var userA = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "User A",
             Username = "user-a-idor",
             Email = "user-a-idor@example.com"
         });
         var userB = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "User B",
             Username = "user-b-idor",
             Email = "user-b-idor@example.com"
         });
@@ -84,13 +82,11 @@ public class AuthorizationEndToEndTests : IClassFixture<PubTrackerWebApplication
 
         var userA = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "User A2",
             Username = "user-a2-idor",
             Email = "user-a2-idor@example.com"
         });
         var userB = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "User B2",
             Username = "user-b2-idor",
             Email = "user-b2-idor@example.com"
         });

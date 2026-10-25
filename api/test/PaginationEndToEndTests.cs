@@ -159,7 +159,6 @@ public class PaginationEndToEndTests : IClassFixture<PubTrackerWebApplicationFac
             {
                 await usersDataAccess.CreateUserAsync(new User
                 {
-                    Name = $"Pagination Users {i}",
                     Username = $"pagination-users-{i}",
                     Email = $"pagination-users-{i}@example.com"
                 });
@@ -245,7 +244,6 @@ public class PaginationEndToEndTests : IClassFixture<PubTrackerWebApplicationFac
         var usersDataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = $"Pagination {caseName}",
             Username = $"pagination-{caseName}",
             Email = $"pagination-{caseName}@example.com"
         });

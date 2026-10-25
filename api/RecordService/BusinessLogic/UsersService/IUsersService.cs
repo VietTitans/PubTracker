@@ -9,7 +9,7 @@ public interface IUsersService
     Task<List<SearchQuery>> GetSearchQueriesByUserAsync(int userId);
     Task<Paged<SearchQuery>> GetSearchQueriesPageByUserAsync(int userId, int page, int pageSize);
     Task<User> CreateUserAsync(User user);
-    Task<User> GetOrProvisionByKeycloakSubAsync(string keycloakSub, string email, string name, string username);
+    Task<User> GetOrProvisionByKeycloakSubAsync(string keycloakSub, string email, string username);
     /// <param name="keycloakSub">The caller's Keycloak id. When given and the email changes, the Keycloak account is updated too.</param>
     Task UpdateUserAsync(int userId, User user, string? keycloakSub = null);
     Task SetDigestsStoppedAsync(int userId, bool stopped);

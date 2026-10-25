@@ -39,7 +39,6 @@ public class SourceOutageEndToEndTests : IClassFixture<PubTrackerWebApplicationF
 
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Outage User",
             Username = "outage-user",
             Email = "outage-user@example.com"
         });

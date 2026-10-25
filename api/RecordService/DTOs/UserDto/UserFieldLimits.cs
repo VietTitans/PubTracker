@@ -6,7 +6,6 @@ namespace RecordService.DTOs.UserDto;
 /// </summary>
 public static class UserFieldLimits
 {
-    public const int Name = 200;
     public const int Username = 100;
     public const int Email = 254;
 }

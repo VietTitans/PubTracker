@@ -51,7 +51,6 @@ public class SlowPollBlocksCallerTests : IClassFixture<PubTrackerWebApplicationF
         var usersDataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Slow Poll User",
             Username = "slow-poll-user",
             Email = "slow-poll-user@example.com"
         });

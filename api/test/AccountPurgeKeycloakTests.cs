@@ -83,7 +83,7 @@ public class AccountPurgeKeycloakTests : IClassFixture<PubTrackerWebApplicationF
         var ok = await SeedDueUserAsync(dataAccess, connectionString, "purge-ok", "sub-purge-ok");
         var fails = await SeedDueUserAsync(dataAccess, connectionString, "purge-fails", "sub-purge-fails");
         var noSub = await SeedDueUserAsync(dataAccess, connectionString, "purge-nosub", null);
-        var notDue = await dataAccess.CreateUserAsync(new User { Name = "Active", Username = "purge-active", Email = "purge-active@example.com" });
+        var notDue = await dataAccess.CreateUserAsync(new User { Username = "purge-active", Email = "purge-active@example.com" });
 
         var purged = await service.PurgeExpiredDeletedUsersAsync();
 
@@ -199,7 +199,7 @@ public class AccountPurgeKeycloakTests : IClassFixture<PubTrackerWebApplicationF
 
     private static async Task<User> SeedDueUserAsync(IUsersDataAccess dataAccess, string connectionString, string name, string? keycloakSub)
     {
-        var user = await dataAccess.CreateUserAsync(new User { Name = name, Username = name, Email = $"{name}@example.com" });
+        var user = await dataAccess.CreateUserAsync(new User { Username = name, Email = $"{name}@example.com" });
         await using var connection = new NpgsqlConnection(connectionString);
         await connection.OpenAsync();
         await using var command = new NpgsqlCommand(

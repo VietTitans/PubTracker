@@ -29,7 +29,6 @@ public class DigestOutboxTests : IClassFixture<PubTrackerWebApplicationFactory>
         using var scope = _factory.Services.CreateScope();
         var user = await scope.ServiceProvider.GetRequiredService<IUsersDataAccess>().CreateUserAsync(new User
         {
-            Name = name,
             Username = name,
             Email = $"{name}@example.com"
         });

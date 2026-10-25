@@ -34,24 +34,23 @@ public class EfRewriteCoverageTests : IClassFixture<PubTrackerWebApplicationFact
 
         // Branch 1: no matching sub or email -> inserts a new user.
         var created = await usersDataAccess.GetOrProvisionByKeycloakSubAsync(
-            "sub-1", "sub1@example.com", "Sub One", "sub-one");
+            "sub-1", "sub1@example.com", "sub-one");
         Assert.True(created.Id > 0);
 
         // Branch 2: same sub again -> selects the same row, doesn't duplicate.
         var reselected = await usersDataAccess.GetOrProvisionByKeycloakSubAsync(
-            "sub-1", "sub1@example.com", "Sub One", "sub-one");
+            "sub-1", "sub1@example.com", "sub-one");
         Assert.Equal(created.Id, reselected.Id);
 
         // Branch 3: pre-existing user (no sub yet) with a matching email -> links by email
         // instead of inserting a duplicate.
         var preExisting = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Pre Existing",
             Username = "pre-existing",
             Email = "linked@example.com"
         });
         var linked = await usersDataAccess.GetOrProvisionByKeycloakSubAsync(
-            "sub-2", "linked@example.com", "Linked User", "linked-user");
+            "sub-2", "linked@example.com", "linked-user");
         Assert.Equal(preExisting.Id, linked.Id);
     }
 
@@ -63,20 +62,17 @@ public class EfRewriteCoverageTests : IClassFixture<PubTrackerWebApplicationFact
 
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Original Name",
             Username = "original-username",
             Email = "original@example.com"
         });
 
         await usersDataAccess.UpdateUserAsync(user.Id, new User
         {
-            Name = "Updated Name",
             Username = "updated-username",
             Email = "updated@example.com"
         });
 
         var updated = await usersDataAccess.GetUserByIdAsync(user.Id);
-        Assert.Equal("Updated Name", updated.Name);
         Assert.Equal("updated-username", updated.Username);
         Assert.Equal("updated@example.com", updated.Email);
         Assert.False(updated.IsMarkedForDeletion);
@@ -97,7 +93,6 @@ public class EfRewriteCoverageTests : IClassFixture<PubTrackerWebApplicationFact
 
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Unsub User",
             Username = "unsub-user",
             Email = "unsub-user@example.com"
         });
@@ -127,7 +122,6 @@ public class EfRewriteCoverageTests : IClassFixture<PubTrackerWebApplicationFact
 
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Sweep User",
             Username = "sweep-user",
             Email = "sweep-user@example.com"
         });

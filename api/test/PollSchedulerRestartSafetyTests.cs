@@ -57,7 +57,6 @@ public class PollSchedulerRestartSafetyTests : IClassFixture<PubTrackerWebApplic
         var usersDataAccess = setupScope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Gate User",
             Username = "gate-user",
             Email = "gate-user@example.com"
         });
@@ -89,7 +88,6 @@ public class PollSchedulerRestartSafetyTests : IClassFixture<PubTrackerWebApplic
         var usersDataAccess = setupScope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Claim User",
             Username = "claim-user",
             Email = "claim-user@example.com"
         });

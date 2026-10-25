@@ -37,32 +37,32 @@ public class UserDeletionGracePeriodTests : IClassFixture<PubTrackerWebApplicati
 
         var withinGraceUser = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Regretful User", Username = "regretful", Email = "regretful@example.com"
+            Username = "regretful", Email = "regretful@example.com"
         });
         await MarkDeletedAsync(connectionString, withinGraceUser.Id, "sub-within-grace", DateTime.UtcNow.AddDays(-20));
 
         var pastGraceUser = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Too Late User", Username = "too-late", Email = "too-late@example.com"
+            Username = "too-late", Email = "too-late@example.com"
         });
         await MarkDeletedAsync(connectionString, pastGraceUser.Id, "sub-past-grace", DateTime.UtcNow.AddDays(-40));
         var searchQueryId = await SeedSearchQuerySubscriptionAsync(connectionString, pastGraceUser.Id);
 
         var justDeletedUser = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Just Deleted User", Username = "just-deleted", Email = "just-deleted@example.com"
+            Username = "just-deleted", Email = "just-deleted@example.com"
         });
         await MarkDeletedAsync(connectionString, justDeletedUser.Id, null, DateTime.UtcNow);
 
         // Signing back in within the grace period reactivates the account.
         var reactivated = await usersDataAccess.GetOrProvisionByKeycloakSubAsync(
-            "sub-within-grace", withinGraceUser.Email, withinGraceUser.Name, withinGraceUser.Username);
+            "sub-within-grace", withinGraceUser.Email, withinGraceUser.Username);
         Assert.False(reactivated.IsMarkedForDeletion);
         Assert.Null(reactivated.DeletionRequestedAt);
 
         // Signing back in after the grace period leaves the account marked for deletion.
         var stillDeleted = await usersDataAccess.GetOrProvisionByKeycloakSubAsync(
-            "sub-past-grace", pastGraceUser.Email, pastGraceUser.Name, pastGraceUser.Username);
+            "sub-past-grace", pastGraceUser.Email, pastGraceUser.Username);
         Assert.True(stillDeleted.IsMarkedForDeletion);
 
         var purgedCount = await usersService.PurgeExpiredDeletedUsersAsync();
@@ -95,12 +95,12 @@ public class UserDeletionGracePeriodTests : IClassFixture<PubTrackerWebApplicati
 
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Never Linked User", Username = "never-linked", Email = "never-linked@example.com"
+            Username = "never-linked", Email = "never-linked@example.com"
         });
         await MarkDeletedAsync(connectionString, user.Id, keycloakSub: null, DateTime.UtcNow.AddDays(-5));
 
         var reactivated = await usersDataAccess.GetOrProvisionByKeycloakSubAsync(
-            "sub-first-login", user.Email, user.Name, user.Username);
+            "sub-first-login", user.Email, user.Username);
 
         Assert.False(reactivated.IsMarkedForDeletion);
         Assert.Null(reactivated.DeletionRequestedAt);
@@ -116,7 +116,7 @@ public class UserDeletionGracePeriodTests : IClassFixture<PubTrackerWebApplicati
 
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Leaving User", Username = "leaving-user", Email = "leaving-user@example.com"
+            Username = "leaving-user", Email = "leaving-user@example.com"
         });
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Debug-User-Id", user.Id.ToString());
@@ -137,7 +137,7 @@ public class UserDeletionGracePeriodTests : IClassFixture<PubTrackerWebApplicati
         Assert.Equal(watermarkBefore, await DigestWatermarkAsync(connectionString, user.Id));
 
         // Signing back in undoes the deletion; the next poll sends what was held back.
-        await usersDataAccess.GetOrProvisionByKeycloakSubAsync("sub-leaving", user.Email, user.Name, user.Username);
+        await usersDataAccess.GetOrProvisionByKeycloakSubAsync("sub-leaving", user.Email, user.Username);
         await pollingService.PollAllSearchQueriesAsync();
         await _factory.DrainOutboxAsync();
 
@@ -155,7 +155,7 @@ public class UserDeletionGracePeriodTests : IClassFixture<PubTrackerWebApplicati
 
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Early Leaver", Username = "early-leaver", Email = "early-leaver@example.com"
+            Username = "early-leaver", Email = "early-leaver@example.com"
         });
         var client = _factory.CreateClient();
         client.DefaultRequestHeaders.Add("X-Debug-User-Id", user.Id.ToString());
@@ -167,7 +167,7 @@ public class UserDeletionGracePeriodTests : IClassFixture<PubTrackerWebApplicati
 
         // First poll of the query is the baseline: its backlog is not news, even to a returning user.
         await pollingService.PollAllSearchQueriesAsync();
-        await usersDataAccess.GetOrProvisionByKeycloakSubAsync("sub-early-leaver", user.Email, user.Name, user.Username);
+        await usersDataAccess.GetOrProvisionByKeycloakSubAsync("sub-early-leaver", user.Email, user.Username);
         await pollingService.PollAllSearchQueriesAsync();
         await _factory.DrainOutboxAsync();
 

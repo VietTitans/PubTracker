@@ -16,7 +16,6 @@ public static class UserMappingExtensions
         return new UserResponseDto
         {
             Id = user.Id,
-            Name = user.Name,
             Username = user.Username,
             Email = user.Email,
             DigestsStopped = user.DigestsStopped
@@ -35,7 +34,6 @@ public static class UserMappingExtensions
         if (dto == null)
             return;
 
-        user.Name = dto.Name;
         user.Username = dto.Username;
         user.Email = dto.Email;
     }

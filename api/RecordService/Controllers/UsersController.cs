@@ -140,7 +140,6 @@ public class UsersController : ControllerBase
             var user = new User
             {
                 Id = int.Parse(userId),
-                Name = dto.Name,
                 Username = dto.Username,
                 Email = dto.Email
             };

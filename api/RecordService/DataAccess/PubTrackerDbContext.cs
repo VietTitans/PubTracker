@@ -31,7 +31,6 @@ public class PubTrackerDbContext : DbContext
         {
             entity.ToTable("users");
             entity.Property(e => e.Id).HasColumnName("id");
-            entity.Property(e => e.Name).HasColumnName("name").HasMaxLength(UserFieldLimits.Name);
             entity.Property(e => e.Username).HasColumnName("username").HasMaxLength(UserFieldLimits.Username);
             entity.Property(e => e.Email).HasColumnName("email").HasMaxLength(UserFieldLimits.Email);
             entity.Property(e => e.KeycloakSub).HasColumnName("keycloak_sub");

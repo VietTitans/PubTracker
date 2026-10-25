@@ -83,7 +83,6 @@ public class UsersDataAccess : IUsersDataAccess
     {
         var entity = new UserEntity
         {
-            Name = user.Name,
             Username = user.Username,
             Email = user.Email,
             IsMarkedForDeletion = user.IsMarkedForDeletion,
@@ -95,7 +94,7 @@ public class UsersDataAccess : IUsersDataAccess
         return user;
     }
 
-    public async Task<User> GetOrProvisionByKeycloakSubAsync(string keycloakSub, string email, string name, string username)
+    public async Task<User> GetOrProvisionByKeycloakSubAsync(string keycloakSub, string email, string username)
     {
         var existing = await _dbContext.Users
             .Where(u => u.KeycloakSub == keycloakSub)
@@ -120,13 +119,12 @@ public class UsersDataAccess : IUsersDataAccess
             return await ReactivateIfWithinGraceAsync(await GetUserByIdAsync(linkedRows[0]));
         }
 
-        var entity = new UserEntity { Name = name, Username = username, Email = email, KeycloakSub = keycloakSub };
+        var entity = new UserEntity { Username = username, Email = email, KeycloakSub = keycloakSub };
         _dbContext.Users.Add(entity);
         await _dbContext.SaveChangesAsync();
         return new User
         {
             Id = entity.Id,
-            Name = entity.Name,
             Username = entity.Username,
             Email = entity.Email,
             DigestsStopped = entity.DigestsStopped,
@@ -190,7 +188,6 @@ public class UsersDataAccess : IUsersDataAccess
     private static readonly System.Linq.Expressions.Expression<Func<UserEntity, User>> ToUser = u => new User
     {
         Id = u.Id,
-        Name = u.Name,
         Username = u.Username,
         Email = u.Email,
         DigestsStopped = u.DigestsStopped,
@@ -203,7 +200,6 @@ public class UsersDataAccess : IUsersDataAccess
         await _dbContext.Users
             .Where(u => u.Id == userId)
             .ExecuteUpdateAsync(setters => setters
-                .SetProperty(u => u.Name, user.Name)
                 .SetProperty(u => u.Username, user.Username)
                 .SetProperty(u => u.Email, user.Email));
     }

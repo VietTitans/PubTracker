@@ -23,7 +23,6 @@ public class FeedbackAndSuggestionsEndToEndTests : IClassFixture<PubTrackerWebAp
         using var scope = _factory.Services.CreateScope();
         var user = await scope.ServiceProvider.GetRequiredService<IUsersDataAccess>().CreateUserAsync(new User
         {
-            Name = username,
             Username = username,
             Email = $"{username}@example.com"
         });

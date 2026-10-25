@@ -55,13 +55,12 @@ public class UsersService : IUsersService
         return await _dataAccess.CreateUserAsync(user);
     }
 
-    public async Task<User> GetOrProvisionByKeycloakSubAsync(string keycloakSub, string email, string name, string username)
+    public async Task<User> GetOrProvisionByKeycloakSubAsync(string keycloakSub, string email, string username)
     {
         // Token claims bypass DTO validation; clamp to the column limits so login cannot throw.
         return await _dataAccess.GetOrProvisionByKeycloakSubAsync(
             keycloakSub,
             Truncate(email, UserFieldLimits.Email),
-            Truncate(name, UserFieldLimits.Name),
             Truncate(username, UserFieldLimits.Username));
     }
 
@@ -163,7 +162,7 @@ public class UsersService : IUsersService
 
     private string BuildInactivityNoticeBody(User user) =>
         $"""
-         <p>Hello {System.Net.WebUtility.HtmlEncode(user.Name)},</p>
+         <p>Hello {System.Net.WebUtility.HtmlEncode(user.Username)},</p>
          <p>You have not signed in to PubTracker for 5 years. To protect your privacy we delete inactive accounts:
          your account and all your subscriptions will be permanently deleted in <strong>30 days</strong> unless you sign in before then.</p>
          <p><a href="{_webAppOrigin}">Sign in to keep your account</a></p>

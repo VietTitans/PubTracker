@@ -16,7 +16,7 @@ public interface IUsersDataAccess
     /// pre-existing/seeded user isn't duplicated the first time they log in via Keycloak),
     /// and only creates a new row if neither match is found.
     /// </summary>
-    Task<User> GetOrProvisionByKeycloakSubAsync(string keycloakSub, string email, string name, string username);
+    Task<User> GetOrProvisionByKeycloakSubAsync(string keycloakSub, string email, string username);
     Task UpdateUserAsync(int userId, User user);
     Task SetDigestsStoppedAsync(int userId, bool stopped);
     Task SoftDeleteUserAsync(int userId);

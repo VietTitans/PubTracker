@@ -43,7 +43,6 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
         var usersDataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Combined Digest User",
             Username = "combined-digest-user",
             Email = "combined-digest-user@example.com"
         });
@@ -86,13 +85,11 @@ public class CombinedDigestEndToEndTests : IClassFixture<PubTrackerWebApplicatio
         var usersDataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
         var userA = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Subscriber A",
             Username = "subscriber-a",
             Email = "subscriber-a@example.com"
         });
         var userB = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Subscriber B",
             Username = "subscriber-b",
             Email = "subscriber-b@example.com"
         });

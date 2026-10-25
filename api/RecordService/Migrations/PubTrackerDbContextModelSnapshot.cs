@@ -396,12 +396,6 @@ namespace RecordService.Migrations
                         .HasColumnName("last_active_at")
                         .HasDefaultValueSql("now()");
 
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(200)
-                        .HasColumnType("character varying(200)")
-                        .HasColumnName("name");
-
                     b.Property<string>("Username")
                         .IsRequired()
                         .HasMaxLength(100)

@@ -4,7 +4,6 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL as string;
 
 export interface User {
   id: number;
-  name: string;
   username: string;
   email: string;
   digestsStopped: boolean;
@@ -86,7 +85,7 @@ export function getCurrentUser(): Promise<User> {
   return request<User>(`${API_PREFIX}/Users/me`);
 }
 
-export function updateCurrentUser(dto: { name: string; username: string; email: string }): Promise<User> {
+export function updateCurrentUser(dto: { username: string; email: string }): Promise<User> {
   return request<User>(`${API_PREFIX}/Users/me`, {
     method: "PUT",
     body: JSON.stringify(dto),

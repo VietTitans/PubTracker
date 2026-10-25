@@ -75,7 +75,7 @@ public class InactiveUserNoticeTests : IClassFixture<PubTrackerWebApplicationFac
         var returning = await CreateAsync(usersDataAccess, "warned-returning");
         await SetAsync(db, returning.Id, "keycloak_sub = 'sub-returning', last_active_at = now() - interval '5 years 40 days', inactivity_notice_sent_at = now() - interval '31 days'");
 
-        await usersService.GetOrProvisionByKeycloakSubAsync("sub-returning", returning.Email, returning.Name, returning.Username);
+        await usersService.GetOrProvisionByKeycloakSubAsync("sub-returning", returning.Email, returning.Username);
         await usersService.PurgeExpiredDeletedUsersAsync();
 
         Assert.NotNull(await usersDataAccess.GetUserByIdAsync(returning.Id));
@@ -88,7 +88,7 @@ public class InactiveUserNoticeTests : IClassFixture<PubTrackerWebApplicationFac
     }
 
     private static Task<User> CreateAsync(IUsersDataAccess usersDataAccess, string name) =>
-        usersDataAccess.CreateUserAsync(new User { Name = name, Username = name, Email = $"{name}@example.com" });
+        usersDataAccess.CreateUserAsync(new User { Username = name, Email = $"{name}@example.com" });
 
     private static async Task SetAsync(string connectionString, int userId, string assignments)
     {

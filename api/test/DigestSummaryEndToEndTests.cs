@@ -42,7 +42,6 @@ public class DigestSummaryEndToEndTests : IClassFixture<PubTrackerWebApplication
         var usersDataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Summary User",
             Username = "summary-user",
             Email = "summary-user@example.com"
         });
@@ -74,7 +73,6 @@ public class DigestSummaryEndToEndTests : IClassFixture<PubTrackerWebApplication
         var usersDataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Summary Failure User",
             Username = "summary-failure-user",
             Email = "summary-failure-user@example.com"
         });
@@ -104,13 +102,11 @@ public class DigestSummaryEndToEndTests : IClassFixture<PubTrackerWebApplication
         var usersDataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
         var userA = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Shared Query User A",
             Username = "shared-query-user-a",
             Email = "shared-query-user-a@example.com"
         });
         var userB = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Shared Query User B",
             Username = "shared-query-user-b",
             Email = "shared-query-user-b@example.com"
         });

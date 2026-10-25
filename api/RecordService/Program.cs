@@ -292,11 +292,10 @@ void ConfigureKeycloakBearer(JwtBearerOptions options)
             }
 
             var email = principal.FindFirstValue("email") ?? string.Empty;
-            var name = principal.FindFirstValue("name") ?? email;
             var username = principal.FindFirstValue("preferred_username") ?? email;
 
             var usersService = context.HttpContext.RequestServices.GetRequiredService<IUsersService>();
-            var user = await usersService.GetOrProvisionByKeycloakSubAsync(keycloakSub, email, name, username);
+            var user = await usersService.GetOrProvisionByKeycloakSubAsync(keycloakSub, email, username);
 
             if (user.IsMarkedForDeletion)
             {

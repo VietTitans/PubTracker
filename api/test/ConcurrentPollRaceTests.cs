@@ -41,7 +41,6 @@ public class ConcurrentPollRaceTests : IClassFixture<PubTrackerWebApplicationFac
         var usersDataAccess = setupScope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Race User",
             Username = "race-user",
             Email = "race-user@example.com"
         });

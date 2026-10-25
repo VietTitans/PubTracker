@@ -183,7 +183,7 @@ public class ObservabilityTests : IClassFixture<PubTrackerWebApplicationFactory>
         await connection.OpenAsync();
         for (var i = 0; i < count; i++)
         {
-            var user = await users.CreateUserAsync(new User { Name = $"{prefix}-{i}", Username = $"{prefix}-{i}", Email = $"{prefix}-{i}@example.com" });
+            var user = await users.CreateUserAsync(new User { Username = $"{prefix}-{i}", Email = $"{prefix}-{i}@example.com" });
             await using var command = new NpgsqlCommand(
                 $"INSERT INTO digest_outbox (user_id, subject, html_body, claims, next_attempt_at, created_at) VALUES ({user.Id}, 's', 'b', '[]', NOW(), NOW())", connection);
             await command.ExecuteNonQueryAsync();

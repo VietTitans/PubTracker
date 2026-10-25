@@ -28,7 +28,6 @@ public class InputValidationTests : IClassFixture<PubTrackerWebApplicationFactor
         using var scope = _factory.Services.CreateScope();
         var user = await scope.ServiceProvider.GetRequiredService<IUsersDataAccess>().CreateUserAsync(new User
         {
-            Name = name,
             Username = name,
             Email = $"{name}@example.com"
         });
@@ -83,29 +82,27 @@ public class InputValidationTests : IClassFixture<PubTrackerWebApplicationFactor
     }
 
     [Theory]
-    [InlineData("", "ok", "ok@example.com")]
-    [InlineData("Name", "", "ok@example.com")]
-    [InlineData("Name", "ok", "not-an-email")]
-    [InlineData("Name", "ok", "")]
-    public async Task UpdateCurrentUser_InvalidFields_Returns400(string name, string username, string email)
+    [InlineData("", "ok@example.com")]
+    [InlineData("ok", "not-an-email")]
+    [InlineData("ok", "")]
+    public async Task UpdateCurrentUser_InvalidFields_Returns400(string username, string email)
     {
         var client = await CreateUserClientAsync("val-upd-" + Guid.NewGuid().ToString("N")[..8]);
 
         var response = await client.PutAsJsonAsync("/api/v1/Users/me",
-            new UpdateUserDto { Name = name, Username = username, Email = email });
+            new UpdateUserDto { Username = username, Email = email });
 
         await AssertBadRequestWithMessageAsync(response);
     }
 
     [Fact]
-    public async Task UpdateCurrentUser_OversizedName_Returns400()
+    public async Task UpdateCurrentUser_OversizedUsername_Returns400()
     {
         var client = await CreateUserClientAsync("val-upd-long-" + Guid.NewGuid().ToString("N")[..8]);
 
         var response = await client.PutAsJsonAsync("/api/v1/Users/me", new UpdateUserDto
         {
-            Name = new string('a', UserFieldLimits.Name + 1),
-            Username = "ok",
+            Username = new string('a', UserFieldLimits.Username + 1),
             Email = "ok@example.com"
         });
 

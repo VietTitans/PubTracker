@@ -51,7 +51,6 @@ public class AuthorIntentionEndToEndTests : IClassFixture<PubTrackerWebApplicati
         var usersDataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Author Intention User",
             Username = "author-intention-user",
             Email = "author-intention-user@example.com"
         });
@@ -90,7 +89,6 @@ public class AuthorIntentionEndToEndTests : IClassFixture<PubTrackerWebApplicati
         var usersDataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Author Intention Failure User",
             Username = "author-intention-failure-user",
             Email = "author-intention-failure-user@example.com"
         });
@@ -122,13 +120,11 @@ public class AuthorIntentionEndToEndTests : IClassFixture<PubTrackerWebApplicati
         var usersDataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
         var userA = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Author Intention Dedup User A",
             Username = "author-intention-dedup-user-a",
             Email = "author-intention-dedup-user-a@example.com"
         });
         var userB = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Author Intention Dedup User B",
             Username = "author-intention-dedup-user-b",
             Email = "author-intention-dedup-user-b@example.com"
         });
@@ -178,7 +174,6 @@ public class AuthorIntentionEndToEndTests : IClassFixture<PubTrackerWebApplicati
     {
         var user = await scope.ServiceProvider.GetRequiredService<IUsersDataAccess>().CreateUserAsync(new User
         {
-            Name = name,
             Username = name,
             Email = $"{name}@example.com"
         });

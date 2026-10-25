@@ -36,7 +36,6 @@ public class SearchQueryPollingEndToEndTests : IClassFixture<PubTrackerWebApplic
         var usersDataAccess = scope.ServiceProvider.GetRequiredService<IUsersDataAccess>();
         var user = await usersDataAccess.CreateUserAsync(new User
         {
-            Name = "Test User",
             Username = "test-user",
             Email = "test-user@example.com"
         });

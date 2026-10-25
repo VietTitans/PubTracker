@@ -8,10 +8,6 @@ namespace RecordService.DTOs.UserDto;
 public class UpdateUserDto
 {
     [Required(AllowEmptyStrings = false)]
-    [StringLength(UserFieldLimits.Name)]
-    public string Name { get; set; }
-
-    [Required(AllowEmptyStrings = false)]
     [StringLength(UserFieldLimits.Username)]
     public string Username { get; set; }
 
