@@ -122,7 +122,6 @@ pipeline {
                         echo "$GHCR_TOKEN" | docker login ghcr.io -u "$GHCR_USER" --password-stdin
                         docker buildx inspect pt-builder >/dev/null 2>&1 || docker buildx create --name pt-builder --driver docker-container
                         docker buildx build --builder pt-builder --platform linux/arm64 --push \
-                            --build-arg INSTALL_PLAYWRIGHT=false \
                             -f api/Dockerfile -t ghcr.io/$OWNER/pubtracker-api:$BUILD_NUMBER api
                         # Vite bakes VITE_* in at build time; API and Keycloak are same-origin behind Caddy.
                         docker buildx build --builder pt-builder --platform linux/arm64 --push \

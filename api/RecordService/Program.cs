@@ -262,7 +262,10 @@ void ConfigureKeycloakBearer(JwtBearerOptions options)
         options.MetadataAddress = keycloakMetadataAddress;
     }
     options.Audience = keycloakAudience;
-    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment(); // local dev Keycloak runs over plain HTTP
+    // Local dev Keycloak runs over plain HTTP. In prod, MetadataAddress is the in-network
+    // http://keycloak:8080 route (TLS ends at Cloudflare); the issuer stays pinned to the https Authority.
+    options.RequireHttpsMetadata = !builder.Environment.IsDevelopment()
+        && keycloakMetadataAddress?.StartsWith("http://", StringComparison.OrdinalIgnoreCase) != true;
     options.MapInboundClaims = false; // keep raw JWT claim names ("sub", "email", ...) instead of the default ClaimTypes.* remapping
     options.TokenValidationParameters = new TokenValidationParameters
     {

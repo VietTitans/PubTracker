@@ -140,9 +140,8 @@ services:
       Heartbeat__OutboxUrl: ${HEARTBEAT_OUTBOX_URL:-}
       Unsubscribe__SigningKey: ${UNSUBSCRIBE_SIGNING_KEY}
       Sources__PubMed__Enabled: ${SOURCES_PUBMED_ENABLED:-}
-      # Pinned off: the production image is built without Chromium (INSTALL_PLAYWRIGHT=false), so PEDro
-      # cannot work here. Not configurable from .env on purpose.
-      Sources__Pedro__Enabled: "false"
+      # Scraped source: set SOURCES_PEDRO_ENABLED=true only with PEDro's permission. Needs the Chromium image.
+      Sources__Pedro__Enabled: ${SOURCES_PEDRO_ENABLED:-}
       Ncbi__ApiKey: ${NCBI_API_KEY:-}
       Ncbi__ContactEmail: ${NCBI_CONTACT_EMAIL:-}
       Llm__BaseUrl: ${LLM_BASE_URL:-}

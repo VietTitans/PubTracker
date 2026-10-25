@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Hygiene checks for the prod stack, no VM needed:
-#   1. docker-compose.prod.yml wiring (healthchecks, log rotation, ordering, PEDro off)
+#   1. docker-compose.prod.yml wiring (healthchecks, log rotation, ordering)
 #   2. the healthcheck commands themselves, run inside the real images
 #   3. host/disk-alert.sh against a stub ping server
 # Needs a running Docker daemon. Usage: docker/test-hygiene.sh
@@ -37,9 +37,6 @@ offenders=$(jq_ -r '. as $c | ["api","web","keycloak","db"][] | select($c.servic
 offenders=$(jq_ -r '. as $c | .services | to_entries[] | .key as $svc | (.value.depends_on // {}) | to_entries[]
   | select($c.services[.key].healthcheck != null and .value.condition != "service_healthy") | "\($svc) -> \(.key)"' <<<"$COMPOSE_JSON")
 [ -z "$offenders" ] || fail "dependencies that do not wait for service_healthy: $offenders"
-
-[ "$(jq_ -r '.services.api.environment.Sources__Pedro__Enabled' <<<"$COMPOSE_JSON")" = "false" ] \
-  || fail "PEDro must be pinned off in the api environment"
 
 echo "== keycloak hardening: realm file and admin-console exposure =="
 REALM=keycloak/realm-export.prod.json
