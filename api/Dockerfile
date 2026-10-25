@@ -9,10 +9,13 @@ WORKDIR /src
 
 COPY . .
 
-RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo arm64 || echo x64) && \
-    dotnet restore RecordService/RecordService.csproj -a $ARCH
+# Cache mount keeps downloaded packages across retries/builds; timeout fails a stalled restore fast.
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    ARCH=$([ "$TARGETARCH" = "arm64" ] && echo arm64 || echo x64) && \
+    timeout 600 dotnet restore RecordService/RecordService.csproj -a $ARCH --disable-parallel
 
-RUN ARCH=$([ "$TARGETARCH" = "arm64" ] && echo arm64 || echo x64) && \
+RUN --mount=type=cache,target=/root/.nuget/packages \
+    ARCH=$([ "$TARGETARCH" = "arm64" ] && echo arm64 || echo x64) && \
     dotnet publish RecordService/RecordService.csproj \
     -c Release \
     -a $ARCH \
