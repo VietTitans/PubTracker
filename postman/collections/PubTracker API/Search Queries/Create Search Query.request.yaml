@@ -1,0 +1,19 @@
+$kind: http-request
+name: 'Create Search Query (Subscribe)'
+method: POST
+url: '{{base_url}}/api/v1/searchqueries'
+order: 1000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{access_token}}'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "targetUrl": "https://pubmed.ncbi.nlm.nih.gov/?term=example"
+    }

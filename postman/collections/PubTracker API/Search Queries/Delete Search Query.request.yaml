@@ -1,0 +1,13 @@
+$kind: http-request
+name: 'Delete Search Query (Unsubscribe)'
+method: DELETE
+url: '{{base_url}}/api/v1/searchqueries/:searchQueryId'
+order: 3000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{access_token}}'
+pathVariables:
+  - key: searchQueryId
+    value: '1'

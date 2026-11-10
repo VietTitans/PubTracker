@@ -1,0 +1,12 @@
+$kind: http-request
+name: List Sources
+method: GET
+url: '{{base_url}}/api/v1/sources?page=1&pageSize=20'
+order: 1000
+auth:
+  type: noauth
+queryParams:
+  - key: page
+    value: '1'
+  - key: pageSize
+    value: '20'

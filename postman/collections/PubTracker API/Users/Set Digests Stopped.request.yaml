@@ -1,0 +1,19 @@
+$kind: http-request
+name: Set Digests Stopped
+method: PUT
+url: '{{base_url}}/api/v1/users/me/digests-stopped'
+order: 4000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{access_token}}'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "stopped": true
+    }

@@ -1,0 +1,94 @@
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+# One deploy at a time; a newer push waits instead of cancelling a deploy mid-flight.
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+env:
+  PUBLIC_ORIGIN: https://pubtracker.org
+  # Prefixed so tags never collide with the old Jenkins build-number tags already in GHCR.
+  TAG: gh${{ github.run_number }}
+
+jobs:
+  ci:
+    uses: ./.github/workflows/ci.yml
+
+  images:
+    needs: ci
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - id: owner
+        run: echo "name=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
+      # Prod VM is linux/arm64. api/Dockerfile cross-compiles on the native arch, so QEMU only
+      # runs the cheap final stages; the web build runs under it.
+      - uses: docker/setup-qemu-action@v3
+        with:
+          platforms: arm64
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: api
+          file: api/Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: ghcr.io/${{ steps.owner.outputs.name }}/pubtracker-api:${{ env.TAG }}
+          cache-from: type=gha,scope=api
+          cache-to: type=gha,scope=api,mode=max
+      # Vite bakes VITE_* in at build time; API and Keycloak are same-origin behind Caddy.
+      - uses: docker/build-push-action@v6
+        with:
+          context: web
+          file: web/Dockerfile
+          platforms: linux/arm64
+          push: true
+          build-args: |
+            VITE_API_BASE_URL=${{ env.PUBLIC_ORIGIN }}
+            VITE_KEYCLOAK_AUTHORITY=${{ env.PUBLIC_ORIGIN }}/auth/realms/science-alerts-saas
+            VITE_KEYCLOAK_CLIENT_ID=science-alerts-web
+          tags: ghcr.io/${{ steps.owner.outputs.name }}/pubtracker-web:${{ env.TAG }}
+          cache-from: type=gha,scope=web
+          cache-to: type=gha,scope=web,mode=max
+
+  deploy:
+    needs: images
+    runs-on: ubuntu-latest
+    # Add required reviewers on this environment in repo settings for a manual approval gate.
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      # deploy.sh reaches the VM through `cloudflared access ssh` (docs/adr/0001).
+      - name: Install cloudflared
+        run: |
+          curl -fsSL -o cloudflared.deb https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64.deb
+          sudo dpkg -i cloudflared.deb
+      - name: Deploy
+        env:
+          DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+          TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.TUNNEL_SERVICE_TOKEN_ID }}
+          TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.TUNNEL_SERVICE_TOKEN_SECRET }}
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+        run: |
+          SSH_KEY=$(mktemp)
+          trap 'rm -f "$SSH_KEY"' EXIT
+          printf '%s\n' "$DEPLOY_SSH_KEY" > "$SSH_KEY"
+          chmod 600 "$SSH_KEY"
+          export SSH_KEY
+          sh deploy/deploy.sh "$TAG"

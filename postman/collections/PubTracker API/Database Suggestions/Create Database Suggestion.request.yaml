@@ -1,0 +1,21 @@
+$kind: http-request
+name: Create Database Suggestion
+method: POST
+url: '{{base_url}}/api/v1/databasesuggestions'
+order: 2000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{access_token}}'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "name": "PubMed",
+      "websiteUrl": "https://pubmed.ncbi.nlm.nih.gov",
+      "reason": "Great source for biomedical literature."
+    }

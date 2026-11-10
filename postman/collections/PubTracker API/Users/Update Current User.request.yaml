@@ -1,0 +1,20 @@
+$kind: http-request
+name: Update Current User
+method: PUT
+url: '{{base_url}}/api/v1/users/me'
+order: 2000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{access_token}}'
+headers:
+  - key: Content-Type
+    value: application/json
+body:
+  type: json
+  content: |-
+    {
+      "username": "john_doe",
+      "email": "john@example.com"
+    }

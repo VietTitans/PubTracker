@@ -1,0 +1,10 @@
+$kind: http-request
+name: Apply Unsubscribe
+method: POST
+url: '{{base_url}}/api/v1/subscriptions/unsubscribe/:token'
+order: 2000
+auth:
+  type: noauth
+pathVariables:
+  - key: token
+    value: example-token

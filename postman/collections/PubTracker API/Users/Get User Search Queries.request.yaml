@@ -1,0 +1,18 @@
+$kind: http-request
+name: Get User Search Queries
+method: GET
+url: '{{base_url}}/api/v1/users/:userId/search-queries?page=1&pageSize=20'
+order: 7000
+auth:
+  type: bearer
+  credentials:
+    - key: token
+      value: '{{access_token}}'
+pathVariables:
+  - key: userId
+    value: '1'
+queryParams:
+  - key: page
+    value: '1'
+  - key: pageSize
+    value: '20'

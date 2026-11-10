@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+  workflow_call:
+
+permissions:
+  contents: read
+
+jobs:
+  api:
+    runs-on: ubuntu-latest
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: "1"
+      DOTNET_NOLOGO: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      # Test.csproj references RecordService.csproj (which references RecordData.csproj), so building
+      # it builds all of api/. No .sln file exists.
+      - run: dotnet restore api/test/Test.csproj
+      - run: dotnet build api/test/Test.csproj --no-restore -c Release
+      # Excludes BrevoEmailSenderManualTest / PedroProviderManualTest, which hit real external
+      # services. The Testcontainers Postgres tests use the runner's Docker daemon directly.
+      - run: >
+          dotnet test api/test/Test.csproj --no-build -c Release
+          --filter "FullyQualifiedName!~ManualTest"
+          --logger "trx;LogFileName=test-results.trx"
+          --results-directory ./TestResults
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results
+          path: TestResults/*.trx
+          if-no-files-found: ignore
+
+  web:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      # Keep in step with the "FROM node:... AS build" line in web/Dockerfile.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      # `npm run build` is `tsc -b && vite build`, so a type error fails here instead of in the image build.
+      - run: npm ci && npm run build
+        working-directory: web
+
+  deploy-script:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash deploy/test.sh

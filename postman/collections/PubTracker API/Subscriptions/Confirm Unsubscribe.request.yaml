@@ -1,0 +1,10 @@
+$kind: http-request
+name: Confirm Unsubscribe
+method: GET
+url: '{{base_url}}/api/v1/subscriptions/unsubscribe/:token'
+order: 1000
+auth:
+  type: noauth
+pathVariables:
+  - key: token
+    value: example-token
