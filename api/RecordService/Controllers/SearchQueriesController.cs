@@ -1,5 +1,6 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
+using RecordService.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using RecordService.BusinessLogic.SearchQueriesService;
@@ -38,22 +39,18 @@ public class SearchQueriesController : ControllerBase
 
         try
         {
-            if (!User.IsInRole("Admin"))
-            {
-                var subscriberIds = await _searchQueriesService.GetUserSubscribersForQueryAsync(searchQueryId);
-                if (!subscriberIds.Contains(int.Parse(userId)))
-                {
-                    return Forbid();
-                }
-            }
-
-            var searchQuery = await _searchQueriesService.GetSearchQueryByIdAsync(searchQueryId);
+            // Admin-or-subscriber is enforced by the service.
+            var searchQuery = await _searchQueriesService.GetSearchQueryByIdAsync(Caller.From(User), searchQueryId);
             if (searchQuery == null)
             {
                 return NotFound(new { message = "Search query not found." });
             }
 
             return Ok(searchQuery.ToResponseDto());
+        }
+        catch (ForbiddenException)
+        {
+            return Forbid();
         }
         catch (Exception ex)
         {
@@ -68,8 +65,12 @@ public class SearchQueriesController : ControllerBase
     {
         try
         {
-            var userIds = await _searchQueriesService.GetUserSubscribersPageForQueryAsync(searchQueryId, pageRequest.Page, pageRequest.PageSize);
+            var userIds = await _searchQueriesService.GetUserSubscribersPageForQueryAsync(Caller.From(User), searchQueryId, pageRequest.Page, pageRequest.PageSize);
             return Ok(userIds.ToPagedResponseDto(pageRequest, id => id));
+        }
+        catch (ForbiddenException)
+        {
+            return Forbid();
         }
         catch (Exception ex)
         {
@@ -91,7 +92,7 @@ public class SearchQueriesController : ControllerBase
 
         try
         {
-            var searchQuery = await _searchQueriesService.SubscribeAsync(int.Parse(userId), dto.TargetUrl);
+            var searchQuery = await _searchQueriesService.SubscribeAsync(Caller.From(User), int.Parse(userId), dto.TargetUrl);
             return CreatedAtAction(nameof(GetSearchQueryById), new { searchQueryId = searchQuery.Id }, searchQuery.ToResponseDto());
         }
         catch (AlreadySubscribedException)
@@ -125,7 +126,7 @@ public class SearchQueriesController : ControllerBase
 
         try
         {
-            var unsubscribed = await _searchQueriesService.UnsubscribeAsync(int.Parse(userId), searchQueryId);
+            var unsubscribed = await _searchQueriesService.UnsubscribeAsync(Caller.From(User), int.Parse(userId), searchQueryId);
             if (!unsubscribed)
             {
                 return NotFound(new { message = "Subscription not found." });

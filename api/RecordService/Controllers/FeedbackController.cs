@@ -1,5 +1,6 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
+using RecordService.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using RecordService.BusinessLogic.FeedbackService;
@@ -35,7 +36,7 @@ public class FeedbackController : ControllerBase
 
         try
         {
-            await _feedbackService.SubmitFeedbackAsync(int.Parse(userId), dto.Type, dto.Message);
+            await _feedbackService.SubmitFeedbackAsync(Caller.From(User), int.Parse(userId), dto.Type, dto.Message);
             return NoContent();
         }
         catch (Exception ex)

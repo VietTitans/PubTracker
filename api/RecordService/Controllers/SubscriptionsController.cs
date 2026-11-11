@@ -1,6 +1,7 @@
 using System.Net;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
+using RecordService.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using RecordService.BusinessLogic.DigestService;
@@ -58,14 +59,16 @@ public class SubscriptionsController : ControllerBase
 
         try
         {
+            // The signed token is the credential: whoever holds it acts as that user, never as admin.
+            var caller = new Caller(userId, IsAdmin: false);
             if (searchQueryId is { } queryId)
             {
                 // Already unsubscribed is fine: the outcome the user asked for holds.
-                await _searchQueriesService.UnsubscribeAsync(userId, queryId);
+                await _searchQueriesService.UnsubscribeAsync(caller, userId, queryId);
             }
             else
             {
-                await _usersService.SetDigestsStoppedAsync(userId, true);
+                await _usersService.SetDigestsStoppedAsync(caller, userId, true);
             }
         }
         catch (Exception ex)

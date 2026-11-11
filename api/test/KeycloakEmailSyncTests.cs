@@ -84,7 +84,7 @@ public class KeycloakEmailSyncTests : IClassFixture<PubTrackerWebApplicationFact
         var (service, dataAccess, sync) = CreateService();
         var user = await dataAccess.CreateUserAsync(new User { Username = "a", Email = "kc-old@example.com" });
 
-        await service.UpdateUserAsync(user.Id, new User { Username = "a", Email = "kc-new@example.com" }, "sub-abc");
+        await service.UpdateUserAsync(new RecordService.Authentication.Caller(user.Id, false), user.Id, new User { Username = "a", Email = "kc-new@example.com" }, "sub-abc");
 
         Assert.Equal(new[] { ("sub-abc", "kc-new@example.com") }, sync.Calls);
         Assert.Equal("kc-new@example.com", (await dataAccess.GetUserByIdAsync(user.Id)).Email);
@@ -96,7 +96,7 @@ public class KeycloakEmailSyncTests : IClassFixture<PubTrackerWebApplicationFact
         var (service, dataAccess, sync) = CreateService();
         var user = await dataAccess.CreateUserAsync(new User { Username = "a", Email = "same@example.com" });
 
-        await service.UpdateUserAsync(user.Id, new User { Username = "renamed", Email = "same@example.com" }, "sub-abc");
+        await service.UpdateUserAsync(new RecordService.Authentication.Caller(user.Id, false), user.Id, new User { Username = "renamed", Email = "same@example.com" }, "sub-abc");
 
         Assert.Empty(sync.Calls);
         Assert.Equal("renamed", (await dataAccess.GetUserByIdAsync(user.Id)).Username);
@@ -108,7 +108,7 @@ public class KeycloakEmailSyncTests : IClassFixture<PubTrackerWebApplicationFact
         var (service, dataAccess, sync) = CreateService();
         var user = await dataAccess.CreateUserAsync(new User { Username = "a", Email = "nosub-old@example.com" });
 
-        await service.UpdateUserAsync(user.Id, new User { Username = "a", Email = "nosub-new@example.com" });
+        await service.UpdateUserAsync(new RecordService.Authentication.Caller(user.Id, false), user.Id, new User { Username = "a", Email = "nosub-new@example.com" });
 
         Assert.Empty(sync.Calls);
         Assert.Equal("nosub-new@example.com", (await dataAccess.GetUserByIdAsync(user.Id)).Email);
@@ -122,7 +122,7 @@ public class KeycloakEmailSyncTests : IClassFixture<PubTrackerWebApplicationFact
         var user = await dataAccess.CreateUserAsync(new User { Username = "a", Email = "keep@example.com" });
 
         await Assert.ThrowsAsync<EmailAlreadyInUseException>(() =>
-            service.UpdateUserAsync(user.Id, new User { Username = "a", Email = "taken@example.com" }, "sub-abc"));
+            service.UpdateUserAsync(new RecordService.Authentication.Caller(user.Id, false), user.Id, new User { Username = "a", Email = "taken@example.com" }, "sub-abc"));
 
         Assert.Equal("keep@example.com", (await dataAccess.GetUserByIdAsync(user.Id)).Email);
     }
