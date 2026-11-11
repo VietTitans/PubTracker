@@ -2,6 +2,7 @@ using System.Net;
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using RecordService.BusinessLogic.DigestService;
 using RecordService.BusinessLogic.SearchQueriesService;
 using RecordService.BusinessLogic.UsersService;
@@ -15,6 +16,7 @@ namespace RecordService.Controllers;
 /// List-Unsubscribe-Post request sends to the same URL.
 /// </summary>
 [AllowAnonymous]
+[EnableRateLimiting("anon")]
 [ApiVersion("1.0")]
 [ApiController]
 [Route("api/v{version:apiVersion}/[controller]")]

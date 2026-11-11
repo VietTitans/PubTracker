@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using RecordService.BusinessLogic.FeedbackService;
 using RecordService.DTOs.FeedbackDto;
 using System.Security.Claims;
@@ -22,6 +23,7 @@ public class FeedbackController : ControllerBase
     }
 
     [Authorize]
+    [EnableRateLimiting("strict")]
     [HttpPost]
     public async Task<IActionResult> SubmitFeedback([FromBody] CreateFeedbackDto dto)
     {

@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using RecordService.BusinessLogic.SearchQueriesService;
 using RecordService.DTOs;
 using RecordService.DTOs.SearchQueryDto;
@@ -78,6 +79,7 @@ public class SearchQueriesController : ControllerBase
     }
 
     [Authorize]
+    [EnableRateLimiting("strict")]
     [HttpPost]
     public async Task<IActionResult> CreateSearchQuery([FromBody] CreateSearchQueryDto dto)
     {

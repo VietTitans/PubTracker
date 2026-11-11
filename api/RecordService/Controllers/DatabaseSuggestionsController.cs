@@ -1,6 +1,7 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using RecordService.BusinessLogic.DatabaseSuggestionsService;
 using RecordService.DTOs;
 using RecordService.DTOs.DatabaseSuggestionDto;
@@ -46,6 +47,7 @@ public class DatabaseSuggestionsController : ControllerBase
     }
 
     [Authorize]
+    [EnableRateLimiting("strict")]
     [HttpPost]
     public async Task<IActionResult> Suggest([FromBody] CreateDatabaseSuggestionDto dto)
     {
@@ -68,6 +70,7 @@ public class DatabaseSuggestionsController : ControllerBase
     }
 
     [Authorize]
+    [EnableRateLimiting("strict")]
     [HttpPut("{suggestionId}/vote")]
     public async Task<IActionResult> AddVote(int suggestionId)
     {
@@ -91,6 +94,7 @@ public class DatabaseSuggestionsController : ControllerBase
     }
 
     [Authorize]
+    [EnableRateLimiting("strict")]
     [HttpDelete("{suggestionId}/vote")]
     public async Task<IActionResult> RemoveVote(int suggestionId)
     {
