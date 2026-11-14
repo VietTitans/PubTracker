@@ -1,6 +1,0 @@
-$kind: collection
-name: PubTracker API
-description: API collection for the PubTracker publication tracking service.
-variables:
-  - key: base_url
-    value: 'http://localhost:5000'
