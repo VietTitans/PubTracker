@@ -135,8 +135,15 @@
 }
 
 .supported-databases .badge {
+  display: inline-block;
   padding: 4px 12px;
   font-size: 14px;
+  text-decoration: none;
+}
+
+.supported-databases a.badge:hover {
+  filter: brightness(0.92);
+  text-decoration: underline;
 }
 
 .supported-databases-more {

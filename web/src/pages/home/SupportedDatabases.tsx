@@ -7,8 +7,16 @@ export default function SupportedDatabases() {
       <span className="supported-databases-label">Supported databases</span>
       <ul>
         {supportedSources.map((source) => (
-          <li key={source.label} className={`badge badge-${source.label.toLowerCase()}`}>
-            {source.label}
+          <li key={source.label}>
+            <a
+              href={source.homepageUrl}
+              target="_blank"
+              rel="noreferrer"
+              className={`badge badge-${source.label.toLowerCase()}`}
+              title={`Open ${source.label} in a new tab`}
+            >
+              {source.label}
+            </a>
           </li>
         ))}
       </ul>
