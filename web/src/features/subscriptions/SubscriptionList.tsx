@@ -41,8 +41,10 @@ export default function SubscriptionList({ subscriptions }: { subscriptions: Sub
 
         {searchQueries.length === 0 ? (
           <div className="empty-state">
-            <p>No subscriptions yet.</p>
-            <p className="empty-state-hint">Paste a search URL above to start tracking new results.</p>
+            <p>You're not tracking any searches yet.</p>
+            <p className="empty-state-hint">
+              Paste a PubMed search link above and we'll email you a digest when new papers appear.
+            </p>
           </div>
         ) : (
           <ul className="search-query-list">
