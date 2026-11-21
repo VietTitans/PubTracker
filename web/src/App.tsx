@@ -13,6 +13,7 @@ import {
   type User,
 } from "./api/client";
 import { useAuth } from "./auth/useAuth";
+import Modal from "./components/Modal";
 import { detectSourceLabel } from "./lib/sourceLabel";
 import { PrivacyPage, TermsPage } from "./pages/LegalPages";
 import FeedbackPage from "./pages/FeedbackPage";
@@ -151,37 +152,19 @@ function ConfirmDialog({
   onConfirm: () => void;
   onCancel: () => void;
 }) {
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        onCancel();
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onCancel]);
-
   return (
-    <div className="modal-overlay" onClick={onCancel}>
-      <div
-        className="modal-card"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="confirm-dialog-title"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 id="confirm-dialog-title">{title}</h3>
-        <p className="modal-message">{message}</p>
-        <div className="modal-actions">
-          <button className="btn btn-ghost" onClick={onCancel} disabled={isBusy}>
-            Cancel
-          </button>
-          <button className="btn btn-danger" onClick={onConfirm} disabled={isBusy} autoFocus>
-            {isBusy ? <Spinner /> : confirmLabel}
-          </button>
-        </div>
+    <Modal titleId="confirm-dialog-title" role="alertdialog" onClose={onCancel}>
+      <h3 id="confirm-dialog-title">{title}</h3>
+      <p className="modal-message">{message}</p>
+      <div className="modal-actions">
+        <button className="btn btn-ghost" onClick={onCancel} disabled={isBusy}>
+          Cancel
+        </button>
+        <button className="btn btn-danger" onClick={onConfirm} disabled={isBusy} autoFocus>
+          {isBusy ? <Spinner /> : confirmLabel}
+        </button>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -200,16 +183,6 @@ function DetailDialog({
   onClose: () => void;
   onRequestUnsubscribe: () => void;
 }) {
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
   const source = detectSourceLabel(target.targetUrl);
   const lastFetch = detail?.lastFetchedAt
     ? new Date(detail.lastFetchedAt).toLocaleString(undefined, { hour12: false })
@@ -220,76 +193,68 @@ function DetailDialog({
   const keywords = detail?.tags ?? [];
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="detail-title"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <div className="detail-header">
-          <span className={`badge badge-${source.toLowerCase()}`}>{source}</span>
-          <h3 id="detail-title">Search details</h3>
+    <Modal titleId="detail-title" onClose={onClose}>
+      <div className="detail-header">
+        <span className={`badge badge-${source.toLowerCase()}`}>{source}</span>
+        <h3 id="detail-title">Search details</h3>
+      </div>
+
+      {error && (
+        <p className="alert" role="alert">
+          {error}
+        </p>
+      )}
+
+      <dl className="detail-list">
+        <div className="detail-tags-row">
+          <dt>Keywords</dt>
+          <dd>
+            {isLoading ? (
+              <Spinner />
+            ) : keywords.length > 0 ? (
+              <div className="tag-group">
+                {keywords.map((keyword) => (
+                  <span key={keyword} className="tag">
+                    {keyword}
+                  </span>
+                ))}
+              </div>
+            ) : (
+              "—"
+            )}
+          </dd>
         </div>
-
-        {error && (
-          <p className="alert" role="alert">
-            {error}
-          </p>
-        )}
-
-        <dl className="detail-list">
-          <div className="detail-tags-row">
-            <dt>Keywords</dt>
-            <dd>
-              {isLoading ? (
-                <Spinner />
-              ) : keywords.length > 0 ? (
-                <div className="tag-group">
-                  {keywords.map((keyword) => (
-                    <span key={keyword} className="tag">
-                      {keyword}
-                    </span>
-                  ))}
-                </div>
-              ) : (
-                "—"
-              )}
+        <div>
+          <dt>Records registered</dt>
+          <dd>{isLoading ? <Spinner /> : (detail?.sourceRecordCount ?? "—")}</dd>
+        </div>
+        <div>
+          <dt>Last fetch</dt>
+          <dd>{isLoading ? <Spinner /> : lastFetch}</dd>
+        </div>
+        {!isLoading && lastPollFailedAt && (
+          <div>
+            <dt>Status</dt>
+            <dd className="detail-status-warning">
+              Last check failed ({lastPollFailedAt}) - will retry on the next scheduled check
             </dd>
           </div>
-          <div>
-            <dt>Records registered</dt>
-            <dd>{isLoading ? <Spinner /> : (detail?.sourceRecordCount ?? "—")}</dd>
-          </div>
-          <div>
-            <dt>Last fetch</dt>
-            <dd>{isLoading ? <Spinner /> : lastFetch}</dd>
-          </div>
-          {!isLoading && lastPollFailedAt && (
-            <div>
-              <dt>Status</dt>
-              <dd className="detail-status-warning">
-                Last check failed ({lastPollFailedAt}) - will retry on the next scheduled check
-              </dd>
-            </div>
-          )}
-        </dl>
+        )}
+      </dl>
 
-        <a href={target.targetUrl} target="_blank" rel="noreferrer" className="detail-url">
-          Click here to follow the URL
-        </a>
+      <a href={target.targetUrl} target="_blank" rel="noreferrer" className="detail-url">
+        Click here to follow the URL
+      </a>
 
-        <div className="modal-actions">
-          <button className="btn btn-danger-outline" onClick={onRequestUnsubscribe}>
-            Unsubscribe
-          </button>
-          <button className="btn btn-ghost" onClick={onClose} autoFocus>
-            Close
-          </button>
-        </div>
+      <div className="modal-actions">
+        <button className="btn btn-danger-outline" onClick={onRequestUnsubscribe}>
+          Unsubscribe
+        </button>
+        <button className="btn btn-ghost" onClick={onClose} autoFocus>
+          Close
+        </button>
       </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -401,16 +366,6 @@ function ProfileDialog({
   const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setIsSaving(true);
@@ -427,61 +382,53 @@ function ProfileDialog({
   }
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="profile-title"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 id="profile-title">Profile</h3>
+    <Modal titleId="profile-title" onClose={onClose}>
+      <h3 id="profile-title">Profile</h3>
 
-        {error && (
-          <p className="alert" role="alert">
-            {error}
-          </p>
-        )}
+      {error && (
+        <p className="alert" role="alert">
+          {error}
+        </p>
+      )}
 
-        <form onSubmit={handleSubmit}>
-          <div className="form-field">
-            <label className="field-label" htmlFor="profile-username">
-              Username
-            </label>
-            <input
-              id="profile-username"
-              className="text-input"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              required
-            />
-          </div>
+      <form onSubmit={handleSubmit}>
+        <div className="form-field">
+          <label className="field-label" htmlFor="profile-username">
+            Username
+          </label>
+          <input
+            id="profile-username"
+            className="text-input"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+          />
+        </div>
 
-          <div className="form-field">
-            <label className="field-label" htmlFor="profile-email">
-              Email
-            </label>
-            <input
-              id="profile-email"
-              type="email"
-              className="text-input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-            />
-          </div>
+        <div className="form-field">
+          <label className="field-label" htmlFor="profile-email">
+            Email
+          </label>
+          <input
+            id="profile-email"
+            type="email"
+            className="text-input"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+          />
+        </div>
 
-          <div className="modal-actions">
-            <button type="button" className="btn btn-ghost" onClick={onClose} disabled={isSaving}>
-              Cancel
-            </button>
-            <button type="submit" className="btn btn-primary" disabled={isSaving}>
-              {isSaving ? <Spinner /> : "Save"}
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <div className="modal-actions">
+          <button type="button" className="btn btn-ghost" onClick={onClose} disabled={isSaving}>
+            Cancel
+          </button>
+          <button type="submit" className="btn btn-primary" disabled={isSaving}>
+            {isSaving ? <Spinner /> : "Save"}
+          </button>
+        </div>
+      </form>
+    </Modal>
   );
 }
 
@@ -496,54 +443,36 @@ function SettingsDialog({
   onClose: () => void;
   onRequestDeleteAccount: () => void;
 }) {
-  useEffect(() => {
-    function onKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        onClose();
-      }
-    }
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
-
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="settings-title"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h3 id="settings-title">Settings</h3>
-        <p className="modal-subtitle">Manage your account.</p>
+    <Modal titleId="settings-title" onClose={onClose}>
+      <h3 id="settings-title">Settings</h3>
+      <p className="modal-subtitle">Manage your account.</p>
 
+      <p className="modal-message">
+        {digestsStopped
+          ? "Digest emails are off. Your searches are kept."
+          : "Digest emails are on."}
+      </p>
+      <button className="btn btn-ghost" onClick={onToggleDigests}>
+        {digestsStopped ? "Turn Digests back on" : "Stop all Digests"}
+      </button>
+
+      <div className="danger-zone">
+        <p className="danger-zone-title">Delete account</p>
         <p className="modal-message">
-          {digestsStopped
-            ? "Digest emails are off. Your searches are kept."
-            : "Digest emails are on."}
+          You have 30 days to recover your account by signing in again. After that, your account and all subscriptions will be permanently deleted.
         </p>
-        <button className="btn btn-ghost" onClick={onToggleDigests}>
-          {digestsStopped ? "Turn Digests back on" : "Stop all Digests"}
+        <button className="btn btn-danger-outline" onClick={onRequestDeleteAccount}>
+          Delete account
         </button>
-
-        <div className="danger-zone">
-          <p className="danger-zone-title">Delete account</p>
-          <p className="modal-message">
-            You have 30 days to recover your account by signing in again. After that, your account and all subscriptions will be permanently deleted.
-          </p>
-          <button className="btn btn-danger-outline" onClick={onRequestDeleteAccount}>
-            Delete account
-          </button>
-        </div>
-
-        <div className="modal-actions">
-          <button className="btn btn-ghost" onClick={onClose} autoFocus>
-            Close
-          </button>
-        </div>
       </div>
-    </div>
+
+      <div className="modal-actions">
+        <button className="btn btn-ghost" onClick={onClose} autoFocus>
+          Close
+        </button>
+      </div>
+    </Modal>
   );
 }
 
