@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { supportedPublicationSources } from "../../features/publicationSources/publicationSources";
+import { supportedPublicationSources } from "./publicationSources";
 
 export default function SupportedDatabases() {
   return (
