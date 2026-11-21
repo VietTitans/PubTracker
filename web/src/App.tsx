@@ -9,99 +9,17 @@ import {
   type User,
 } from "./api/client";
 import { useAuth } from "./auth/useAuth";
+import Icon from "./components/Icon";
 import Modal from "./components/Modal";
-import { detectSourceLabel } from "./lib/sourceLabel";
+import SourceBadge from "./components/SourceBadge";
+import Spinner from "./components/Spinner";
+import TagList from "./components/TagList";
+import SubscriptionRow from "./features/subscriptions/SubscriptionRow";
 import { rememberPendingUrl, useSubscriptions } from "./features/subscriptions/useSubscriptions";
 import { PrivacyPage, TermsPage } from "./pages/LegalPages";
 import FeedbackPage from "./pages/FeedbackPage";
 import SuggestPage from "./pages/SuggestPage";
 import "./App.css";
-
-function ExternalLinkIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
-      <polyline points="15 3 21 3 21 9" />
-      <line x1="10" y1="14" x2="21" y2="3" />
-    </svg>
-  );
-}
-
-function TrashIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
-      <path d="M10 11v6" />
-      <path d="M14 11v6" />
-      <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
-    </svg>
-  );
-}
-
-function Spinner() {
-  return <span className="spinner" aria-hidden="true" />;
-}
-
-function ChevronDownIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="6 9 12 15 18 9" />
-    </svg>
-  );
-}
-
-function ProfileIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  );
-}
-
-function SettingsIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </svg>
-  );
-}
-
-function SignOutIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-      <polyline points="16 17 21 12 16 7" />
-      <line x1="21" y1="12" x2="9" y2="12" />
-    </svg>
-  );
-}
-
-function SunIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="5" />
-      <line x1="12" y1="1" x2="12" y2="3" />
-      <line x1="12" y1="21" x2="12" y2="23" />
-      <line x1="4.22" y1="4.22" x2="5.64" y2="5.64" />
-      <line x1="18.36" y1="18.36" x2="19.78" y2="19.78" />
-      <line x1="1" y1="12" x2="3" y2="12" />
-      <line x1="21" y1="12" x2="23" y2="12" />
-      <line x1="4.22" y1="19.78" x2="5.64" y2="18.36" />
-      <line x1="18.36" y1="5.64" x2="19.78" y2="4.22" />
-    </svg>
-  );
-}
-
-function MoonIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-    </svg>
-  );
-}
 
 type Theme = "light" | "dark";
 
@@ -127,7 +45,7 @@ function ThemeToggle() {
       aria-label={label}
       title={label}
     >
-      {theme === "dark" ? <SunIcon /> : <MoonIcon />}
+      {theme === "dark" ? <Icon name="sun" /> : <Icon name="moon" />}
     </button>
   );
 }
@@ -178,7 +96,6 @@ function DetailDialog({
   onClose: () => void;
   onRequestUnsubscribe: () => void;
 }) {
-  const source = detectSourceLabel(target.targetUrl);
   const lastFetch = detail?.lastFetchedAt
     ? new Date(detail.lastFetchedAt).toLocaleString(undefined, { hour12: false })
     : "Never";
@@ -190,7 +107,7 @@ function DetailDialog({
   return (
     <Modal titleId="detail-title" onClose={onClose}>
       <div className="detail-header">
-        <span className={`badge badge-${source.toLowerCase()}`}>{source}</span>
+        <SourceBadge url={target.targetUrl} />
         <h3 id="detail-title">Search details</h3>
       </div>
 
@@ -207,13 +124,7 @@ function DetailDialog({
             {isLoading ? (
               <Spinner />
             ) : keywords.length > 0 ? (
-              <div className="tag-group">
-                {keywords.map((keyword) => (
-                  <span key={keyword} className="tag">
-                    {keyword}
-                  </span>
-                ))}
-              </div>
+              <TagList tags={keywords} />
             ) : (
               "—"
             )}
@@ -302,7 +213,7 @@ function UserMenu({
         <span className="user-chip-text">
           <span className="user-chip-name">{user.username}</span>
         </span>
-        <ChevronDownIcon />
+        <Icon name="chevronDown" size={14} />
       </button>
 
       {isOpen && (
@@ -315,7 +226,7 @@ function UserMenu({
               onOpenProfile();
             }}
           >
-            <ProfileIcon />
+            <Icon name="profile" />
             Profile
           </button>
           <button
@@ -326,7 +237,7 @@ function UserMenu({
               onOpenSettings();
             }}
           >
-            <SettingsIcon />
+            <Icon name="settings" />
             Settings
           </button>
           <div className="user-menu-divider" />
@@ -338,7 +249,7 @@ function UserMenu({
               onSignOut();
             }}
           >
-            <SignOutIcon />
+            <Icon name="signOut" />
             Sign out
           </button>
         </div>
@@ -687,69 +598,15 @@ function App() {
           </div>
         ) : (
           <ul className="search-query-list">
-            {searchQueries.map((sq) => {
-              const source = detectSourceLabel(sq.targetUrl);
-              const tags = sq.tags;
-              return (
-                <li key={sq.id} onClick={() => openDetail(sq)} className="clickable">
-                  <span className={`badge badge-${source.toLowerCase()}`}>{source}</span>
-                  {tags.length > 0 ? (
-                    <div className="tag-group tag-group-row">
-                      {tags.map((tag) => (
-                        <span key={tag} className="tag">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="query-url-text" title={sq.targetUrl}>
-                      {sq.targetUrl}
-                    </span>
-                  )}
-                  <div className="record-count" title="Records registered">
-                    <span className="record-count-label">Records</span>
-                    <span className="record-count-row">
-                      {sq.sourceRecordCount === null && !sq.lastPollFailedAt ? (
-                        <Spinner />
-                      ) : (
-                        <span className="record-count-value">{sq.sourceRecordCount ?? "—"}</span>
-                      )}
-                      {sq.lastPollFailedAt && (
-                        <span
-                          className="record-count-status"
-                          title={`Couldn't reach ${source} on the last check - will retry on the next scheduled check`}
-                        >
-                          ⚠
-                        </span>
-                      )}
-                    </span>
-                  </div>
-                  <a
-                    href={sq.targetUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="btn btn-icon"
-                    onClick={(e) => e.stopPropagation()}
-                    aria-label="Open in new tab"
-                    title="Open in new tab"
-                  >
-                    <ExternalLinkIcon />
-                  </a>
-                  <button
-                    className="btn btn-icon btn-danger-hover"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setConfirmTarget(sq);
-                    }}
-                    disabled={unsubscribingId === sq.id}
-                    aria-label="Unsubscribe"
-                    title="Unsubscribe"
-                  >
-                    {unsubscribingId === sq.id ? <Spinner /> : <TrashIcon />}
-                  </button>
-                </li>
-              );
-            })}
+            {searchQueries.map((sq) => (
+              <SubscriptionRow
+                key={sq.id}
+                searchQuery={sq}
+                isUnsubscribing={unsubscribingId === sq.id}
+                onOpen={() => openDetail(sq)}
+                onUnsubscribe={() => setConfirmTarget(sq)}
+              />
+            ))}
           </ul>
         )}
       </section>
