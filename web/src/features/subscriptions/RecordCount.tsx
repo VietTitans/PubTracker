@@ -1,6 +1,6 @@
 import type { SearchQuery } from "../../api/client";
 import Spinner from "../../components/Spinner";
-import { detectSourceLabel } from "../../lib/sourceLabel";
+import { detectSourceLabel } from "../../lib/sources";
 
 // Spinner until the backend has counted the Search Query's Records, unless its last poll failed.
 export default function RecordCount({ searchQuery }: { searchQuery: SearchQuery }) {

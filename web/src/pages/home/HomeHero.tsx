@@ -1,6 +1,7 @@
 import { Link } from "react-router-dom";
 import SearchBox from "../../features/subscriptions/SearchBox";
 import ExampleDigest from "./ExampleDigest";
+import SupportedDatabases from "./SupportedDatabases";
 import "./HomeHero.css";
 
 export default function HomeHero({ onSubmit }: { onSubmit: (url: string) => Promise<boolean> }) {
@@ -22,11 +23,9 @@ export default function HomeHero({ onSubmit }: { onSubmit: (url: string) => Prom
             placeholder="Paste a search link"
           />
         </div>
+        <SupportedDatabases />
         <p className="home-hero-links">
           <Link to="/how-it-works">See how it works →</Link>
-          <span>
-            Works with library databases · more coming. <Link to="/suggest">Suggest a database</Link>
-          </span>
         </p>
       </div>
       <ExampleDigest />

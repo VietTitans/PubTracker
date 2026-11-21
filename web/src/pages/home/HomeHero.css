@@ -104,8 +104,48 @@
   font-weight: 700;
 }
 
-.home-hero-links b {
+.supported-databases {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px dashed var(--accent-border);
+  border-radius: var(--radius);
+  background: var(--accent-bg);
+  font-size: 14px;
+}
+
+.supported-databases-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   color: var(--text-h);
+}
+
+.supported-databases ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.supported-databases .badge {
+  padding: 4px 12px;
+  font-size: 14px;
+}
+
+.supported-databases-more {
+  color: var(--text-dim);
+}
+
+.supported-databases-more a {
+  color: var(--accent);
+  font-weight: 700;
 }
 
 /* Example digest: mirrors the digest email's structure (see digestSample.ts). */
