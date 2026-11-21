@@ -73,6 +73,16 @@
   color: var(--text-dim);
 }
 
+/* Squarer, softly rounded paste box instead of the default pill. */
+.home-hero .search-box {
+  padding: 6px 6px 6px 16px;
+  border-radius: var(--radius);
+}
+
+.home-hero .search-box .btn {
+  border-radius: var(--radius-sm);
+}
+
 .home-hero-hint {
   margin: 14px 0 0 8px;
   font-size: 14px;
