@@ -10,10 +10,11 @@ export default function HomeHero({ onSubmit }: { onSubmit: (url: string) => Prom
       <div className="home-hero-copy">
         <span className="home-hero-pill">For clinicians & researchers</span>
         <h1>
-          Stop re&#8209;running the <span className="home-hero-accent">same search</span> every week.
+          Stay on top of the <span className="home-hero-accent">latest research</span> in your field.
         </h1>
         <p className="home-hero-lead">
-          Paste a search link from your library database. We check it weekly and email you only the new papers.
+          Save the searches for the topics you follow. PubTracker keeps watch and emails you the new research that
+          matches them, so you always know the state of the art.
         </p>
         <div>
           <SearchBox
