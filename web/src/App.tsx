@@ -4,10 +4,6 @@ import {
   deleteCurrentUser,
   getCurrentUser,
   setDigestsStopped,
-  getSearchQueriesForUser,
-  getSearchQueryById,
-  subscribeToSearchQuery,
-  unsubscribeFromSearchQuery,
   updateCurrentUser,
   type SearchQuery,
   type User,
@@ -15,12 +11,11 @@ import {
 import { useAuth } from "./auth/useAuth";
 import Modal from "./components/Modal";
 import { detectSourceLabel } from "./lib/sourceLabel";
+import { rememberPendingUrl, useSubscriptions } from "./features/subscriptions/useSubscriptions";
 import { PrivacyPage, TermsPage } from "./pages/LegalPages";
 import FeedbackPage from "./pages/FeedbackPage";
 import SuggestPage from "./pages/SuggestPage";
 import "./App.css";
-
-const PENDING_URL_KEY = "pendingUrl";
 
 function ExternalLinkIcon() {
   return (
@@ -479,22 +474,26 @@ function SettingsDialog({
 function App() {
   const { isLoading, isAuthenticated, login, logout } = useAuth();
   const [user, setUser] = useState<User | null>(null);
-  const [searchQueries, setSearchQueries] = useState<SearchQuery[]>([]);
   const [targetUrl, setTargetUrl] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [unsubscribingId, setUnsubscribingId] = useState<number | null>(null);
   const [confirmTarget, setConfirmTarget] = useState<SearchQuery | null>(null);
-  const [undoStack, setUndoStack] = useState<string[]>([]);
-  const [isRedoing, setIsRedoing] = useState(false);
-  const [detailTarget, setDetailTarget] = useState<SearchQuery | null>(null);
-  const [detailData, setDetailData] = useState<SearchQuery | null>(null);
-  const [isDetailLoading, setIsDetailLoading] = useState(false);
-  const [detailError, setDetailError] = useState<string | null>(null);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isDeleteAccountConfirmOpen, setIsDeleteAccountConfirmOpen] = useState(false);
   const [isDeletingAccount, setIsDeletingAccount] = useState(false);
+  const {
+    searchQueries,
+    isSubmitting,
+    unsubscribingId,
+    isRedoing,
+    canRedo,
+    detail,
+    subscribe,
+    unsubscribe,
+    redoUnsubscribe,
+    openDetail,
+    closeDetail,
+  } = useSubscriptions(user?.id ?? null, setError);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -506,66 +505,16 @@ function App() {
 
   useEffect(() => {
     if (isAuthenticated) {
-      void loadCurrentUserAndSubscriptions();
+      void loadCurrentUser();
     }
   }, [isAuthenticated]);
 
-  async function loadCurrentUserAndSubscriptions() {
+  async function loadCurrentUser() {
     try {
-      const currentUser = await getCurrentUser();
-      setUser(currentUser);
-      setSearchQueries(await getSearchQueriesForUser(currentUser.id));
-
-      // A URL typed on the signed-out home page survives the Keycloak round trip here.
-      const pendingUrl = sessionStorage.getItem(PENDING_URL_KEY);
-      if (pendingUrl) {
-        sessionStorage.removeItem(PENDING_URL_KEY);
-        const newQuery = await subscribeToSearchQuery(pendingUrl);
-        setSearchQueries(await getSearchQueriesForUser(currentUser.id));
-        scheduleRecordCountRefresh(currentUser.id, newQuery.id);
-      }
+      setUser(await getCurrentUser());
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     }
-  }
-
-  // The backend fetches a brand new search query's records shortly after it's created
-  // (a few seconds after this returns) rather than during the subscribe request itself, so
-  // the list we get back immediately still shows 0 records. How long that actually takes
-  // varies a lot by source (PEDro's Playwright scrape can take much longer than a single
-  // fixed delay would predict, especially a cold browser launch on a large result set), so
-  // keep polling until it's actually done rather than giving up after a guessed duration -
-  // a stopped poll would otherwise leave the spinner stuck until a manual page reload.
-  function scheduleRecordCountRefresh(userId: number, searchQueryId: number) {
-    const pollIntervalMs = 4000;
-
-    function poll() {
-      setTimeout(() => {
-        getSearchQueriesForUser(userId)
-          .then((queries) => {
-            setSearchQueries(queries);
-            // Matches the condition the list actually renders a spinner for (App.tsx's
-            // sourceRecordCount === null check); not lastFetchedAt, which PEDro's baseline
-            // poll (no individual records linked yet) can leave null indefinitely even once
-            // sourceRecordCount is populated. Also stops once a poll has actually failed
-            // (lastPollFailedAt set); otherwise a down source (e.g. PubMed) leaves
-            // sourceRecordCount null forever and this polls every 4s indefinitely.
-            const stillFetching = queries.some(
-              (q) => q.id === searchQueryId && q.sourceRecordCount === null && !q.lastPollFailedAt,
-            );
-            if (stillFetching) {
-              poll();
-            }
-          })
-          .catch(() => {
-            // Transient failure (e.g. a network blip); keep trying rather than leaving the
-            // spinner stuck forever.
-            poll();
-          });
-      }, pollIntervalMs);
-    }
-
-    poll();
   }
 
   async function handleSubscribe(e: React.FormEvent) {
@@ -574,37 +523,18 @@ function App() {
       return;
     }
 
-    setIsSubmitting(true);
-    setError(null);
-    try {
-      const newQuery = await subscribeToSearchQuery(targetUrl.trim());
+    if (await subscribe(targetUrl.trim())) {
       setTargetUrl("");
-      setSearchQueries(await getSearchQueriesForUser(user.id));
-      scheduleRecordCountRefresh(user.id, newQuery.id);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setIsSubmitting(false);
     }
   }
 
   async function handleConfirmUnsubscribe() {
-    if (!user || !confirmTarget) {
+    if (!confirmTarget) {
       return;
     }
 
-    const target = confirmTarget;
-    setUnsubscribingId(target.id);
-    setError(null);
-    try {
-      await unsubscribeFromSearchQuery(target.id);
-      setSearchQueries(await getSearchQueriesForUser(user.id));
+    if (await unsubscribe(confirmTarget)) {
       setConfirmTarget(null);
-      setUndoStack((prev) => [...prev, target.targetUrl]);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setUnsubscribingId(null);
     }
   }
 
@@ -622,48 +552,12 @@ function App() {
     }
   }
 
-  async function handleRedo() {
-    if (!user || undoStack.length === 0) {
-      return;
-    }
-
-    const url = undoStack[undoStack.length - 1];
-    setIsRedoing(true);
-    setError(null);
-    try {
-      const newQuery = await subscribeToSearchQuery(url);
-      setSearchQueries(await getSearchQueriesForUser(user.id));
-      scheduleRecordCountRefresh(user.id, newQuery.id);
-      setUndoStack((prev) => prev.slice(0, -1));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setIsRedoing(false);
-    }
-  }
-
   async function handleLogin() {
     setError(null);
     try {
       await login();
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
-    }
-  }
-
-  async function handleOpenDetail(sq: SearchQuery) {
-    setDetailTarget(sq);
-    setDetailData(null);
-    setDetailError(null);
-    setIsDetailLoading(true);
-    try {
-      const fresh = await getSearchQueryById(sq.id);
-      setDetailData(fresh);
-      setSearchQueries((prev) => prev.map((q) => (q.id === fresh.id ? fresh : q)));
-    } catch (err) {
-      setDetailError(err instanceof Error ? err.message : String(err));
-    } finally {
-      setIsDetailLoading(false);
     }
   }
 
@@ -680,7 +574,7 @@ function App() {
     if (!targetUrl.trim()) {
       return;
     }
-    sessionStorage.setItem(PENDING_URL_KEY, targetUrl.trim());
+    rememberPendingUrl(targetUrl.trim());
     void handleLogin();
   }
 
@@ -779,8 +673,8 @@ function App() {
         <div className="section-header">
           <h2>Your search queries</h2>
           {searchQueries.length > 0 && <span className="count-badge">{searchQueries.length}</span>}
-          {undoStack.length > 0 && (
-            <button className="btn btn-ghost btn-sm section-header-action" onClick={handleRedo} disabled={isRedoing}>
+          {canRedo && (
+            <button className="btn btn-ghost btn-sm section-header-action" onClick={redoUnsubscribe} disabled={isRedoing}>
               {isRedoing ? <Spinner /> : "Redo"}
             </button>
           )}
@@ -797,7 +691,7 @@ function App() {
               const source = detectSourceLabel(sq.targetUrl);
               const tags = sq.tags;
               return (
-                <li key={sq.id} onClick={() => handleOpenDetail(sq)} className="clickable">
+                <li key={sq.id} onClick={() => openDetail(sq)} className="clickable">
                   <span className={`badge badge-${source.toLowerCase()}`}>{source}</span>
                   {tags.length > 0 ? (
                     <div className="tag-group tag-group-row">
@@ -876,16 +770,16 @@ function App() {
         />
       )}
 
-      {detailTarget && (
+      {detail && (
         <DetailDialog
-          target={detailTarget}
-          detail={detailData}
-          isLoading={isDetailLoading}
-          error={detailError}
-          onClose={() => setDetailTarget(null)}
+          target={detail.target}
+          detail={detail.data}
+          isLoading={detail.isLoading}
+          error={detail.error}
+          onClose={closeDetail}
           onRequestUnsubscribe={() => {
-            setConfirmTarget(detailTarget);
-            setDetailTarget(null);
+            setConfirmTarget(detail.target);
+            closeDetail();
           }}
         />
       )}
