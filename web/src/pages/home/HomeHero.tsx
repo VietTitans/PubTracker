@@ -13,8 +13,7 @@ export default function HomeHero({ onSubmit }: { onSubmit: (url: string) => Prom
           Stay on top of the <span className="home-hero-accent">latest research</span> in your field.
         </h1>
         <p className="home-hero-lead">
-          Save the searches for the topics you follow. PubTracker keeps watch and emails you the new research that
-          matches them, so you always know the state of the art.
+          PubTracker monitors and emails you the new research. You decide what to monitor.
         </p>
         <div>
           <SearchBox
