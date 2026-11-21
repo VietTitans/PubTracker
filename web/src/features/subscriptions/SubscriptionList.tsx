@@ -43,7 +43,7 @@ export default function SubscriptionList({ subscriptions }: { subscriptions: Sub
           <div className="empty-state">
             <p>You're not tracking any searches yet.</p>
             <p className="empty-state-hint">
-              Paste a PubMed search link above and we'll email you a digest when new papers appear.
+              Paste a search link from your library database above and we'll email you a digest when new papers appear.
             </p>
           </div>
         ) : (

@@ -15,7 +15,7 @@ export interface ExampleTopic {
 }
 
 export const exampleDigest = {
-  source: "PubMed",
+  source: "Library database",
   category: "Lumbar spine, SIJ or pelvis",
   summary:
     "Four new papers this week look at non-surgical care for low back pain. Two studies compare different ways of delivering exercise, one pools earlier trials on graded activity, and one looks at how fear of movement relates to recovery. Taken together they point towards active, supervised care and early reassurance. This summary is illustrative; the real one is generated from each paper's abstract.",
