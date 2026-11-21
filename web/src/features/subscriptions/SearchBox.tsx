@@ -5,9 +5,13 @@ import Spinner from "../../components/Spinner";
 export default function SearchBox({
   isSubmitting,
   onSubmit,
+  submitLabel = "Subscribe",
+  placeholder = "Paste a search URL",
 }: {
   isSubmitting: boolean;
   onSubmit: (url: string) => Promise<boolean>;
+  submitLabel?: string;
+  placeholder?: string;
 }) {
   const [targetUrl, setTargetUrl] = useState("");
 
@@ -27,14 +31,14 @@ export default function SearchBox({
       <input
         id="target-url"
         type="url"
-        placeholder="Paste a search URL"
+        placeholder={placeholder}
         aria-label="Search URL"
         value={targetUrl}
         onChange={(e) => setTargetUrl(e.target.value)}
         required
       />
       <button type="submit" className="btn btn-primary" disabled={isSubmitting}>
-        {isSubmitting ? <Spinner /> : "Subscribe"}
+        {isSubmitting ? <Spinner /> : submitLabel}
       </button>
     </form>
   );
