@@ -6,6 +6,7 @@ import {
   unsubscribeFromSearchQuery,
   type SearchQuery,
 } from "../../api/client";
+import { errorMessage } from "../../lib/errorMessage";
 
 const PENDING_URL_KEY = "pendingUrl";
 
@@ -30,7 +31,7 @@ export function useSubscriptions(userId: number | null, onError: (message: strin
   const [detail, setDetail] = useState<SubscriptionDetail | null>(null);
 
   function fail(err: unknown) {
-    onError(err instanceof Error ? err.message : String(err));
+    onError(errorMessage(err));
   }
 
   useEffect(() => {
@@ -163,7 +164,7 @@ export function useSubscriptions(userId: number | null, onError: (message: strin
       setDetail((d) => (d ? { ...d, data: fresh } : d));
       setSearchQueries((prev) => prev.map((q) => (q.id === fresh.id ? fresh : q)));
     } catch (err) {
-      setDetail((d) => (d ? { ...d, error: err instanceof Error ? err.message : String(err) } : d));
+      setDetail((d) => (d ? { ...d, error: errorMessage(err) } : d));
     } finally {
       setDetail((d) => (d ? { ...d, isLoading: false } : d));
     }
@@ -187,3 +188,5 @@ export function useSubscriptions(userId: number | null, onError: (message: strin
     closeDetail,
   };
 }
+
+export type Subscriptions = ReturnType<typeof useSubscriptions>;

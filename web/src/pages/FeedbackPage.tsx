@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { submitFeedback } from "../api/client";
 import SignInPrompt from "./SignInPrompt";
+import { errorMessage } from "../lib/errorMessage";
 
 const TYPES = [
   { value: "bug", label: "Bug" },
@@ -28,7 +29,7 @@ export default function FeedbackPage({ isAuthenticated, onLogin }: { isAuthentic
       setMessage("");
       setIsSent(true);
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
     } finally {
       setIsSending(false);
     }

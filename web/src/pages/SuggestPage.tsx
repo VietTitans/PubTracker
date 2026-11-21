@@ -6,6 +6,7 @@ import {
   type DatabaseSuggestion,
 } from "../api/client";
 import SignInPrompt from "./SignInPrompt";
+import { errorMessage } from "../lib/errorMessage";
 
 export default function SuggestPage({ isAuthenticated, onLogin }: { isAuthenticated: boolean; onLogin: () => void }) {
   const [suggestions, setSuggestions] = useState<DatabaseSuggestion[]>([]);
@@ -19,7 +20,7 @@ export default function SuggestPage({ isAuthenticated, onLogin }: { isAuthentica
     if (isAuthenticated) {
       getDatabaseSuggestions()
         .then(setSuggestions)
-        .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+        .catch((err) => setError(errorMessage(err)));
     }
   }, [isAuthenticated]);
 
@@ -39,7 +40,7 @@ export default function SuggestPage({ isAuthenticated, onLogin }: { isAuthentica
       // A repeat of an existing name becomes a vote on it, so reload to show the new order.
       setSuggestions(await getDatabaseSuggestions());
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
     } finally {
       setIsSending(false);
     }
@@ -51,7 +52,7 @@ export default function SuggestPage({ isAuthenticated, onLogin }: { isAuthentica
       await setSuggestionVote(s.id, !s.hasVoted);
       setSuggestions(await getDatabaseSuggestions());
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setError(errorMessage(err));
     }
   }
 
