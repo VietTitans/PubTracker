@@ -9,6 +9,7 @@ import AppShell from "./layout/AppShell";
 import { errorMessage } from "./lib/errorMessage";
 import FeedbackPage from "./pages/FeedbackPage";
 import HomePage from "./pages/HomePage";
+import HowItWorksPage from "./pages/HowItWorksPage";
 import { PrivacyPage, TermsPage } from "./pages/LegalPages";
 import SuggestPage from "./pages/SuggestPage";
 import "./App.css";
@@ -59,6 +60,7 @@ function App() {
     >
       <Routes>
         <Route path="/feedback" element={<FeedbackPage isAuthenticated={isAuthenticated} onLogin={handleLogin} />} />
+        <Route path="/how-it-works" element={<HowItWorksPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
         <Route path="/suggest" element={<SuggestPage isAuthenticated={isAuthenticated} onLogin={handleLogin} />} />
