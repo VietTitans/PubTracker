@@ -21,7 +21,6 @@ export default function HomeHero({ onSubmit }: { onSubmit: (url: string) => Prom
             submitLabel="Start tracking"
             placeholder="Paste a PubMed search link"
           />
-          <p className="home-hero-hint">Free. You'll create an account next, and your link is saved.</p>
         </div>
         <p className="home-hero-links">
           <Link to="/how-it-works">See how it works →</Link>
