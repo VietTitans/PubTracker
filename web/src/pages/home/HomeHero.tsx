@@ -2,7 +2,10 @@ import { Link } from "react-router-dom";
 import SearchBox from "../../features/subscriptions/SearchBox";
 import ExampleDigest from "./ExampleDigest";
 import SupportedDatabases from "./SupportedDatabases";
+import { supportedPublicationSources } from "./publicationSources";
 import "./HomeHero.css";
+
+const EXAMPLE_SEARCH_URLS = supportedPublicationSources.flatMap((source) => source.exampleSearchUrl ?? []);
 
 export default function HomeHero({ onSubmit }: { onSubmit: (url: string) => Promise<boolean> }) {
   return (
@@ -21,6 +24,7 @@ export default function HomeHero({ onSubmit }: { onSubmit: (url: string) => Prom
             onSubmit={onSubmit}
             submitLabel="Start tracking"
             placeholder="Paste a search link to watch"
+            placeholderExamples={EXAMPLE_SEARCH_URLS}
           />
         </div>
         <SupportedDatabases />

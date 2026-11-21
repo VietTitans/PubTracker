@@ -79,6 +79,14 @@
   border-radius: var(--radius);
 }
 
+.home-hero .search-box input {
+  font-size: 16px;
+}
+
+.home-hero .search-box input::placeholder {
+  font-size: 14px;
+}
+
 .home-hero .search-box .btn {
   border-radius: var(--radius-sm);
 }
