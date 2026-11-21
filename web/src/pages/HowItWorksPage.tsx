@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 const STEPS = [
   {
     title: "Paste a search link",
-    body: "Run your search on PubMed or PEDro as usual, then copy the address from your browser and paste it into PubTracker.",
+    body: "Run your search on a library database as usual, then copy the address from your browser and paste it into PubTracker.",
     example: "https://pubmed.ncbi.nlm.nih.gov/?term=low+back+pain+exercise",
   },
   {
