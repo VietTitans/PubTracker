@@ -20,7 +20,7 @@ export default function HomeHero({ onSubmit }: { onSubmit: (url: string) => Prom
             isSubmitting={false}
             onSubmit={onSubmit}
             submitLabel="Start tracking"
-            placeholder="Paste a search link"
+            placeholder="Paste a search link to watch"
           />
         </div>
         <SupportedDatabases />
