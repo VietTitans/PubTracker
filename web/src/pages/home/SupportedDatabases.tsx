@@ -1,12 +1,12 @@
 import { Link } from "react-router-dom";
-import { supportedSources } from "../../lib/sources";
+import { supportedPublicationSources } from "../../features/publicationSources/publicationSources";
 
 export default function SupportedDatabases() {
   return (
     <div className="supported-databases">
       <span className="supported-databases-label">Supported databases</span>
       <ul>
-        {supportedSources.map((source) => (
+        {supportedPublicationSources.map((source) => (
           <li key={source.label}>
             <a
               href={source.homepageUrl}

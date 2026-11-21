@@ -1,4 +1,4 @@
-import { detectSourceLabel } from "../lib/sources";
+import { detectSourceLabel } from "../features/publicationSources/publicationSources";
 
 export default function SourceBadge({ url }: { url: string }) {
   const source = detectSourceLabel(url);
