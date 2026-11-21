@@ -76,13 +76,10 @@
 .home-hero .search-box {
   border-color: var(--text-h);
   box-shadow: 6px 6px 0 var(--accent);
-  transition: box-shadow 0.15s, transform 0.15s;
 }
 
 .home-hero .search-box:focus-within {
-  border-color: var(--text-h);
-  box-shadow: 3px 3px 0 var(--accent);
-  transform: translate(3px, 3px);
+  border-color: var(--accent);
 }
 
 .home-hero .search-box .btn {
