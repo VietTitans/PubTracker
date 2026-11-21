@@ -1,7 +1,7 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getSearchQueriesForUser, subscribeToSearchQuery, type SearchQuery } from "../../api/client";
-import { useSubscriptions } from "./useSubscriptions";
+import { rememberPendingUrl, useSubscriptions } from "./useSubscriptions";
 
 vi.mock("../../api/client", () => ({
   getSearchQueriesForUser: vi.fn(),
@@ -57,7 +57,7 @@ async function subscribeToNewQuery() {
 describe("useSubscriptions record-count polling", () => {
   beforeEach(() => {
     vi.useFakeTimers();
-    sessionStorage.clear();
+    localStorage.clear();
     getQueries.mockReset();
     subscribeTo.mockReset();
     getQueries.mockResolvedValueOnce([]); // initial load
@@ -130,7 +130,7 @@ describe("useSubscriptions record-count polling", () => {
   });
 
   it("subscribes to a URL remembered before sign-in and polls it like any new query", async () => {
-    sessionStorage.setItem("pendingUrl", "https://pubmed.ncbi.nlm.nih.gov/?term=pending");
+    rememberPendingUrl("https://pubmed.ncbi.nlm.nih.gov/?term=pending");
     subscribeTo.mockResolvedValueOnce(searchQuery());
     getQueries.mockReset();
     getQueries.mockResolvedValueOnce([]); // initial load
@@ -140,7 +140,7 @@ describe("useSubscriptions record-count polling", () => {
     await act(async () => {});
 
     expect(subscribeTo).toHaveBeenCalledWith("https://pubmed.ncbi.nlm.nih.gov/?term=pending");
-    expect(sessionStorage.getItem("pendingUrl")).toBeNull();
+    expect(localStorage.getItem("pendingUrl")).toBeNull();
     expect(hook.result.current.searchQueries).toHaveLength(1);
 
     getQueries.mockClear();
@@ -148,5 +148,46 @@ describe("useSubscriptions record-count polling", () => {
     await advance(POLL_INTERVAL_MS);
     expect(getQueries).toHaveBeenCalledTimes(1);
     expect(hook.result.current.searchQueries[0].sourceRecordCount).toBe(8);
+  });
+
+  describe("remembered URL expiry", () => {
+    const ONE_HOUR_MS = 60 * 60 * 1000;
+
+    async function mountSignedIn() {
+      getQueries.mockReset();
+      getQueries.mockResolvedValue([]);
+      const hook = renderHook(() => useSubscriptions(USER_ID, vi.fn()));
+      await act(async () => {});
+      return hook;
+    }
+
+    it("still subscribes to a URL remembered just under an hour ago", async () => {
+      rememberPendingUrl("https://pubmed.ncbi.nlm.nih.gov/?term=fresh");
+      subscribeTo.mockResolvedValueOnce(searchQuery());
+      vi.setSystemTime(Date.now() + ONE_HOUR_MS - 1000);
+
+      await mountSignedIn();
+
+      expect(subscribeTo).toHaveBeenCalledWith("https://pubmed.ncbi.nlm.nih.gov/?term=fresh");
+    });
+
+    it("ignores and clears a URL remembered more than an hour ago", async () => {
+      rememberPendingUrl("https://pubmed.ncbi.nlm.nih.gov/?term=stale");
+      vi.setSystemTime(Date.now() + ONE_HOUR_MS + 1000);
+
+      await mountSignedIn();
+
+      expect(subscribeTo).not.toHaveBeenCalled();
+      expect(localStorage.getItem("pendingUrl")).toBeNull();
+    });
+
+    it("ignores and clears an unreadable stored value", async () => {
+      localStorage.setItem("pendingUrl", "https://pubmed.ncbi.nlm.nih.gov/?term=plain-string");
+
+      await mountSignedIn();
+
+      expect(subscribeTo).not.toHaveBeenCalled();
+      expect(localStorage.getItem("pendingUrl")).toBeNull();
+    });
   });
 });

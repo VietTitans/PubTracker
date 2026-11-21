@@ -9,10 +9,32 @@ import {
 import { errorMessage } from "../../lib/errorMessage";
 
 const PENDING_URL_KEY = "pendingUrl";
+const PENDING_URL_TTL_MS = 60 * 60 * 1000;
 
-// A URL typed on the signed-out home page survives the Keycloak round trip here.
+// A URL typed on the signed-out home page survives the Keycloak round trip here. It lives in
+// localStorage, not sessionStorage, so it also survives finishing sign-up in another tab (e.g. an
+// email-verification link); the expiry keeps a stale URL from subscribing someone days later.
 export function rememberPendingUrl(url: string) {
-  sessionStorage.setItem(PENDING_URL_KEY, url);
+  localStorage.setItem(PENDING_URL_KEY, JSON.stringify({ url, savedAt: Date.now() }));
+}
+
+// Removes the remembered URL from storage; null if there is none or it has expired.
+function takePendingUrl(): string | null {
+  const raw = localStorage.getItem(PENDING_URL_KEY);
+  if (!raw) {
+    return null;
+  }
+  localStorage.removeItem(PENDING_URL_KEY);
+
+  try {
+    const { url, savedAt } = JSON.parse(raw) as { url?: unknown; savedAt?: unknown };
+    if (typeof url === "string" && typeof savedAt === "number" && Date.now() - savedAt <= PENDING_URL_TTL_MS) {
+      return url;
+    }
+  } catch {
+    // Unreadable entry: treat it as absent.
+  }
+  return null;
 }
 
 export interface SubscriptionDetail {
@@ -44,9 +66,8 @@ export function useSubscriptions(userId: number | null, onError: (message: strin
     try {
       setSearchQueries(await getSearchQueriesForUser(id));
 
-      const pendingUrl = sessionStorage.getItem(PENDING_URL_KEY);
+      const pendingUrl = takePendingUrl();
       if (pendingUrl) {
-        sessionStorage.removeItem(PENDING_URL_KEY);
         const newQuery = await subscribeToSearchQuery(pendingUrl);
         setSearchQueries(await getSearchQueriesForUser(id));
         scheduleRecordCountRefresh(id, newQuery.id);
