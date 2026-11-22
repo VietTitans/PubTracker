@@ -194,7 +194,6 @@
 }
 
 .example-digest-head,
-.example-digest-summary,
 .example-digest-topic {
   margin: 0 0 12px;
   padding: 12px 16px;
@@ -207,25 +206,16 @@
   background: var(--surface-hover);
 }
 
-.example-digest-summary {
-  background: var(--accent-bg);
-}
-
 .example-digest-topic {
   border: 1px solid var(--border);
   background: var(--surface);
 }
 
-.example-digest-summary h4,
 .example-digest-topic h4 {
   margin: 0 0 6px;
   font-size: 14px;
   font-weight: 800;
   color: var(--text-h);
-}
-
-.example-digest-summary p {
-  margin: 0;
 }
 
 .example-digest-topic ol {

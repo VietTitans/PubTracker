@@ -1,8 +1,8 @@
 // Static content for the hero's example digest. It mirrors what the API's digest email renders
-// (api/RecordService/BusinessLogic/DigestService: DigestMessageFormatter lays out the header,
-// AI summary and topic sections; RecordTopicClassifier owns the topic names). If that layout or those
-// topic names change, update this file to match. Titles are fictional and were chosen so
-// RecordTopicClassifier would sort them into these topics.
+// (api/RecordService/BusinessLogic/DigestService: DigestMessageFormatter lays out the header and topic
+// sections; RecordTopicClassifier owns the topic names). The optional AI summary is deliberately left out
+// so the example shows the core digest. If that layout or those topic names change, update this file to
+// match. Titles are fictional and were chosen so RecordTopicClassifier would sort them into these topics.
 
 export interface ExampleRecord {
   title: string;
@@ -17,8 +17,6 @@ export interface ExampleTopic {
 export const exampleDigest = {
   source: "Library database",
   category: "Lumbar spine, SIJ or pelvis",
-  summary:
-    "Four new papers this week look at non-surgical care for low back pain. Two studies compare different ways of delivering exercise, one pools earlier trials on graded activity, and one looks at how fear of movement relates to recovery. Taken together they point towards active, supervised care and early reassurance. This summary is illustrative; the real one is generated from each paper's abstract.",
   topics: [
     {
       name: "Exercise & movement-based therapy",

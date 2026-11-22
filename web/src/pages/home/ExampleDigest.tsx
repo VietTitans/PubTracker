@@ -6,17 +6,13 @@ export default function ExampleDigest() {
   return (
     <div className="example-digest">
       <div className="example-digest-back" aria-hidden="true" />
-      <aside className="example-digest-sheet" aria-label="Example digest">
-        <span className="home-hero-tag">Example digest</span>
+      <aside className="example-digest-sheet" aria-label="Example email digest">
+        <span className="home-hero-tag">Example email digest</span>
         <p className="example-digest-head">
           🧠 {exampleDigest.source} update for: <strong>{exampleDigest.category}</strong>
           <br />
           📈 New records: <strong>{exampleRecordCount}</strong>
         </p>
-        <div className="example-digest-summary">
-          <h4>🤖 AI Summary</h4>
-          <p>{exampleDigest.summary}</p>
-        </div>
         {exampleDigest.topics.slice(0, VISIBLE_TOPICS).map((topic) => (
           <div className="example-digest-topic" key={topic.name}>
             <h4>
