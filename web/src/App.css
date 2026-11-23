@@ -32,7 +32,7 @@
 }
 
 .app {
-  max-width: 640px;
+  max-width: 880px;
   margin: 0 auto;
   padding: 40px 20px 80px;
   text-align: left;
@@ -835,4 +835,121 @@ textarea.text-input {
 .suggestion-votes {
   font-weight: 600;
   color: var(--text-h);
+}
+
+.hiw h2 {
+  font-size: clamp(26px, 5vw, 38px);
+  font-weight: 800;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin-bottom: 8px;
+}
+
+.hiw-eyebrow {
+  font: 700 12px var(--mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 8px;
+}
+
+.hiw-lead {
+  font-size: 18px;
+  font-weight: 300;
+  max-width: 56ch;
+  margin: 0 0 32px;
+}
+
+.hiw-timeline {
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+}
+
+.hiw-timeline li {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 16px;
+  padding-bottom: 28px;
+  position: relative;
+}
+
+.hiw-timeline li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 23px;
+  top: 48px;
+  bottom: 4px;
+  width: 2px;
+  background: var(--accent-border);
+}
+
+.hiw-dot {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border: 2px solid var(--accent);
+}
+
+.hiw-body {
+  display: grid;
+  gap: 8px;
+  justify-items: start;
+  min-width: 0;
+  padding-top: 4px;
+}
+
+.hiw-body h3 {
+  font-size: 20px;
+  color: var(--text-h);
+  margin: 0;
+}
+
+.hiw-body p {
+  margin: 0;
+  max-width: 60ch;
+}
+
+.hiw-url {
+  font: 13px var(--mono);
+  color: var(--text-h);
+  background: var(--surface-hover);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  max-width: 100%;
+  overflow-x: auto;
+  white-space: nowrap;
+}
+
+.hiw-optional {
+  font: 700 11px var(--mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  border-radius: 6px;
+  padding: 3px 8px;
+}
+
+.hiw-foot {
+  color: var(--text-dim);
+  font-size: 14px;
+  max-width: 60ch;
+  margin: 0 0 20px;
+}
+
+.hiw-cta {
+  display: flex;
+  width: fit-content;
+  margin: 0 auto;
+  padding: 14px 36px;
+  font-size: 17px;
 }

@@ -1,5 +1,7 @@
 using RecordService;
 using System.Security.Claims;
+using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -76,6 +78,37 @@ builder.Services.Configure<Microsoft.AspNetCore.Builder.ForwardedHeadersOptions>
         options.KnownIPNetworks.Add(System.Net.IPNetwork.Parse(network));
     // X-Forwarded-For reads "client, cloudflared" by the time it reaches the api (Caddy appends its peer).
     options.ForwardLimit = 2;
+});
+
+// Fixed-window, in-memory limits (single api instance). Authenticated callers are keyed by user id, others by
+// client IP (real IP via the forwarded-headers setup above). "strict" guards writes (search-query subscribe
+// triggers a source lookup), "anon" guards the unauthenticated unsubscribe links.
+static string RateLimitKey(HttpContext c) =>
+    c.User.FindFirstValue(ClaimTypes.NameIdentifier) is { } id ? $"user:{id}" : $"ip:{c.Connection.RemoteIpAddress}";
+static FixedWindowRateLimiterOptions PerMinute(int limit) => new() { PermitLimit = limit, Window = TimeSpan.FromMinutes(1) };
+int RateLimitPerMinute(string name, int fallback)
+{
+    var value = builder.Configuration.GetValue($"RateLimit:{name}PerMinute", fallback);
+    if (value < 1) throw new Exception($"RateLimit:{name}PerMinute must be a whole number of at least 1");
+    return value;
+}
+var globalPerMinute = RateLimitPerMinute("Global", 120);
+var strictPerMinute = RateLimitPerMinute("Strict", 10);
+var anonPerMinute = RateLimitPerMinute("Anon", 20);
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.GlobalLimiter = PartitionedRateLimiter.Create<HttpContext, string>(c =>
+        RateLimitPartition.GetFixedWindowLimiter(RateLimitKey(c), _ => PerMinute(globalPerMinute)));
+    options.AddPolicy("strict", c => RateLimitPartition.GetFixedWindowLimiter(RateLimitKey(c), _ => PerMinute(strictPerMinute)));
+    options.AddPolicy("anon", c => RateLimitPartition.GetFixedWindowLimiter(RateLimitKey(c), _ => PerMinute(anonPerMinute)));
+    options.OnRejected = async (context, token) =>
+    {
+        if (context.Lease.TryGetMetadata(MetadataName.RetryAfter, out var retryAfter))
+            context.HttpContext.Response.Headers.RetryAfter = ((int)retryAfter.TotalSeconds).ToString();
+        await context.HttpContext.Response.WriteAsJsonAsync(new { message = "Too many requests. Try again later." }, token);
+    };
 });
 
 builder.Services.AddControllers().ConfigureApiBehaviorOptions(options =>
@@ -442,12 +475,15 @@ app.UseAuthentication();
 
 app.UseAuthorization();
 
+app.UseRateLimiter();
+
 app.MapControllers();
 
 // Liveness + DB reachability for the deploy pipeline's post-deploy check (see docs/adr/0001).
 app.MapGet("/api/health", async (RecordService.DataAccess.PubTrackerDbContext db) =>
     await db.Database.CanConnectAsync() ? Results.Ok(new { status = "ok" }) : Results.StatusCode(503))
-    .AllowAnonymous();
+    .AllowAnonymous()
+    .DisableRateLimiting();
 
 app.Run();
 

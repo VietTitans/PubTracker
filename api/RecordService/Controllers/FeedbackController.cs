@@ -1,6 +1,8 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
+using RecordService.Authentication;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using RecordService.BusinessLogic.FeedbackService;
 using RecordService.DTOs.FeedbackDto;
 using System.Security.Claims;
@@ -22,6 +24,7 @@ public class FeedbackController : ControllerBase
     }
 
     [Authorize]
+    [EnableRateLimiting("strict")]
     [HttpPost]
     public async Task<IActionResult> SubmitFeedback([FromBody] CreateFeedbackDto dto)
     {
@@ -33,7 +36,7 @@ public class FeedbackController : ControllerBase
 
         try
         {
-            await _feedbackService.SubmitFeedbackAsync(int.Parse(userId), dto.Type, dto.Message);
+            await _feedbackService.SubmitFeedbackAsync(Caller.From(User), int.Parse(userId), dto.Type, dto.Message);
             return NoContent();
         }
         catch (Exception ex)

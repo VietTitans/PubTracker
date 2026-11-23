@@ -1,5 +1,6 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
+using RecordService.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using RecordData;
 using RecordService.BusinessLogic.UsersService;
@@ -37,7 +38,7 @@ public class UsersController : ControllerBase
 
         try
         {
-            var user = await _userService.GetUserByIdAsync(int.Parse(userId));
+            var user = await _userService.GetUserByIdAsync(Caller.From(User), int.Parse(userId));
 
             if (user == null)
             {
@@ -65,7 +66,7 @@ public class UsersController : ControllerBase
 
         try
         {
-            await _userService.SetDigestsStoppedAsync(int.Parse(userId), dto.Stopped);
+            await _userService.SetDigestsStoppedAsync(Caller.From(User), int.Parse(userId), dto.Stopped);
             return NoContent();
         }
         catch (Exception ex)
@@ -93,7 +94,7 @@ public class UsersController : ControllerBase
 
         try
         {
-            var user = await _userService.GetUserByIdAsync(id);
+            var user = await _userService.GetUserByIdAsync(Caller.From(User), id);
 
             if (user == null)
             {
@@ -101,6 +102,10 @@ public class UsersController : ControllerBase
             }
 
             return Ok(user.ToResponseDto());
+        }
+        catch (ForbiddenException)
+        {
+            return Forbid();
         }
         catch (Exception ex)
         {
@@ -115,8 +120,12 @@ public class UsersController : ControllerBase
     {
         try
         {
-            var users = await _userService.GetUsersPageAsync(pageRequest.Page, pageRequest.PageSize);
+            var users = await _userService.GetUsersPageAsync(Caller.From(User), pageRequest.Page, pageRequest.PageSize);
             return Ok(users.ToPagedResponseDto(pageRequest));
+        }
+        catch (ForbiddenException)
+        {
+            return Forbid();
         }
         catch (Exception ex)
         {
@@ -144,9 +153,9 @@ public class UsersController : ControllerBase
                 Email = dto.Email
             };
 
-            await _userService.UpdateUserAsync(int.Parse(userId), user, User.FindFirstValue("sub"));
+            await _userService.UpdateUserAsync(Caller.From(User), int.Parse(userId), user, User.FindFirstValue("sub"));
 
-            var updatedUser = await _userService.GetUserByIdAsync(int.Parse(userId));
+            var updatedUser = await _userService.GetUserByIdAsync(Caller.From(User), int.Parse(userId));
             return Ok(updatedUser.ToResponseDto());
         }
         catch (EmailAlreadyInUseException ex)
@@ -172,7 +181,7 @@ public class UsersController : ControllerBase
 
         try
         {
-            await _userService.SoftDeleteUserAsync(int.Parse(userId));
+            await _userService.SoftDeleteUserAsync(Caller.From(User), int.Parse(userId));
             return NoContent();
         }
         catch (Exception ex)
@@ -199,8 +208,12 @@ public class UsersController : ControllerBase
 
         try
         {
-            var queries = await _userService.GetSearchQueriesPageByUserAsync(userId, pageRequest.Page, pageRequest.PageSize);
+            var queries = await _userService.GetSearchQueriesPageByUserAsync(Caller.From(User), userId, pageRequest.Page, pageRequest.PageSize);
             return Ok(queries.ToPagedResponseDto(pageRequest));
+        }
+        catch (ForbiddenException)
+        {
+            return Forbid();
         }
         catch (Exception ex)
         {
@@ -221,7 +234,7 @@ public class UsersController : ControllerBase
 
         try
         {
-            var queries = await _userService.GetSearchQueriesPageByUserAsync(int.Parse(userId), pageRequest.Page, pageRequest.PageSize);
+            var queries = await _userService.GetSearchQueriesPageByUserAsync(Caller.From(User), int.Parse(userId), pageRequest.Page, pageRequest.PageSize);
             return Ok(queries.ToPagedResponseDto(pageRequest));
         }
         catch (Exception ex)

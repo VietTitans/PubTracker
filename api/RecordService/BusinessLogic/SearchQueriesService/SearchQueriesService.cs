@@ -1,4 +1,6 @@
 using RecordData;
+using RecordService.Authentication;
+using RecordService.Exceptions;
 using RecordService.BusinessLogic.RecordPollingService;
 using RecordService.DataAccess;
 
@@ -20,23 +22,29 @@ public class SearchQueriesService : ISearchQueriesService
         _logger = logger;
     }
 
-    public async Task<SearchQuery?> GetSearchQueryByIdAsync(int searchQueryId)
+    public async Task<SearchQuery?> GetSearchQueryByIdAsync(Caller caller, int searchQueryId)
     {
+        if (caller.IsAdmin)
+        {
+            caller.RequireAdmin();
+        }
+        else if (caller.UserId <= 0 || !(await _dataAccess.GetUserSubscribersForQueryAsync(searchQueryId)).Contains(caller.UserId))
+        {
+            // Forbidden whether or not the query exists, so a non-subscriber learns nothing.
+            throw new ForbiddenException();
+        }
         return await _dataAccess.GetSearchQueryByIdAsync(searchQueryId);
     }
 
-    public async Task<List<int>> GetUserSubscribersForQueryAsync(int searchQueryId)
+    public async Task<Paged<int>> GetUserSubscribersPageForQueryAsync(Caller caller, int searchQueryId, int page, int pageSize)
     {
-        return await _dataAccess.GetUserSubscribersForQueryAsync(searchQueryId);
-    }
-
-    public async Task<Paged<int>> GetUserSubscribersPageForQueryAsync(int searchQueryId, int page, int pageSize)
-    {
+        caller.RequireAdmin();
         return await _dataAccess.GetUserSubscribersPageForQueryAsync(searchQueryId, page, pageSize);
     }
 
-    public async Task<SearchQuery> SubscribeAsync(int userId, string targetUrl)
+    public async Task<SearchQuery> SubscribeAsync(Caller caller, int userId, string targetUrl)
     {
+        caller.RequireSelf(userId);
         var searchQuery = await _dataAccess.SubscribeAsync(userId, targetUrl);
 
         // New subscriptions start with zero records; a brand new search query's source has
@@ -68,8 +76,9 @@ public class SearchQueriesService : ISearchQueriesService
         }
     }
 
-    public async Task<bool> UnsubscribeAsync(int userId, int searchQueryId)
+    public async Task<bool> UnsubscribeAsync(Caller caller, int userId, int searchQueryId)
     {
+        caller.RequireSelf(userId);
         return await _dataAccess.UnsubscribeAsync(userId, searchQueryId);
     }
 }

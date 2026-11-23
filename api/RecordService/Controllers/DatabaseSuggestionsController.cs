@@ -1,6 +1,8 @@
 using Asp.Versioning;
 using Microsoft.AspNetCore.Authorization;
+using RecordService.Authentication;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using RecordService.BusinessLogic.DatabaseSuggestionsService;
 using RecordService.DTOs;
 using RecordService.DTOs.DatabaseSuggestionDto;
@@ -35,7 +37,7 @@ public class DatabaseSuggestionsController : ControllerBase
 
         try
         {
-            var suggestions = await _suggestionsService.GetSuggestionsPageAsync(int.Parse(userId), pageRequest.Page, pageRequest.PageSize);
+            var suggestions = await _suggestionsService.GetSuggestionsPageAsync(Caller.From(User), int.Parse(userId), pageRequest.Page, pageRequest.PageSize);
             return Ok(suggestions.ToPagedResponseDto(pageRequest));
         }
         catch (Exception ex)
@@ -46,6 +48,7 @@ public class DatabaseSuggestionsController : ControllerBase
     }
 
     [Authorize]
+    [EnableRateLimiting("strict")]
     [HttpPost]
     public async Task<IActionResult> Suggest([FromBody] CreateDatabaseSuggestionDto dto)
     {
@@ -57,7 +60,7 @@ public class DatabaseSuggestionsController : ControllerBase
 
         try
         {
-            var suggestion = await _suggestionsService.SuggestAsync(int.Parse(userId), dto.Name, dto.WebsiteUrl, dto.Reason);
+            var suggestion = await _suggestionsService.SuggestAsync(Caller.From(User), int.Parse(userId), dto.Name, dto.WebsiteUrl, dto.Reason);
             return Ok(suggestion.ToResponseDto());
         }
         catch (Exception ex)
@@ -68,6 +71,7 @@ public class DatabaseSuggestionsController : ControllerBase
     }
 
     [Authorize]
+    [EnableRateLimiting("strict")]
     [HttpPut("{suggestionId}/vote")]
     public async Task<IActionResult> AddVote(int suggestionId)
     {
@@ -79,7 +83,7 @@ public class DatabaseSuggestionsController : ControllerBase
 
         try
         {
-            return await _suggestionsService.AddVoteAsync(int.Parse(userId), suggestionId)
+            return await _suggestionsService.AddVoteAsync(Caller.From(User), int.Parse(userId), suggestionId)
                 ? NoContent()
                 : NotFound(new { message = "Suggestion not found." });
         }
@@ -91,6 +95,7 @@ public class DatabaseSuggestionsController : ControllerBase
     }
 
     [Authorize]
+    [EnableRateLimiting("strict")]
     [HttpDelete("{suggestionId}/vote")]
     public async Task<IActionResult> RemoveVote(int suggestionId)
     {
@@ -102,7 +107,7 @@ public class DatabaseSuggestionsController : ControllerBase
 
         try
         {
-            await _suggestionsService.RemoveVoteAsync(int.Parse(userId), suggestionId);
+            await _suggestionsService.RemoveVoteAsync(Caller.From(User), int.Parse(userId), suggestionId);
             return NoContent();
         }
         catch (Exception ex)

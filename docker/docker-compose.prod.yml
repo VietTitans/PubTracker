@@ -135,6 +135,9 @@ services:
       Email__FromName: ${EMAIL_FROM_NAME:-PubTracker}
       Email__DailySendLimit: ${EMAIL_DAILY_SEND_LIMIT:-250}
       Subscriptions__MaxPerUser: ${SUBSCRIPTIONS_MAX_PER_USER:-20}
+      RateLimit__GlobalPerMinute: ${RATE_LIMIT_GLOBAL_PER_MINUTE:-120}
+      RateLimit__StrictPerMinute: ${RATE_LIMIT_STRICT_PER_MINUTE:-10}
+      RateLimit__AnonPerMinute: ${RATE_LIMIT_ANON_PER_MINUTE:-20}
       Sentry__Dsn: ${SENTRY_DSN:-}
       Heartbeat__PollUrl: ${HEARTBEAT_POLL_URL:-}
       Heartbeat__OutboxUrl: ${HEARTBEAT_OUTBOX_URL:-}

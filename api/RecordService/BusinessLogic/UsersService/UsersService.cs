@@ -1,4 +1,5 @@
 ﻿using RecordData;
+using RecordService.Authentication;
 using RecordService.DataAccess;
 using RecordService.DataAccess.Email;
 using RecordService.DataAccess.Keycloak;
@@ -25,28 +26,33 @@ public class UsersService : IUsersService
         _logger = logger;
     }
 
-    public async Task<User> GetUserByIdAsync(int userId)
+    public async Task<User> GetUserByIdAsync(Caller caller, int userId)
     {
+        caller.RequireSelfOrAdmin(userId);
         return await _dataAccess.GetUserByIdAsync(userId);
     }
 
-    public async Task<Paged<User>> GetUsersPageAsync(int page, int pageSize)
+    public async Task<Paged<User>> GetUsersPageAsync(Caller caller, int page, int pageSize)
     {
+        caller.RequireAdmin();
         return await _dataAccess.GetUsersPageAsync(page, pageSize);
     }
 
-    public async Task SetDigestsStoppedAsync(int userId, bool stopped)
+    public async Task SetDigestsStoppedAsync(Caller caller, int userId, bool stopped)
     {
+        caller.RequireSelf(userId);
         await _dataAccess.SetDigestsStoppedAsync(userId, stopped);
     }
 
-    public async Task<List<SearchQuery>> GetSearchQueriesByUserAsync(int userId)
+    public async Task<List<SearchQuery>> GetSearchQueriesByUserAsync(Caller caller, int userId)
     {
+        caller.RequireSelfOrAdmin(userId);
         return await _dataAccess.GetSearchQueriesByUserAsync(userId);
     }
 
-    public async Task<Paged<SearchQuery>> GetSearchQueriesPageByUserAsync(int userId, int page, int pageSize)
+    public async Task<Paged<SearchQuery>> GetSearchQueriesPageByUserAsync(Caller caller, int userId, int page, int pageSize)
     {
+        caller.RequireSelfOrAdmin(userId);
         return await _dataAccess.GetSearchQueriesPageByUserAsync(userId, page, pageSize);
     }
 
@@ -64,8 +70,9 @@ public class UsersService : IUsersService
             Truncate(username, UserFieldLimits.Username));
     }
 
-    public async Task UpdateUserAsync(int userId, User user, string? keycloakSub = null)
+    public async Task UpdateUserAsync(Caller caller, int userId, User user, string? keycloakSub = null)
     {
+        caller.RequireSelf(userId);
         // Keycloak goes first: if it rejects the change (e.g. the email belongs to another
         // account) the database is left untouched, so the two never disagree.
         if (!string.IsNullOrEmpty(keycloakSub))
@@ -80,8 +87,9 @@ public class UsersService : IUsersService
         await _dataAccess.UpdateUserAsync(userId, user);
     }
 
-    public async Task SoftDeleteUserAsync(int userId)
+    public async Task SoftDeleteUserAsync(Caller caller, int userId)
     {
+        caller.RequireSelf(userId);
         _logger.LogInformation("User {UserId} requested account deletion", userId);
         try
         {

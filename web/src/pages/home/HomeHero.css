@@ -1,0 +1,287 @@
+/* Signed-out hero. Breaks out of the narrow .app column so the copy and the example digest sit side by side. */
+
+.home-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  left: 50%;
+  width: min(1120px, calc(100vw - 32px));
+  transform: translateX(-50%);
+  margin-top: 16px;
+  padding: clamp(24px, 5vw, 64px);
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 0.95fr);
+  gap: clamp(24px, 4vw, 56px);
+  align-items: center;
+  border: 1px solid var(--border);
+  border-radius: 28px;
+  text-align: left;
+  background:
+    radial-gradient(900px 420px at 85% -10%, var(--accent-bg), transparent 60%),
+    radial-gradient(700px 380px at -5% 110%, var(--accent-bg), transparent 65%),
+    var(--surface);
+}
+
+.home-hero-copy {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 22px;
+}
+
+.home-hero-copy > div {
+  width: 100%;
+}
+
+.home-hero h1 {
+  margin: 0;
+  font-size: clamp(36px, 5.6vw, 64px);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+  color: var(--text-h);
+}
+
+.home-hero-accent {
+  color: var(--accent);
+}
+
+.home-hero-lead {
+  margin: 0;
+  max-width: 30em;
+  font-size: clamp(17px, 2vw, 20px);
+  line-height: 1.5;
+}
+
+.home-hero-pill,
+.home-hero-tag {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--accent-border);
+  background: var(--accent-bg);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.home-hero-tag {
+  border-color: var(--border);
+  background: var(--surface);
+  color: var(--text-dim);
+}
+
+/* Squarer, softly rounded paste box instead of the default pill. */
+.home-hero .search-box {
+  padding: 6px 6px 6px 16px;
+  border-radius: var(--radius);
+}
+
+.home-hero .search-box input {
+  font-size: 16px;
+}
+
+.home-hero .search-box input::placeholder {
+  font-size: 14px;
+}
+
+.home-hero .search-box .btn {
+  border-radius: var(--radius-sm);
+}
+
+.home-hero-hint {
+  margin: 14px 0 0 8px;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.home-hero-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 24px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--text-dim);
+}
+
+.home-hero-links a {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+.supported-databases {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  width: 100%;
+  padding: 12px 14px;
+  border: 1px dashed var(--accent-border);
+  border-radius: var(--radius);
+  background: var(--accent-bg);
+  font-size: 14px;
+}
+
+.supported-databases-label {
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-h);
+}
+
+.supported-databases ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.supported-databases .badge {
+  display: inline-block;
+  padding: 4px 12px;
+  font-size: 14px;
+  text-decoration: none;
+}
+
+.supported-databases a.badge:hover {
+  filter: brightness(0.92);
+  text-decoration: underline;
+}
+
+.supported-databases-more {
+  color: var(--text-dim);
+}
+
+.supported-databases-more a {
+  color: var(--accent);
+  font-weight: 700;
+}
+
+/* Example digest: mirrors the digest email's structure (see digestSample.ts). */
+.example-digest {
+  position: relative;
+  transform: rotate(-1.6deg);
+}
+
+.example-digest-sheet {
+  position: relative;
+  overflow: hidden;
+  max-height: 520px;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow), 0 30px 60px -20px rgba(10, 20, 35, 0.25);
+}
+
+.example-digest-sheet .home-hero-tag {
+  margin-bottom: 14px;
+}
+
+.example-digest-back {
+  position: absolute;
+  inset: 14px -14px -14px 14px;
+  border: 1px solid var(--accent-border);
+  border-radius: 18px;
+  background: var(--accent-bg);
+  transform: rotate(2.4deg);
+}
+
+.example-digest-head,
+.example-digest-topic {
+  margin: 0 0 12px;
+  padding: 12px 16px;
+  border-radius: 10px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.example-digest-head {
+  background: var(--surface-hover);
+}
+
+.example-digest-topic {
+  border: 1px solid var(--border);
+  background: var(--surface);
+}
+
+.example-digest-topic h4 {
+  margin: 0 0 6px;
+  font-size: 14px;
+  font-weight: 800;
+  color: var(--text-h);
+}
+
+.example-digest-topic ol {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.example-digest-topic li {
+  padding: 6px 0;
+  color: var(--text-h);
+}
+
+.example-digest-topic li i {
+  display: block;
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--text-dim);
+}
+
+.example-digest-fade {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 90px;
+  background: linear-gradient(transparent, var(--surface));
+  pointer-events: none;
+}
+
+/* One page-load reveal: copy rises in sequence, then the digest slides in. */
+@keyframes home-hero-rise {
+  from { opacity: 0; transform: translateY(18px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes home-hero-slide {
+  from { opacity: 0; transform: translateX(40px) rotate(3deg); }
+  to { opacity: 1; transform: translateX(0) rotate(-1.6deg); }
+}
+
+.home-hero-copy > * {
+  animation: home-hero-rise 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+}
+
+.home-hero-copy > :nth-child(2) { animation-delay: 80ms; }
+.home-hero-copy > :nth-child(3) { animation-delay: 160ms; }
+.home-hero-copy > :nth-child(4) { animation-delay: 240ms; }
+.home-hero-copy > :nth-child(5) { animation-delay: 320ms; }
+
+.example-digest {
+  animation: home-hero-slide 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) 0.35s both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .home-hero-copy > *,
+  .example-digest {
+    animation: none;
+  }
+}
+
+/* Narrow screens: copy and paste box first, example digest below. */
+@media (max-width: 820px) {
+  .home-hero {
+    grid-template-columns: minmax(0, 1fr);
+    padding: 24px 18px;
+  }
+
+  .example-digest-sheet {
+    max-height: 340px;
+  }
+}
