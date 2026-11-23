@@ -1,4 +1,3 @@
-import { Link } from "react-router-dom";
 import { supportedPublicationSources } from "./publicationSources";
 
 export default function SupportedDatabases() {
@@ -20,9 +19,6 @@ export default function SupportedDatabases() {
           </li>
         ))}
       </ul>
-      <span className="supported-databases-more">
-        More coming. <Link to="/suggest">Suggest a database</Link>
-      </span>
     </div>
   );
 }

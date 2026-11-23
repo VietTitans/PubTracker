@@ -11,7 +11,6 @@ import FeedbackPage from "./pages/FeedbackPage";
 import HomePage from "./pages/HomePage";
 import HowItWorksPage from "./pages/HowItWorksPage";
 import { PrivacyPage, TermsPage } from "./pages/LegalPages";
-import SuggestPage from "./pages/SuggestPage";
 import "./App.css";
 
 function App() {
@@ -63,7 +62,6 @@ function App() {
         <Route path="/how-it-works" element={<HowItWorksPage />} />
         <Route path="/privacy" element={<PrivacyPage />} />
         <Route path="/terms" element={<TermsPage />} />
-        <Route path="/suggest" element={<SuggestPage isAuthenticated={isAuthenticated} onLogin={handleLogin} />} />
         <Route
           path="*"
           element={<HomePage isAuthenticated={isAuthenticated} subscriptions={subscriptions} onLogin={handleLogin} />}

@@ -825,18 +825,6 @@ textarea.text-input {
   resize: vertical;
 }
 
-.suggestion-name {
-  flex: 1;
-  color: var(--text-h);
-  text-decoration: none;
-  font-weight: 600;
-}
-
-.suggestion-votes {
-  font-weight: 600;
-  color: var(--text-h);
-}
-
 .hiw h2 {
   font-size: clamp(26px, 5vw, 38px);
   font-weight: 800;

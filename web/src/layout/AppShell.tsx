@@ -23,7 +23,6 @@ export default function AppShell({
           </NavLink>
           <NavLink to="/how-it-works">How it works</NavLink>
           <NavLink to="/feedback">Feedback</NavLink>
-          <NavLink to="/suggest">Suggest a database</NavLink>
         </nav>
         <div className="header-actions">
           <ThemeToggle />
